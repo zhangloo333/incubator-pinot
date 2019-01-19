@@ -28,12 +28,14 @@ import org.apache.pinot.core.common.predicate.NEqPredicate;
 import org.apache.pinot.core.common.predicate.NotInPredicate;
 import org.apache.pinot.core.common.predicate.RangePredicate;
 import org.apache.pinot.core.common.predicate.RegexpLikePredicate;
+import org.apache.pinot.core.common.predicate.MatchesPredicate;
 
 
 public abstract class Predicate {
 
   public enum Type {
-    EQ, NEQ, REGEXP_LIKE, RANGE, IN, NOT_IN;
+
+    EQ, NEQ, REGEXP_LIKE, RANGE, IN, NOT_IN, MATCHES;
 
     public boolean isExclusive() {
       return this == NEQ || this == NOT_IN;
@@ -74,8 +76,9 @@ public abstract class Predicate {
     final String column = filterQueryTree.getColumn();
     final List<String> value = filterQueryTree.getValue();
 
-    Predicate predicate = null;
+    Predicate predicate;
     switch (filterType) {
+<<<<<<< HEAD
       case EQUALITY:
         predicate = new EqPredicate(column, value);
         break;
@@ -94,8 +97,36 @@ public abstract class Predicate {
       case IN:
         predicate = new InPredicate(column, value);
         break;
+      case TEXT_MATCH:
+        predicate = new MatchesPredicate(column, value);
+        break;
       default:
         throw new UnsupportedOperationException("Unsupported filterType:" + filterType);
+=======
+    case EQUALITY:
+      predicate = new EqPredicate(column, value);
+      break;
+    case RANGE:
+      predicate = new RangePredicate(column, value);
+      break;
+    case REGEXP_LIKE:
+      predicate = new RegexpLikePredicate(column, value);
+      break;
+    case NOT:
+      predicate = new NEqPredicate(column, value);
+      break;
+    case NOT_IN:
+      predicate = new NotInPredicate(column, value);
+      break;
+    case IN:
+      predicate = new InPredicate(column, value);
+      break;
+    case MATCHES:
+      predicate = new MatchesPredicate(column, value);
+      break;
+    default:
+      throw new UnsupportedOperationException("Unsupported filterType:" + filterType);
+>>>>>>> Enhancing PQL to support MATCHES predicate, can be used for searching within text, map, json and other complex objects
     }
     return predicate;
   }
