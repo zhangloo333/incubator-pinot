@@ -36,7 +36,7 @@ public class ZookeeperLauncher {
   private ZkServer _zkServer;
 
   public ZookeeperLauncher() {
-    this("/tmp");
+    this(org.apache.commons.io.FileUtils.getTempDirectoryPath());
   }
 
   public ZookeeperLauncher(String baseTempDir) {

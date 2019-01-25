@@ -118,8 +118,8 @@ public class ImmutableSegmentLoader {
     SegmentDirectory.Reader segmentReader = segmentDirectory.createReader();
     Map<String, ColumnIndexContainer> indexContainerMap = new HashMap<>();
     for (Map.Entry<String, ColumnMetadata> entry : segmentMetadata.getColumnMetadataMap().entrySet()) {
-      indexContainerMap
-          .put(entry.getKey(), new PhysicalColumnIndexContainer(segmentReader, entry.getValue(), indexLoadingConfig));
+      indexContainerMap.put(entry.getKey(),
+          new PhysicalColumnIndexContainer(indexDir, segmentReader, entry.getValue(), indexLoadingConfig));
     }
 
     if (schema == null) {

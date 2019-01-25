@@ -21,6 +21,8 @@ package org.apache.pinot.core.realtime.impl.invertedindex;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+import org.apache.pinot.core.common.Predicate;
 import org.apache.pinot.core.segment.index.readers.InvertedIndexReader;
 import org.roaringbitmap.buffer.MutableRoaringBitmap;
 
@@ -54,7 +56,11 @@ public class RealtimeInvertedIndexReader implements InvertedIndexReader<MutableR
       _bitmaps.get(dictId).checkAndAdd(docId);
     }
   }
-
+  
+  @Override
+  public MutableRoaringBitmap getDocIds(Predicate predicate) {
+    throw new UnsupportedOperationException("Predicate:"+ predicate + " is not supported");
+  }
   @Override
   public MutableRoaringBitmap getDocIds(int dictId) {
     ThreadSafeMutableRoaringBitmap bitmap;

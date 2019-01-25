@@ -21,6 +21,8 @@ package org.apache.pinot.core.segment.virtualcolumn;
 import java.io.IOException;
 import org.apache.pinot.common.data.FieldSpec;
 import org.apache.pinot.common.utils.Pairs;
+import org.apache.pinot.common.utils.Pairs.IntPair;
+import org.apache.pinot.core.common.Predicate;
 import org.apache.pinot.core.io.reader.BaseSingleColumnSingleValueReader;
 import org.apache.pinot.core.io.reader.DataFileReader;
 import org.apache.pinot.core.io.reader.impl.v1.SortedIndexReader;
@@ -75,7 +77,10 @@ public abstract class SingleStringVirtualColumnProvider extends BaseVirtualColum
     public SingleStringInvertedIndex(int length) {
       _length = length;
     }
-
+    @Override
+    public IntPair getDocIds(Predicate predicate) {
+      throw new UnsupportedOperationException("");
+    }
     @Override
     public Pairs.IntPair getDocIds(int dictId) {
       if (dictId == 0) {

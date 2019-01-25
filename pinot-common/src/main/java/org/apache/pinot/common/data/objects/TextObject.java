@@ -27,7 +27,8 @@ import com.google.common.collect.Lists;
 public class TextObject implements PinotObject {
 
   byte[] _bytes;
-  private static List<String> _FIELDS = Lists.newArrayList("Content");
+  public static String DEFAULT_FIELD = "Content";
+  private static List<String> _FIELDS = Lists.newArrayList(DEFAULT_FIELD);
 
   @Override
   public void init(byte[] bytes) {

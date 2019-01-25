@@ -87,7 +87,7 @@ public final class ColumnDataSource extends DataSource {
       }
     } else {
       // Raw index
-      Preconditions.checkState(invertedIndex == null);
+      //Preconditions.checkState(invertedIndex == null);
     }
 
     _operatorName = "ColumnDataSource [" + columnName + "]";
