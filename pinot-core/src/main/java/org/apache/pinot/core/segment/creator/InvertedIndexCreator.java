@@ -21,6 +21,8 @@ package org.apache.pinot.core.segment.creator;
 import java.io.Closeable;
 import java.io.IOException;
 
+import org.apache.pinot.common.data.PinotObject;
+
 
 /**
  * Currently only support RoaringBitmap inverted index.
@@ -65,6 +67,12 @@ public interface InvertedIndexCreator extends Closeable {
    * For multi-valued column, adds the dictionary Ids for the next document.
    */
   void add(int[] dictIds, int length);
+  
+  /**
+   * For complex data types such as Map, JSON, TEXT
+   * @param object
+   */
+  void add(PinotObject object);
 
   /**
    * Seals the index and flushes it to disk.

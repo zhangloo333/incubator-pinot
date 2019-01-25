@@ -16,23 +16,29 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.core.segment.index.readers;
+package org.apache.pinot.core.operator.filter;
 
-import java.io.Closeable;
+import org.apache.pinot.core.common.DataSource;
+import org.apache.pinot.core.operator.blocks.FilterBlock;
+import org.apache.pinot.core.operator.filter.predicate.PredicateEvaluator;
 
-import org.apache.pinot.core.common.Predicate;
+public class ScanBasedMatchesFilterOperator  extends BaseFilterOperator {
 
+  public ScanBasedMatchesFilterOperator(PredicateEvaluator predicateEvaluator,
+      DataSource dataSource, int startDocId, int endDocId) {
+    // TODO Auto-generated constructor stub
+  }
 
-public interface InvertedIndexReader<T> extends Closeable {
+  @Override
+  protected FilterBlock getNextBlock() {
+    // TODO Auto-generated method stub
+    return null;
+  }
 
-  /**
-   * Get the document ids for the given dictionary id.
-   */
-  T getDocIds(int dictId);
-  
-  /**
-   * Get the document id's for the given predicate
-   */
-  T getDocIds(Predicate predicate);
-  
+  @Override
+  public String getOperatorName() {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
 }

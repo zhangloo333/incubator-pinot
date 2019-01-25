@@ -19,7 +19,8 @@
     under the License.
 
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
@@ -101,6 +102,25 @@
       </exclusions>
     </dependency>
     <dependency>
+      <groupId>net.sf.jopt-simple</groupId>
+      <artifactId>jopt-simple</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-core</artifactId>
+      <version>7.6.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-queryparser</artifactId>
+      <version>7.6.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-analyzers-common</artifactId>
+      <version>7.6.0</version>
+    </dependency>
+    <dependency>
       <groupId>org.openjdk.jmh</groupId>
       <artifactId>jmh-generator-annprocess</artifactId>
       <version>1.15</version>
@@ -180,15 +200,20 @@
           <binFileExtensions>
             <unix>.sh</unix>
           </binFileExtensions>
-          <!-- Set the target configuration directory to be used in the bin scripts -->
+          <!-- Set the target configuration directory to be used in the bin 
+            scripts -->
           <configurationDirectory>conf</configurationDirectory>
-          <!-- Copy the contents from "/src/main/config" to the target configuration directory in the assembled application -->
+          <!-- Copy the contents from "/src/main/config" to the target configuration 
+            directory in the assembled application -->
           <copyConfigurationDirectory>false</copyConfigurationDirectory>
-          <!-- Include the target configuration directory in the beginning of the classpath declaration in the bin scripts -->
+          <!-- Include the target configuration directory in the beginning 
+            of the classpath declaration in the bin scripts -->
           <includeConfigurationDirectoryInClasspath>false</includeConfigurationDirectoryInClasspath>
           <assembleDirectory>${project.build.directory}/${project.artifactId}-pkg</assembleDirectory>
           <!-- Extra JVM arguments that will be included in the bin scripts -->
-          <extraJvmArguments>-Xms24G -Xmx24G -Dlog4j.configuration=log4j.properties</extraJvmArguments>
+          <extraJvmArguments>-Xms24G -Xmx24G
+            -Dlog4j.configuration=log4j.properties
+          </extraJvmArguments>
           <!-- Generate bin scripts for windows and unix pr default -->
           <platforms>
             <platform>unix</platform>

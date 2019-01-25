@@ -26,6 +26,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import org.apache.commons.io.FileUtils;
 import org.apache.pinot.common.data.FieldSpec;
+import org.apache.pinot.common.data.PinotObject;
 import org.apache.pinot.core.segment.creator.InvertedIndexCreator;
 import org.apache.pinot.core.segment.creator.impl.V1Constants;
 import org.apache.pinot.core.segment.memory.PinotDataBuffer;
@@ -118,6 +119,11 @@ public final class OffHeapBitmapInvertedIndexCreator implements InvertedIndexCre
     }
   }
 
+  @Override
+  public void add(PinotObject object) {
+   throw new UnsupportedOperationException("Bitmap Indexing not supported for Pinot Objects");
+  }
+  
   @Override
   public void add(int dictId) {
     putInt(_forwardIndexValueBuffer, _nextDocId++, dictId);

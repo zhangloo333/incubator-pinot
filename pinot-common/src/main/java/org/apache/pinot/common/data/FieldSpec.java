@@ -335,6 +335,9 @@ public abstract class FieldSpec implements Comparable<FieldSpec>, ConfigNodeLife
       case STRING:
         jsonSchema.set("type", convertStringsToJsonArray("null", "string"));
         return jsonSchema;
+      case BYTES:
+        jsonSchema.set("type", convertStringsToJsonArray("null", "bytes"));
+        return jsonSchema;
       default:
         throw new UnsupportedOperationException();
     }

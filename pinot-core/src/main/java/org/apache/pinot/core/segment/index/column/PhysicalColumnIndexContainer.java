@@ -18,8 +18,10 @@
  */
 package org.apache.pinot.core.segment.index.column;
 
+import java.io.File;
 import java.io.IOException;
 import org.apache.pinot.common.data.FieldSpec;
+import org.apache.pinot.common.data.FieldSpec.DataType;
 import org.apache.pinot.core.io.reader.DataFileReader;
 import org.apache.pinot.core.io.reader.SingleColumnSingleValueReader;
 import org.apache.pinot.core.io.reader.impl.v1.FixedBitMultiValueReader;
@@ -39,6 +41,7 @@ import org.apache.pinot.core.segment.index.readers.ImmutableDictionaryReader;
 import org.apache.pinot.core.segment.index.readers.IntDictionary;
 import org.apache.pinot.core.segment.index.readers.InvertedIndexReader;
 import org.apache.pinot.core.segment.index.readers.LongDictionary;
+import org.apache.pinot.core.segment.index.readers.LuceneInvertedIndexReader;
 import org.apache.pinot.core.segment.index.readers.OnHeapDoubleDictionary;
 import org.apache.pinot.core.segment.index.readers.OnHeapFloatDictionary;
 import org.apache.pinot.core.segment.index.readers.OnHeapIntDictionary;
@@ -60,7 +63,7 @@ public final class PhysicalColumnIndexContainer implements ColumnIndexContainer 
   private final ImmutableDictionaryReader _dictionary;
   private final BloomFilterReader _bloomFilterReader;
 
-  public PhysicalColumnIndexContainer(SegmentDirectory.Reader segmentReader, ColumnMetadata metadata,
+  public PhysicalColumnIndexContainer(File indexDir, SegmentDirectory.Reader segmentReader, ColumnMetadata metadata,
       IndexLoadingConfig indexLoadingConfig)
       throws IOException {
     String columnName = metadata.getColumnName();
@@ -105,16 +108,25 @@ public final class PhysicalColumnIndexContainer implements ColumnIndexContainer 
                 metadata.getBitsPerElement());
       }
       if (loadInvertedIndex) {
-        _invertedIndex =
-            new BitmapInvertedIndexReader(segmentReader.getIndexFor(columnName, ColumnIndexType.INVERTED_INDEX),
-                metadata.getCardinality());
+        if (metadata.getObjectType() == null && metadata.getFieldSpec().getDataType() != DataType.BYTES) {
+          _invertedIndex =
+              new BitmapInvertedIndexReader(segmentReader.getIndexFor(columnName, ColumnIndexType.INVERTED_INDEX),
+                  metadata.getCardinality());
+        } else {
+          _invertedIndex = new LuceneInvertedIndexReader(indexDir, metadata);
+        }
       } else {
         _invertedIndex = null;
       }
     } else {
       // Raw index
       _forwardIndex = loadRawForwardIndex(fwdIndexBuffer, metadata.getDataType());
-      _invertedIndex = null;
+      if (loadInvertedIndex && (metadata.getObjectType() != null
+          || metadata.getFieldSpec().getDataType() == DataType.BYTES)) {
+        _invertedIndex = new LuceneInvertedIndexReader(indexDir, metadata);
+      } else {
+        _invertedIndex = null;
+      }
       _dictionary = null;
       _bloomFilterReader = null;
     }

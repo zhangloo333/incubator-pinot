@@ -21,6 +21,8 @@ package org.apache.pinot.core.io.reader.impl.v1;
 import com.google.common.base.Preconditions;
 import java.io.IOException;
 import org.apache.pinot.common.utils.Pairs;
+import org.apache.pinot.common.utils.Pairs.IntPair;
+import org.apache.pinot.core.common.Predicate;
 import org.apache.pinot.core.io.reader.BaseSingleColumnSingleValueReader;
 import org.apache.pinot.core.io.reader.ReaderContext;
 import org.apache.pinot.core.io.util.FixedByteValueReaderWriter;
@@ -119,6 +121,10 @@ public class SortedIndexReaderImpl extends BaseSingleColumnSingleValueReader<Sor
     return new Context();
   }
 
+  @Override
+  public IntPair getDocIds(Predicate predicate) {
+    throw new UnsupportedOperationException("");
+  }
   @Override
   public Pairs.IntPair getDocIds(int dictId) {
     return new Pairs.IntPair(_reader.getInt(2 * dictId), _reader.getInt(2 * dictId + 1));

@@ -22,6 +22,8 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.ref.SoftReference;
 import java.nio.ByteBuffer;
+
+import org.apache.pinot.core.common.Predicate;
 import org.apache.pinot.core.segment.memory.PinotDataBuffer;
 import org.roaringbitmap.buffer.ImmutableRoaringBitmap;
 import org.slf4j.Logger;
@@ -52,6 +54,11 @@ public class BitmapInvertedIndexReader implements InvertedIndexReader<ImmutableR
     load(indexDataBuffer);
   }
 
+  @Override
+  public ImmutableRoaringBitmap getDocIds(Predicate predicate) {
+    throw new UnsupportedOperationException("Predicate based evaluation not supported for Bitmap based Indexing scheme");
+  }
+  
   /**
    * {@inheritDoc}
    */

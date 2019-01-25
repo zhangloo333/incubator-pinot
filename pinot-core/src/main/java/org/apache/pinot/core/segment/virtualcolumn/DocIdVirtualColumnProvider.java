@@ -21,6 +21,8 @@ package org.apache.pinot.core.segment.virtualcolumn;
 import java.io.IOException;
 import org.apache.pinot.common.data.FieldSpec;
 import org.apache.pinot.common.utils.Pairs;
+import org.apache.pinot.common.utils.Pairs.IntPair;
+import org.apache.pinot.core.common.Predicate;
 import org.apache.pinot.core.io.reader.BaseSingleColumnSingleValueReader;
 import org.apache.pinot.core.io.reader.DataFileReader;
 import org.apache.pinot.core.io.reader.impl.ChunkReaderContext;
@@ -108,7 +110,10 @@ public class DocIdVirtualColumnProvider extends BaseVirtualColumnProvider {
     public Pairs.IntPair getDocIds(int dictId) {
       return new Pairs.IntPair(dictId, dictId);
     }
-
+    @Override
+    public IntPair getDocIds(Predicate predicate) {
+      throw new UnsupportedOperationException("");
+    }
     @Override
     public void close()
         throws IOException {

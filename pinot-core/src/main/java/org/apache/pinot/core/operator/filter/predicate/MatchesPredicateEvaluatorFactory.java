@@ -34,17 +34,15 @@ public class MatchesPredicateEvaluatorFactory {
    */
   public static BaseRawValueBasedPredicateEvaluator newRawValueBasedEvaluator(
       MatchesPredicate textMatchPredicate, FieldSpec.DataType dataType) {
-    return new RawValueBasedTextMatchPredicateEvaluator(textMatchPredicate);
+    return new DefaultMatchesPredicateEvaluator(textMatchPredicate);
   }
 
-  public static final class RawValueBasedTextMatchPredicateEvaluator
+  public static final class DefaultMatchesPredicateEvaluator
       extends BaseRawValueBasedPredicateEvaluator {
-    String _query;
-    String _options;
+    private MatchesPredicate _matchesPredicate;
 
-    public RawValueBasedTextMatchPredicateEvaluator(MatchesPredicate textMatchPredicate) {
-      _query = textMatchPredicate.getQuery();
-      _options = textMatchPredicate.getQueryOptions();
+    public DefaultMatchesPredicateEvaluator(MatchesPredicate matchesPredicate) {
+      this._matchesPredicate = matchesPredicate;
     }
 
     @Override
@@ -58,12 +56,9 @@ public class MatchesPredicateEvaluatorFactory {
           "Text Match is not supported via scanning, its supported only via inverted index");
     }
 
-    public String getQueryString() {
-      return _query;
+    public MatchesPredicate getMatchesPredicate(){
+      return _matchesPredicate;
     }
-
-    public String getQueryOptions() {
-      return _options;
-    }
+   
   }
 }

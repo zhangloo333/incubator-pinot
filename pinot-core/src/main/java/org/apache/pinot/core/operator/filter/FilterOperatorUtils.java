@@ -56,7 +56,13 @@ public class FilterOperatorUtils {
     // Use inverted index if the predicate type is not RANGE or REGEXP_LIKE for efficiency
     DataSourceMetadata dataSourceMetadata = dataSource.getDataSourceMetadata();
     Predicate.Type predicateType = predicateEvaluator.getPredicateType();
-    if (dataSourceMetadata.hasInvertedIndex() && (predicateType != Predicate.Type.RANGE) && (predicateType
+    if(predicateType == Predicate.Type.MATCHES) {
+      if(dataSourceMetadata.hasInvertedIndex()) {
+        return new IndexBasedMatchesFilterOperator(predicateEvaluator, dataSource, startDocId, endDocId);
+      } else {
+        return new ScanBasedMatchesFilterOperator(predicateEvaluator, dataSource, startDocId, endDocId);
+      }
+    } else if (dataSourceMetadata.hasInvertedIndex() && (predicateType != Predicate.Type.RANGE) && (predicateType
         != Predicate.Type.REGEXP_LIKE)) {
       if (dataSourceMetadata.isSorted()) {
         return new SortedInvertedIndexBasedFilterOperator(predicateEvaluator, dataSource, startDocId, endDocId);
