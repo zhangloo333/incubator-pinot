@@ -26,6 +26,7 @@ import java.util.Set;
 import javax.annotation.Nonnull;
 import org.apache.commons.io.FileUtils;
 import org.apache.pinot.common.data.PinotObject;
+import org.apache.pinot.common.data.PinotObjectFactory;
 import org.apache.pinot.common.data.objects.JSONObject;
 import org.apache.pinot.common.data.objects.MapObject;
 import org.apache.pinot.common.data.objects.TextObject;
@@ -117,38 +118,16 @@ public class InvertedIndexHandler {
     LOGGER.info("Creating new lucene based inverted index for segment: {}, column: {}", _segmentName, column);
     int numDocs = columnMetadata.getTotalDocs();
     String objectType = columnMetadata.getObjectType();
-    Class<? extends PinotObject> pinotObjectClazz;
-    PinotObject pinotObject = null;
-    try {
-      switch (objectType.toUpperCase()) {
-        case "MAP":
-          pinotObjectClazz = MapObject.class;
-          break;
-        case "JSON":
-          pinotObjectClazz = JSONObject.class;
-          break;
-        case "TEXT":
-          pinotObjectClazz = TextObject.class;
-          break;
-        default:
-          // custom object type.
-          pinotObjectClazz = (Class<? extends PinotObject>) Class.forName(objectType);
-      }
-      pinotObject = pinotObjectClazz.getConstructor(new Class[]{}).newInstance(new Object[]{});
-    } catch (Exception e) {
-      LOGGER.error("Error pinot object  for type:{}. Skipping inverted index creation", objectType);
-      return;
-    }
 
-    try (LuceneIndexCreator luceneIndexCreator = new LuceneIndexCreator(columnMetadata, invertedIndexDir)) {
+
+    try (LuceneIndexCreator luceneIndexCreator = new LuceneIndexCreator(objectType, invertedIndexDir)) {
       try (DataFileReader fwdIndex = getForwardIndexReader(columnMetadata, _segmentWriter)) {
         if (columnMetadata.isSingleValue()) {
           // Single-value column.
           VarByteChunkSingleValueReader svFwdIndex = (VarByteChunkSingleValueReader) fwdIndex;
           for (int i = 0; i < numDocs; i++) {
             byte[] bytes = svFwdIndex.getBytes(i);
-
-            pinotObject.init(bytes);
+            PinotObject pinotObject = PinotObjectFactory.create(objectType, bytes);
             luceneIndexCreator.add(pinotObject);
           }
         } else {
