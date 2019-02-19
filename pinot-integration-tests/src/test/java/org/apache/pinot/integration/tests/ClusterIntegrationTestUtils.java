@@ -326,7 +326,7 @@ public class ClusterIntegrationTestUtils {
     Producer<byte[], byte[]> producer = new Producer<>(producerConfig);
 
     try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream(65536)) {
-      for (File avroFile : avroFiles) {
+      for (File avroFile : avroFiles)
         try (DataFileStream<GenericRecord> reader = AvroUtils.getAvroReader(avroFile)) {
           BinaryEncoder binaryEncoder = new EncoderFactory().directBinaryEncoder(outputStream, null);
           GenericDatumWriter<GenericRecord> datumWriter = new GenericDatumWriter<>(reader.getSchema());
@@ -357,7 +357,6 @@ public class ClusterIntegrationTestUtils {
           // Send last batch of messages
           producer.send(messagesToWrite);
         }
-      }
     }
   }
 

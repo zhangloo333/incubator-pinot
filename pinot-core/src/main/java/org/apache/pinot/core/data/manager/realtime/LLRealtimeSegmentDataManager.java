@@ -1103,7 +1103,8 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
             .setInvertedIndexColumns(invertedIndexColumns).setRealtimeSegmentZKMetadata(segmentZKMetadata)
             .setOffHeap(_isOffHeap).setMemoryManager(_memoryManager)
             .setStatsHistory(realtimeTableDataManager.getStatsHistory())
-            .setAggregateMetrics(indexingConfig.isAggregateMetrics());
+            .setAggregateMetrics(indexingConfig.isAggregateMetrics())
+            .setConsumerDir(realtimeTableDataManager.getConsumerDir());
 
     // Create message decoder
     _messageDecoder = StreamDecoderProvider.create(_partitionLevelStreamConfig, _schema);

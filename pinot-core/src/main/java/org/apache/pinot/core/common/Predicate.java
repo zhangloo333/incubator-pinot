@@ -78,7 +78,6 @@ public abstract class Predicate {
 
     Predicate predicate;
     switch (filterType) {
-<<<<<<< HEAD
       case EQUALITY:
         predicate = new EqPredicate(column, value);
         break;
@@ -97,36 +96,11 @@ public abstract class Predicate {
       case IN:
         predicate = new InPredicate(column, value);
         break;
-      case TEXT_MATCH:
+      case MATCHES:
         predicate = new MatchesPredicate(column, value);
         break;
       default:
         throw new UnsupportedOperationException("Unsupported filterType:" + filterType);
-=======
-    case EQUALITY:
-      predicate = new EqPredicate(column, value);
-      break;
-    case RANGE:
-      predicate = new RangePredicate(column, value);
-      break;
-    case REGEXP_LIKE:
-      predicate = new RegexpLikePredicate(column, value);
-      break;
-    case NOT:
-      predicate = new NEqPredicate(column, value);
-      break;
-    case NOT_IN:
-      predicate = new NotInPredicate(column, value);
-      break;
-    case IN:
-      predicate = new InPredicate(column, value);
-      break;
-    case MATCHES:
-      predicate = new MatchesPredicate(column, value);
-      break;
-    default:
-      throw new UnsupportedOperationException("Unsupported filterType:" + filterType);
->>>>>>> Enhancing PQL to support MATCHES predicate, can be used for searching within text, map, json and other complex objects
     }
     return predicate;
   }

@@ -18,6 +18,11 @@
  */
 package org.apache.pinot.integration.tests;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.collect.Lists;
 import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -25,9 +30,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-
 import javax.annotation.Nonnull;
-
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -36,21 +39,20 @@ import org.apache.pinot.common.data.DimensionFieldSpec;
 import org.apache.pinot.common.data.FieldSpec;
 import org.apache.pinot.common.data.FieldSpec.DataType;
 import org.apache.pinot.common.data.Schema;
+import org.apache.pinot.common.data.TimeFieldSpec;
+import org.apache.pinot.common.data.TimeGranularitySpec;
+import org.apache.pinot.common.utils.KafkaStarterUtils;
 import org.apache.pinot.core.indexsegment.generator.SegmentVersion;
 import org.apache.pinot.tools.data.generator.AvroWriter;
 import org.apache.pinot.tools.query.comparison.StarTreeQueryGenerator;
 import org.apache.pinot.util.TestUtils;
+import org.joda.time.DateTime;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.google.common.collect.Lists;
 
-public class LuceneIndexClusterIntegrationTest extends BaseClusterIntegrationTest {
+public class LuceneIndexRealtimeClusterIntegrationTest extends RealtimeClusterIntegrationTest {
   protected static final String DEFAULT_TABLE_NAME = "myTable";
   static final long TOTAL_DOCS = 1_000L;
 
@@ -80,26 +82,41 @@ public class LuceneIndexClusterIntegrationTest extends BaseClusterIntegrationTes
     startBroker();
     startServers(1);
 
+    startKafka();
+
     _schema = new Schema();
-    FieldSpec jsonFieldSpec = new DimensionFieldSpec();
-    jsonFieldSpec.setDataType(DataType.BYTES);
-    jsonFieldSpec.setDefaultNullValue("{}".getBytes());
-    jsonFieldSpec.setObjectType("JSON");
-    jsonFieldSpec.setName("headers");
-    jsonFieldSpec.setSingleValueField(true);
-    _schema.addField(jsonFieldSpec);
+    _schema.setSchemaName(DEFAULT_TABLE_NAME);
+    FieldSpec byteField = new DimensionFieldSpec();
+    byteField.setDataType(DataType.BYTES);
+    byteField.setDefaultNullValue("{}".getBytes());
+    byteField.setObjectType("JSON");
+    byteField.setName("headers");
+    byteField.setSingleValueField(true);
+    _schema.addField(byteField);
+
+    FieldSpec timeField = new TimeFieldSpec();
+    timeField.setDataType(DataType.LONG);
+    ((TimeFieldSpec) timeField).setIncomingGranularitySpec(new TimeGranularitySpec(DataType.LONG,TimeUnit.DAYS,"daysSinceEpoch"));
+    timeField.setName("daysSinceEpoch");
+    timeField.setSingleValueField(true);
+    _schema.addField(timeField);
 
     // Create the tables
     ArrayList<String> invertedIndexColumns = Lists.newArrayList("headers");
-    addOfflineTable(DEFAULT_TABLE_NAME, null, null, null, null, null, SegmentVersion.v1,
-        invertedIndexColumns, null, null);
-    setUpSegmentsAndQueryGenerator();
+    ArrayList<String> noDictionaryColumns = Lists.newArrayList("headers");
 
-    // Wait for all documents loaded
+    File avroFile = createAvroFile();
     _currentTable = DEFAULT_TABLE_NAME;
-    waitForAllDocsLoaded(10_000);
-
+    addSchema(_schema);
+    addRealtimeTable(getTableName(), true, KafkaStarterUtils.DEFAULT_KAFKA_BROKER, KafkaStarterUtils.DEFAULT_ZK_STR,
+        getKafkaTopic(), getRealtimeSegmentFlushSize(), avroFile, null, null, DEFAULT_TABLE_NAME, null, null,
+        getLoadMode(), null, invertedIndexColumns, null, noDictionaryColumns,
+        getTaskConfig(), getStreamConsumerFactoryClassName());
+    completeTableConfiguration();
+    pushAvroIntoKafka(Lists.newArrayList(avroFile), getKafkaTopic(), Executors.newCachedThreadPool());
     Thread.currentThread().join();
+    // Wait for all documents loaded
+    waitForAllDocsLoaded(10_000);
   }
 
   @Override
@@ -107,7 +124,7 @@ public class LuceneIndexClusterIntegrationTest extends BaseClusterIntegrationTes
     return TOTAL_DOCS;
   }
   
-  protected void setUpSegmentsAndQueryGenerator() throws Exception {
+  protected File createAvroFile() throws Exception {
     org.apache.avro.Schema avroSchema = AvroWriter.getAvroSchema(_schema);
     DataFileWriter recordWriter =
         new DataFileWriter<>(new GenericDatumWriter<GenericData.Record>(avroSchema));
@@ -124,38 +141,22 @@ public class LuceneIndexClusterIntegrationTest extends BaseClusterIntegrationTes
       GenericData.Record record = new GenericData.Record(avroSchema);
       ByteBuffer byteBuffer = ByteBuffer.wrap(json.getBytes());
       record.put("headers", byteBuffer);
+      record.put("daysSinceEpoch", 15825L);
       recordWriter.append(record);
     }
     recordWriter.close();
 
-    // Unpack the Avro files
-    List<File> avroFiles = Lists.newArrayList(avroFile);
-
-    // Create and upload segments without star tree indexes from Avro data
-    createAndUploadSegments(avroFiles, DEFAULT_TABLE_NAME, false);
-
+    return avroFile;
 
   }
 
-  private void createAndUploadSegments(List<File> avroFiles, String tableName,
-      boolean createStarTreeIndex) throws Exception {
-    System.out.println("SEGMENT_DIR" + _segmentDir);
-    TestUtils.ensureDirectoriesExistAndEmpty(_segmentDir, _tarDir);
-
-    ExecutorService executor = Executors.newCachedThreadPool();
-    ClusterIntegrationTestUtils.buildSegmentsFromAvro(avroFiles, 0, _segmentDir, _tarDir, tableName,
-        createStarTreeIndex, null, null, _schema, executor);
-    executor.shutdown();
-    executor.awaitTermination(10, TimeUnit.MINUTES);
-
-    uploadSegments(_tarDir);
-  }
 
   @Test
   public void testQueries() throws Exception {
     String pqlQuery =
-        "Select count(*) from " + DEFAULT_TABLE_NAME + " WHERE headers matches('k1:\"value\\-1\"','')";
+        "Select count(*) from " + DEFAULT_TABLE_NAME + " WHERE headers matches('k1:\"value\"','')";
     JsonNode pinotResponse = postQuery(pqlQuery);
+    //expect 1000
     System.out.println(pinotResponse);
   }
 

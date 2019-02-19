@@ -80,4 +80,12 @@ public class JSONObject implements PinotObject {
     }
   }
 
+  @Override
+  public String toString() {
+    try {
+      return _MAPPER.writeValueAsString(_jsonNode);
+    } catch (JsonProcessingException e) {
+      return "{}";
+    }
+  }
 }

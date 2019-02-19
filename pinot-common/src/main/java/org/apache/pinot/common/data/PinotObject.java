@@ -50,7 +50,7 @@ public interface PinotObject {
   List<String> getPropertyNames();
 
   /**
-   * @param fieldName
+   * @param propertyName
    * @return the value of the property, it can be a single object or a list of objects.
    */
   Object getProperty(String propertyName);

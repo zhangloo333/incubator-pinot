@@ -295,6 +295,7 @@ public abstract class FieldSpec implements Comparable<FieldSpec>, ConfigNodeLife
     ObjectNode jsonObject = JsonUtils.newObjectNode();
     jsonObject.put("name", _name);
     jsonObject.put("dataType", _dataType.name());
+    jsonObject.put("objectType", _objectType);
     if (!_isSingleValueField) {
       jsonObject.put("singleValueField", false);
     }
@@ -457,6 +458,7 @@ public abstract class FieldSpec implements Comparable<FieldSpec>, ConfigNodeLife
         case DOUBLE:
           return Double.BYTES;
         case BYTES:
+        case STRING:
           // TODO: Metric size is only used for Star-tree generation, which is not supported yet.
           return MetricFieldSpec.UNDEFINED_METRIC_SIZE;
         default:

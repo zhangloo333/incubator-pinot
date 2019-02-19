@@ -52,24 +52,28 @@ public class LuceneIndexCreator implements InvertedIndexCreator {
   private final IndexWriter _writer;
   private final IndexWriterConfig _indexWriterConfig;
   private final Directory _indexDirectory;
-  // TODO:Figure out a way to avoid this
-  boolean _isText = false;
+  private String _objectType;
 
-  public LuceneIndexCreator(ColumnMetadata columnMetadata, File outputDirectory) {
+  public LuceneIndexCreator(String objectType, File outputDirectory) {
+    _objectType = objectType;
     // TODO: Get IndexConfig and set the different analyzer for each field by default we set
     // StandardAnalyzer and use TextField. This can be expensive and inefficient if all we need is
     // exact match. See keyword analyzer
     _analyzer = new PerFieldAnalyzerWrapper(new StandardAnalyzer());
     _indexWriterConfig = new IndexWriterConfig(_analyzer);
-    _indexWriterConfig.setRAMBufferSizeMB(MAX_BUFFER_SIZE_MB);
-    _isText = "TEXT".equalsIgnoreCase(columnMetadata.getObjectType());
+//    _indexWriterConfig.setRAMBufferSizeMB(MAX_BUFFER_SIZE_MB);
     try {
+      outputDirectory.mkdirs();
       _indexDirectory = FSDirectory.open(outputDirectory.toPath());
       _writer = new IndexWriter(_indexDirectory, _indexWriterConfig);
     } catch (IOException e) {
       LOGGER.error("Encountered error creating LuceneIndexCreator ", e);
       throw new RuntimeException(e);
     }
+  }
+
+  public Directory getIndexDirectory() {
+    return _indexDirectory;
   }
 
   @Override
@@ -91,9 +95,6 @@ public class LuceneIndexCreator implements InvertedIndexCreator {
     List<String> propertyNames = object.getPropertyNames();
     for (String propertyName : propertyNames) {
       Field field;
-      // TODO: Figure out a way to avoid special casing Text, have a way to get propertyType from
-      // pinotObject?
-      // TODO: Handle list field
       Object value = object.getProperty(propertyName);
       if (value.getClass().isAssignableFrom(List.class)) {
         List<?> list = (List<?>) value;
@@ -124,4 +125,7 @@ public class LuceneIndexCreator implements InvertedIndexCreator {
     _writer.close();
   }
 
+  public IndexWriter getWriter() {
+    return _writer;
+  }
 }

@@ -18,24 +18,65 @@
  */
 package org.apache.pinot.core.realtime.impl.invertedindex;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.collect.Lists;
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.IndexReader;
+import org.apache.pinot.common.data.DimensionFieldSpec;
+import org.apache.pinot.common.data.FieldSpec;
+import org.apache.pinot.common.data.PinotObject;
+import org.apache.pinot.common.data.objects.JSONObject;
 import org.apache.pinot.core.common.Predicate;
+import org.apache.pinot.core.common.predicate.MatchesPredicate;
+import org.apache.pinot.core.segment.creator.impl.V1Constants;
+import org.apache.pinot.core.segment.creator.impl.inv.LuceneIndexCreator;
 import org.apache.pinot.core.segment.index.readers.InvertedIndexReader;
+import org.apache.pinot.core.segment.index.readers.LuceneInvertedIndexReader;
 import org.roaringbitmap.buffer.MutableRoaringBitmap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 public class RealtimeInvertedIndexReader implements InvertedIndexReader<MutableRoaringBitmap> {
+  private static final Logger LOGGER = LoggerFactory.getLogger(RealtimeInvertedIndexReader.class);
+
   private final List<ThreadSafeMutableRoaringBitmap> _bitmaps = new ArrayList<>();
   private final ReentrantReadWriteLock.ReadLock _readLock;
   private final ReentrantReadWriteLock.WriteLock _writeLock;
+  private LuceneInvertedIndexReader _reader;
+  private LuceneIndexCreator _creator;
+  boolean isLuceneInitialized;
 
-  public RealtimeInvertedIndexReader() {
+  public RealtimeInvertedIndexReader(FieldSpec spec, String indexDir) {
     ReentrantReadWriteLock readWriteLock = new ReentrantReadWriteLock();
     _readLock = readWriteLock.readLock();
     _writeLock = readWriteLock.writeLock();
+    if (spec.getObjectType() != null) {
+      try {
+        File outputDirectory = new File(indexDir, spec.getName() + V1Constants.Indexes.LUCENE_INVERTED_INDEX_DIR);
+        _creator = new LuceneIndexCreator(spec.getObjectType(), outputDirectory);
+        DirectoryReader directoryReader = DirectoryReader.open(_creator.getWriter());
+        _reader = new LuceneInvertedIndexReader(directoryReader);
+        LOGGER.info("Initializing Lucene for column:{}", spec.getName());
+        isLuceneInitialized = true;
+      } catch (IOException e) {
+        LOGGER.error("Error initializing Lucene for column:{}", spec.getName(), e);
+      }
+    }
+  }
+
+  /**
+   * Add the document id to the bitmap for the given dictionary id.
+   */
+  public void add(int docId, PinotObject pinotObject) {
+    _creator.add(pinotObject);
   }
 
   /**
@@ -56,11 +97,12 @@ public class RealtimeInvertedIndexReader implements InvertedIndexReader<MutableR
       _bitmaps.get(dictId).checkAndAdd(docId);
     }
   }
-  
+
   @Override
   public MutableRoaringBitmap getDocIds(Predicate predicate) {
-    throw new UnsupportedOperationException("Predicate:"+ predicate + " is not supported");
+    return _reader.getDocIds(predicate);
   }
+
   @Override
   public MutableRoaringBitmap getDocIds(int dictId) {
     ThreadSafeMutableRoaringBitmap bitmap;
@@ -99,5 +141,27 @@ public class RealtimeInvertedIndexReader implements InvertedIndexReader<MutableR
     public synchronized MutableRoaringBitmap getMutableRoaringBitmap() {
       return _mutableRoaringBitmap.clone();
     }
+  }
+
+  public static void main(String[] args) {
+    FieldSpec byteField = new DimensionFieldSpec();
+    byteField.setDataType(FieldSpec.DataType.BYTES);
+    byteField.setDefaultNullValue("{}".getBytes());
+    byteField.setObjectType("JSON");
+    byteField.setName("headers");
+    byteField.setSingleValueField(true);
+    RealtimeInvertedIndexReader realtimeInvertedIndexReader =
+        new RealtimeInvertedIndexReader(byteField, "/tmp/headers_lucene");
+    for (int i = 0; i < 100; i++) {
+      ObjectNode jsonNode = JsonNodeFactory.instance.objectNode();
+      jsonNode.put("k1", "value" + i);
+      JSONObject jsonObject = new JSONObject();
+      jsonObject.init(jsonNode.toString().getBytes());
+      System.out.println("jsonObject = " + jsonObject);
+      realtimeInvertedIndexReader.add(i, jsonObject);
+    }
+    Predicate predicate = new MatchesPredicate("headers", Lists.newArrayList("k1:value*", ""));
+    MutableRoaringBitmap docIds = realtimeInvertedIndexReader.getDocIds(predicate);
+    System.out.println("docIds = " + docIds);
   }
 }

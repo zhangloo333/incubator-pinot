@@ -65,8 +65,7 @@ public class LuceneInvertedIndexReader implements InvertedIndexReader<MutableRoa
   /**
    * TODO: Change this to take PinotDataBuffer, work around for now since Lucene needs actual
    * directory
-   * @param metadata
-   * @param indexDir
+   * @param segmentIndexDir
    * @param metadata
    */
   public LuceneInvertedIndexReader(File segmentIndexDir, ColumnMetadata metadata) {
@@ -81,6 +80,10 @@ public class LuceneInvertedIndexReader implements InvertedIndexReader<MutableRoa
       LOGGER.error("Encountered error creating LuceneSearchIndexReader ", e);
       throw new RuntimeException(e);
     }
+  }
+
+  public LuceneInvertedIndexReader(IndexReader reader) {
+    _searcher = new IndexSearcher(reader);
   }
 
   @Override
@@ -104,8 +107,9 @@ public class LuceneInvertedIndexReader implements InvertedIndexReader<MutableRoa
 
   public MutableRoaringBitmap getDocIds(String queryStr, String options) {
     QueryParser queryParser = new QueryParser(TextObject.DEFAULT_FIELD, _analyzer);
-    Query query = null;
+    Query query;
     try {
+      queryStr = "k1:value1*";
       query = queryParser.parse(queryStr);
     } catch (ParseException e) {
       LOGGER.error("Encountered exception while parsing query {}", queryStr, e);
@@ -149,6 +153,7 @@ public class LuceneInvertedIndexReader implements InvertedIndexReader<MutableRoa
 
         @Override
         public void collect(int doc) throws IOException {
+          System.out.println("doc = " + doc);
           bitmap.add(doc);
         }
       };
