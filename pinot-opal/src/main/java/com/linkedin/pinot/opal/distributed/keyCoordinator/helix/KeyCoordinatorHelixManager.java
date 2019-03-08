@@ -19,30 +19,46 @@
 package com.linkedin.pinot.opal.distributed.keyCoordinator.helix;
 
 import org.apache.helix.HelixManager;
+import org.apache.helix.HelixManagerFactory;
+import org.apache.helix.InstanceType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
+import java.util.List;
+import java.util.Set;
 
 public class KeyCoordinatorHelixManager {
-  private static final Logger LOGGER = LoggerFactory.getLogger(KeyCoordinatorHelixManager.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(KeyCoordinatorHelixManager.class);
 
-  private final String _helixZkURL;
-  private final String _helixClusterName;
-  private final String _keyCoordinatorId;
+    private final String _helixZkURL;
+    private final String _helixClusterName;
+    private final String _keyCoordinatorId;
+    private final HelixManager _spectatorHelixManager;
+    private final ActiveTableTracker _tableTracker;
 
-  private HelixManager _helixZkManager;
+    private HelixManager _helixZkManager;
 
-  public KeyCoordinatorHelixManager(@Nonnull String zkURL, @Nonnull String helixClusterName,
-                                    @Nonnull String keyCoordinatorId) {
-    _helixZkURL = zkURL;
-    _helixClusterName = helixClusterName;
-    _keyCoordinatorId = keyCoordinatorId;
-  }
+    public KeyCoordinatorHelixManager(@Nonnull String zkURL, @Nonnull String helixClusterName,
+                                      @Nonnull String keyCoordinatorId, Set<String> existingTables, TableListener listener) throws Exception {
+        _helixZkURL = zkURL;
+        _helixClusterName = helixClusterName;
+        _keyCoordinatorId = keyCoordinatorId;
+        _tableTracker = new ActiveTableTracker(existingTables, listener);
 
-  public synchronized void start() {
-    LOGGER.info("starting key coordinator");
-    // TODO add helix related logics for fail over
-    LOGGER.info("finished starting of key coordinator");
-  }
+        _spectatorHelixManager =
+                HelixManagerFactory.getZKHelixManager(_helixClusterName, _keyCoordinatorId, InstanceType.SPECTATOR, _helixZkURL);
+        _spectatorHelixManager.connect();
+        _spectatorHelixManager.addExternalViewChangeListener(_tableTracker);
+    }
+
+    public synchronized void start() {
+        LOGGER.info("starting key coordinator");
+        // TODO add helix related logics for fail over
+        LOGGER.info("finished starting of key coordinator");
+    }
+
+    public ActiveTableTracker getTableTracker() {
+        return _tableTracker;
+    }
 }
