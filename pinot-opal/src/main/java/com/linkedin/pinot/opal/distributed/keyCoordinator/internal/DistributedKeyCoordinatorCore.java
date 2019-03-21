@@ -82,7 +82,6 @@ public class DistributedKeyCoordinatorCore {
     _keyValueStoreDB = getKeyValueStore(conf.subset(KeyCoordinatorConf.KEY_COORDINATOR_KV_STORE));
     _coreThread = Executors.newSingleThreadExecutor();
 
-    // local local config
     fetchMsgDelayMs = conf.getInt(KeyCoordinatorConf.FETCH_MSG_DELAY_MS,
         KeyCoordinatorConf.FETCH_MSG_DELAY_MS_DEFAULT);
     fetchMsgMaxDelayMs = conf.getInt(KeyCoordinatorConf.FETCH_MSG_MAX_DELAY_MS,
@@ -102,7 +101,7 @@ public class DistributedKeyCoordinatorCore {
   public void messageProcessLoop() {
     try {
       _state = State.RUNNING;
-      LOGGER.info("starting local key coordinator");
+      LOGGER.info("starting key coordinator");
       long flushDeadline = System.currentTimeMillis() + fetchMsgMaxDelayMs;
       List<KeyCoordinatorQueueMsg> messages = new ArrayList<>(fetchMsgMaxCount);
       while (_state == State.RUNNING) {
@@ -165,24 +164,24 @@ public class DistributedKeyCoordinatorCore {
         return;
       }
       KeyValueStoreTable<byte[], byte[]> table = _keyValueStoreDB.getTable(tableName);
-      Map<ByteArrayWrapper, KeyCoordinatorMessageContext> keyValueMap = new HashMap<>(msgList.size());
+      Map<ByteArrayWrapper, KeyCoordinatorMessageContext> primaryKeyToValueMap = new HashMap<>(msgList.size());
 
       List<ProduceTask<String, LogCoordinatorMessage>> tasks = new ArrayList<>();
       for (KeyCoordinatorQueueMsg msg: msgList) {
         ByteArrayWrapper key = new ByteArrayWrapper(msg.getKey());
-        if (!keyValueMap.containsKey(key) || _messageResolveStrategy.compareMessage(keyValueMap.get(key), msg.getContext())) {
-          keyValueMap.put(key, msg.getContext());
+        if (!primaryKeyToValueMap.containsKey(key) || _messageResolveStrategy.compareMessage(primaryKeyToValueMap.get(key), msg.getContext())) {
+          primaryKeyToValueMap.put(key, msg.getContext());
         }
       }
-      LOGGER.info("found total of {} duplicated keys", msgList.size() - keyValueMap.size());
+      LOGGER.info("found total of {} duplicated keys", msgList.size() - primaryKeyToValueMap.size());
       Map<byte[], byte[]> result = table.multiGet(
-          keyValueMap.keySet().stream().map(ByteArrayWrapper::getData).collect(Collectors.toList()));
+          primaryKeyToValueMap.keySet().stream().map(ByteArrayWrapper::getData).collect(Collectors.toList()));
       for (Map.Entry<byte[], byte[]> entry: result.entrySet()) {
         emitDeleteActionForOldEvents(tableName, KeyCoordinatorMessageContext.fromBytes(entry.getValue()),
-            keyValueMap.get(new ByteArrayWrapper(entry.getKey())), tasks);
+            primaryKeyToValueMap.get(new ByteArrayWrapper(entry.getKey())), tasks);
       }
       for (KeyCoordinatorQueueMsg msg: msgList) {
-        emitInsertActionForNewEvents(tableName, msg.getKey(), msg.getContext(), keyValueMap, tasks);
+        emitInsertActionForNewEvents(tableName, msg.getKey(), msg.getContext(), primaryKeyToValueMap, tasks);
       }
 //      LOGGER.info("table {}: found {} keys in kv store out of {} keys", table, foundKeyCount, msgList.size());
       LOGGER.info("sending {} tasks to log coordinator queue", tasks.size());
@@ -190,7 +189,7 @@ public class DistributedKeyCoordinatorCore {
       List<ProduceTask<String, LogCoordinatorMessage>> failedTasks = sendMessagesToLogCoordinator(tasks, 10, TimeUnit.SECONDS);
       LOGGER.info("send to producer take {} ms and {} failed", System.currentTimeMillis() - startTime, failedTasks.size());
 
-      updateKeyValueStore(table, keyValueMap);
+      updateKeyValueStore(table, primaryKeyToValueMap);
       LOGGER.info("updated list of message to key value store");
     } catch (IOException e) {
       throw new RuntimeException("failed to interact with rocksdb", e);
@@ -199,6 +198,9 @@ public class DistributedKeyCoordinatorCore {
     }
   }
 
+  /**
+   * generate a deletion event for an old record in key value store before we update the kv-store
+   */
   private void emitDeleteActionForOldEvents(String tableName, Optional<KeyCoordinatorMessageContext> oldContext,
                                             KeyCoordinatorMessageContext newContext, List<ProduceTask<String, LogCoordinatorMessage>> tasks) {
     if (oldContext.isPresent() && _messageResolveStrategy.compareMessage(oldContext.get(), newContext)) {
@@ -210,6 +212,9 @@ public class DistributedKeyCoordinatorCore {
     }
   }
 
+  /**
+   * generate a insertion event for an new record we received from pinot ingestion
+   */
   private void emitInsertActionForNewEvents(String table, byte[] key, KeyCoordinatorMessageContext context,
                                             Map<ByteArrayWrapper, KeyCoordinatorMessageContext> keyMap,
                                             List<ProduceTask<String, LogCoordinatorMessage>> tasks) {

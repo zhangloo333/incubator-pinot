@@ -21,16 +21,8 @@ package org.apache.pinot.broker.requesthandler;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.Splitter;
 import com.google.common.util.concurrent.RateLimiter;
-import java.net.InetAddress;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import javax.annotation.Nullable;
-import javax.annotation.concurrent.ThreadSafe;
+import com.linkedin.pinot.broker.requesthandler.LowWaterMarkQueryWriter;
+import com.linkedin.pinot.broker.upsert.LowWaterMarkService;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.pinot.broker.api.RequestStatistics;
@@ -57,7 +49,26 @@ import org.apache.pinot.pql.parsers.Pql2Compiler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.pinot.common.utils.CommonConstants.Broker.*;
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.ThreadSafe;
+import java.net.InetAddress;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
+import static org.apache.pinot.common.utils.CommonConstants.Broker.CONFIG_OF_BROKER_ID;
+import static org.apache.pinot.common.utils.CommonConstants.Broker.CONFIG_OF_BROKER_QUERY_LOG_LENGTH;
+import static org.apache.pinot.common.utils.CommonConstants.Broker.CONFIG_OF_BROKER_QUERY_LOG_MAX_RATE_PER_SECOND;
+import static org.apache.pinot.common.utils.CommonConstants.Broker.CONFIG_OF_BROKER_QUERY_RESPONSE_LIMIT;
+import static org.apache.pinot.common.utils.CommonConstants.Broker.CONFIG_OF_BROKER_TIMEOUT_MS;
+import static org.apache.pinot.common.utils.CommonConstants.Broker.DEFAULT_BROKER_QUERY_LOG_LENGTH;
+import static org.apache.pinot.common.utils.CommonConstants.Broker.DEFAULT_BROKER_QUERY_LOG_MAX_RATE_PER_SECOND;
+import static org.apache.pinot.common.utils.CommonConstants.Broker.DEFAULT_BROKER_QUERY_RESPONSE_LIMIT;
+import static org.apache.pinot.common.utils.CommonConstants.Broker.DEFAULT_BROKER_TIMEOUT_MS;
 import static org.apache.pinot.common.utils.CommonConstants.Broker.Request.DEBUG_OPTIONS;
 import static org.apache.pinot.common.utils.CommonConstants.Broker.Request.PQL;
 import static org.apache.pinot.common.utils.CommonConstants.Broker.Request.TRACE;
@@ -74,6 +85,7 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
   protected final AccessControlFactory _accessControlFactory;
   protected final QueryQuotaManager _queryQuotaManager;
   protected final BrokerMetrics _brokerMetrics;
+  protected final LowWaterMarkService _lwmService;
 
   protected final AtomicLong _requestIdGenerator = new AtomicLong();
   protected final BrokerRequestOptimizer _brokerRequestOptimizer = new BrokerRequestOptimizer();
@@ -90,13 +102,14 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
 
   public BaseBrokerRequestHandler(Configuration config, RoutingTable routingTable,
       TimeBoundaryService timeBoundaryService, AccessControlFactory accessControlFactory,
-      QueryQuotaManager queryQuotaManager, BrokerMetrics brokerMetrics) {
+      QueryQuotaManager queryQuotaManager, BrokerMetrics brokerMetrics, LowWaterMarkService lowWaterMarkService) {
     _config = config;
     _routingTable = routingTable;
     _timeBoundaryService = timeBoundaryService;
     _accessControlFactory = accessControlFactory;
     _queryQuotaManager = queryQuotaManager;
     _brokerMetrics = brokerMetrics;
+    _lwmService = lowWaterMarkService;
 
     _brokerId = config.getString(CONFIG_OF_BROKER_ID, getDefaultBrokerId());
     _brokerTimeoutMs = config.getLong(CONFIG_OF_BROKER_TIMEOUT_MS, DEFAULT_BROKER_TIMEOUT_MS);
@@ -254,6 +267,9 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
       requestStatistics.setFanoutType(RequestStatistics.FanoutType.REALTIME);
     }
 
+    // Augment the realtime request with LowWaterMark constraints.
+    addLowWaterMarkToQuery(realtimeBrokerRequest, rawTableName);
+
     // Calculate routing table for the query
     long routingStartTimeNs = System.nanoTime();
     Map<String, List<String>> offlineRoutingTable = null;
@@ -337,7 +353,6 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
     }
     return brokerResponse;
   }
-
   /**
    * Helper function to decide whether to force the log
    *
@@ -469,6 +484,15 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
       brokerRequest.setFilterQuery(timeFilterQuery);
       brokerRequest.setFilterSubQueryMap(filterSubQueryMap);
     }
+  }
+
+  private void addLowWaterMarkToQuery(BrokerRequest realtimeBrokerRequest, String rawTableName) {
+    Map<Integer, Long> lowWaterMarks = _lwmService.getLowWaterMarks(rawTableName);
+    if (lowWaterMarks == null || lowWaterMarks.size() == 0) {
+      return;
+    }
+    LOGGER.info("Found low water marks {} for table {}", String.valueOf(lowWaterMarks), rawTableName);
+    LowWaterMarkQueryWriter.addLowWaterMarkToQuery(realtimeBrokerRequest, lowWaterMarks);
   }
 
   /**

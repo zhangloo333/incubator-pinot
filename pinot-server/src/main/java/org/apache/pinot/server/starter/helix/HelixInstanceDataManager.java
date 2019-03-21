@@ -23,6 +23,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
@@ -308,6 +309,12 @@ public class HelixInstanceDataManager implements InstanceDataManager {
       }
     }
     return null;
+  }
+
+  @Override
+  public Map<String, Map<Integer, Long>> getLowWaterMarks() {
+    // TODO(tingchen/sjames) fill the content of this method.
+    return Collections.EMPTY_MAP;
   }
 
   @Nonnull

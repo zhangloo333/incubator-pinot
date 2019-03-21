@@ -20,6 +20,7 @@ package org.apache.pinot.core.data.manager;
 
 import java.io.File;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -144,4 +145,9 @@ public interface InstanceDataManager {
    * Returns the maximum number of segments allowed to refresh in parallel.
    */
   int getMaxParallelRefreshThreads();
+
+  /**
+   * Return the mappings from partition -> low water marks of all the tables hosted in this server.
+   */
+  Map<String, Map<Integer, Long>> getLowWaterMarks();
 }

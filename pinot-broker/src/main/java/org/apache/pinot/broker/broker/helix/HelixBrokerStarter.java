@@ -19,12 +19,9 @@
 package org.apache.pinot.broker.broker.helix;
 
 import com.google.common.collect.ImmutableList;
+import com.linkedin.pinot.broker.upsert.LowWaterMarkService;
+import com.linkedin.pinot.broker.upsert.PollingBasedLowWaterMarkService;
 import com.yammer.metrics.core.MetricsRegistry;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import javax.annotation.Nullable;
 import org.apache.commons.configuration.BaseConfiguration;
 import org.apache.commons.configuration.Configuration;
 import org.apache.helix.HelixAdmin;
@@ -59,6 +56,12 @@ import org.apache.pinot.common.utils.ServiceStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 
 @SuppressWarnings("unused")
 public class HelixBrokerStarter {
@@ -90,6 +93,8 @@ public class HelixBrokerStarter {
   // Participant Helix manager handles Helix functionality such as state transitions and messages
   private HelixManager _participantHelixManager;
   private TimeboundaryRefreshMessageHandlerFactory _tbiMessageHandler;
+
+  private LowWaterMarkService _lwmService;
 
   public HelixBrokerStarter(Configuration brokerConf, String clusterName, String zkServer)
       throws Exception {
@@ -164,6 +169,8 @@ public class HelixBrokerStarter {
     _propertyStore = _spectatorHelixManager.getHelixPropertyStore();
     _helixDataAccessor = _spectatorHelixManager.getHelixDataAccessor();
 
+    _lwmService = new PollingBasedLowWaterMarkService();
+
     // Set up the broker server builder
     LOGGER.info("Setting up broker server builder");
     _helixExternalViewBasedRouting =
@@ -172,7 +179,7 @@ public class HelixBrokerStarter {
     _helixExternalViewBasedQueryQuotaManager = new HelixExternalViewBasedQueryQuotaManager();
     _helixExternalViewBasedQueryQuotaManager.init(_spectatorHelixManager);
     _brokerServerBuilder = new BrokerServerBuilder(_brokerConf, _helixExternalViewBasedRouting,
-        _helixExternalViewBasedRouting.getTimeBoundaryService(), _helixExternalViewBasedQueryQuotaManager);
+        _helixExternalViewBasedRouting.getTimeBoundaryService(), _helixExternalViewBasedQueryQuotaManager, _lwmService);
     BrokerRequestHandler brokerRequestHandler = _brokerServerBuilder.getBrokerRequestHandler();
     if (brokerRequestHandler instanceof ConnectionPoolBrokerRequestHandler) {
       _liveInstanceChangeHandler = new LiveInstanceChangeHandler();

@@ -19,8 +19,8 @@
 package org.apache.pinot.broker.broker;
 
 import com.google.common.base.Preconditions;
+import com.linkedin.pinot.broker.upsert.LowWaterMarkService;
 import com.yammer.metrics.core.MetricsRegistry;
-import java.util.concurrent.atomic.AtomicReference;
 import org.apache.commons.configuration.Configuration;
 import org.apache.pinot.broker.queryquota.QueryQuotaManager;
 import org.apache.pinot.broker.requesthandler.BrokerRequestHandler;
@@ -34,6 +34,8 @@ import org.apache.pinot.common.utils.CommonConstants.Broker;
 import org.apache.pinot.common.utils.CommonConstants.Helix;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.atomic.AtomicReference;
 
 
 public class BrokerServerBuilder {
@@ -56,9 +58,11 @@ public class BrokerServerBuilder {
   private final BrokerMetrics _brokerMetrics;
   private final BrokerRequestHandler _brokerRequestHandler;
   private final BrokerAdminApiApplication _brokerAdminApplication;
+  private final LowWaterMarkService _lwmService;
 
   public BrokerServerBuilder(Configuration config, RoutingTable routingTable, TimeBoundaryService timeBoundaryService,
-      QueryQuotaManager queryQuotaManager) {
+      QueryQuotaManager queryQuotaManager, LowWaterMarkService lowWaterMarkService) {
+    _state.set(State.INIT);
     _config = config;
     _delayedShutdownTimeMs =
         config.getLong(Broker.CONFIG_OF_DELAY_SHUTDOWN_TIME_MS, Broker.DEFAULT_DELAY_SHUTDOWN_TIME_MS);
@@ -74,6 +78,7 @@ public class BrokerServerBuilder {
     _brokerMetrics.initializeGlobalMeters();
     _brokerRequestHandler = buildRequestHandler();
     _brokerAdminApplication = new BrokerAdminApiApplication(this);
+    _lwmService = lowWaterMarkService;
   }
 
   private BrokerRequestHandler buildRequestHandler() {
@@ -82,11 +87,11 @@ public class BrokerServerBuilder {
     if (requestHandlerType.equalsIgnoreCase(Broker.CONNECTION_POOL_REQUEST_HANDLER_TYPE)) {
       LOGGER.info("Using ConnectionPoolBrokerRequestHandler");
       return new ConnectionPoolBrokerRequestHandler(_config, _routingTable, _timeBoundaryService, _accessControlFactory,
-          _queryQuotaManager, _brokerMetrics, _metricsRegistry);
+          _queryQuotaManager, _brokerMetrics, _metricsRegistry, _lwmService);
     } else {
       LOGGER.info("Using SingleConnectionBrokerRequestHandler");
       return new SingleConnectionBrokerRequestHandler(_config, _routingTable, _timeBoundaryService,
-          _accessControlFactory, _queryQuotaManager, _brokerMetrics);
+          _accessControlFactory, _queryQuotaManager, _brokerMetrics, _lwmService);
     }
   }
 

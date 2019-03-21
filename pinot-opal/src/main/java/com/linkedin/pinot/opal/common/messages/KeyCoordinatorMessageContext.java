@@ -23,6 +23,13 @@ import org.apache.commons.lang.SerializationUtils;
 import java.io.Serializable;
 import java.util.Optional;
 
+/**
+ * this class is used as the value stored in key-value store
+ * following field:
+ * segmentName: the name of the segment that contains this record
+ * timestamp: the timestamp of the current message (from pinot raw data)
+ * kafkaOffset: the kafka offset of this message
+ */
 public class KeyCoordinatorMessageContext implements Serializable {
 
   private final String _segmentName;

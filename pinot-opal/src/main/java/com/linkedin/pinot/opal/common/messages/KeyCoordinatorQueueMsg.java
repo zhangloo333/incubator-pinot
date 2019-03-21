@@ -25,6 +25,10 @@ import org.apache.kafka.common.serialization.Serializer;
 import java.io.Serializable;
 import java.util.Map;
 
+/**
+ * class used for the message pass from pint ingestor and the key coordinator
+ * it contains the following field: table name, primary key and other metadata (in the _context field)
+ */
 public class KeyCoordinatorQueueMsg implements Serializable {
   private final String _pinotTable;
   private final byte[] _key;

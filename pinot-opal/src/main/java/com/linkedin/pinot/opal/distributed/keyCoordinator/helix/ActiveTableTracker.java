@@ -30,8 +30,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import static com.linkedin.pinot.common.utils.CommonConstants.Helix.BROKER_RESOURCE_INSTANCE;
-import static com.linkedin.pinot.common.utils.CommonConstants.Helix.TableType.REALTIME;
+import static org.apache.pinot.common.utils.CommonConstants.Helix.BROKER_RESOURCE_INSTANCE;
+import static org.apache.pinot.common.utils.CommonConstants.Helix.TableType.REALTIME;
 
 /**
  * Tracks all the changes happening in the Pinot cluster for all external views

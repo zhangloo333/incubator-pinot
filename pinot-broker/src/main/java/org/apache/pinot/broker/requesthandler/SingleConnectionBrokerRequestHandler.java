@@ -23,6 +23,9 @@ import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
+
+import com.linkedin.pinot.broker.requesthandler.LowWaterMarkQueryWriter;
+import com.linkedin.pinot.broker.upsert.LowWaterMarkService;
 import org.apache.commons.configuration.Configuration;
 import org.apache.pinot.broker.api.RequestStatistics;
 import org.apache.pinot.broker.broker.AccessControlFactory;
@@ -54,9 +57,9 @@ public class SingleConnectionBrokerRequestHandler extends BaseBrokerRequestHandl
   private final QueryRouter _queryRouter;
 
   public SingleConnectionBrokerRequestHandler(Configuration config, RoutingTable routingTable,
-      TimeBoundaryService timeBoundaryService, AccessControlFactory accessControlFactory,
-      QueryQuotaManager queryQuotaManager, BrokerMetrics brokerMetrics) {
-    super(config, routingTable, timeBoundaryService, accessControlFactory, queryQuotaManager, brokerMetrics);
+                                              TimeBoundaryService timeBoundaryService, AccessControlFactory accessControlFactory,
+                                              QueryQuotaManager queryQuotaManager, BrokerMetrics brokerMetrics, LowWaterMarkService lowWaterMarkService) {
+    super(config, routingTable, timeBoundaryService, accessControlFactory, queryQuotaManager, brokerMetrics, lowWaterMarkService);
     _queryRouter = new QueryRouter(_brokerId, brokerMetrics);
   }
 

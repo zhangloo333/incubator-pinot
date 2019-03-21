@@ -26,7 +26,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 
-import static com.linkedin.pinot.common.utils.CommonConstants.Helix.BROKER_RESOURCE_INSTANCE;
+import static org.apache.pinot.common.utils.CommonConstants.Helix.BROKER_RESOURCE_INSTANCE;
 import static org.testng.Assert.assertEquals;
 import static org.testng.AssertJUnit.fail;
 
