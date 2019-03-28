@@ -78,8 +78,8 @@ public final class Schema {
   @ConfigKey("offsetKey")
   private String _offsetKey;
 
-  @ConfigKey("updateSchematic")
-  private String _updateSchematic;
+  @ConfigKey("updateSemantic")
+  private String _updateSemantic;
 
   @ConfigKey("dimensions")
   @UseChildKeyHandler(DimensionFieldSpecChildKeyHandler.class)
@@ -98,6 +98,7 @@ public final class Schema {
 
   // Json ignored fields
   private transient final Map<String, FieldSpec> _fieldSpecMap = new HashMap<>();
+  private transient final Map<String, FieldSpec> _physicalFieldSpecMap = new HashMap<>();
   private transient final List<String> _dimensionNames = new ArrayList<>();
   private transient final List<String> _metricNames = new ArrayList<>();
   private transient final List<String> _dateTimeNames = new ArrayList<>();
@@ -148,16 +149,16 @@ public final class Schema {
     _offsetKey = offsetKey;
   }
 
-  public String getUpdateSchematic() {
-    return _updateSchematic;
+  public String getUpdateSemantic() {
+    return _updateSemantic;
   }
 
-  public void setUpdateSchematic(@Nonnull String updateSchematic) {
-    _updateSchematic = updateSchematic;
+  public void setUpdateSemantic(@Nonnull String updateSemantic) {
+    _updateSemantic = updateSemantic;
   }
 
   public boolean isTableForUpsert() {
-    return UPSERT_TABLE_CONFIG.equalsIgnoreCase(_updateSchematic);
+    return UPSERT_TABLE_CONFIG.equalsIgnoreCase(_updateSemantic);
   }
 
   public DimensionFieldSpec getPrimaryKeyFieldSpec() {
@@ -297,6 +298,9 @@ public final class Schema {
     }
 
     _fieldSpecMap.put(columnName, fieldSpec);
+    if (!fieldSpec.isVirtualColumnField()) {
+      _physicalFieldSpecMap.put(columnName, fieldSpec);
+    }
   }
 
   @Deprecated
@@ -307,6 +311,9 @@ public final class Schema {
 
   public boolean removeField(String columnName) {
     FieldSpec existingFieldSpec = _fieldSpecMap.remove(columnName);
+    if (_physicalFieldSpecMap.containsKey(columnName)) {
+      _physicalFieldSpecMap.remove(columnName);
+    }
     if (existingFieldSpec != null) {
       FieldType fieldType = existingFieldSpec.getFieldType();
       switch (fieldType) {
@@ -371,6 +378,12 @@ public final class Schema {
   @Nonnull
   public Collection<FieldSpec> getAllFieldSpecs() {
     return _fieldSpecMap.values();
+  }
+
+  @JsonIgnore
+  @Nonnull
+  public Collection<FieldSpec> getAllPhysicalFieldSpecs() {
+    return _physicalFieldSpecMap.values();
   }
 
   public int size() {
@@ -472,9 +485,11 @@ public final class Schema {
       }
       jsonObject.set("dateTimeFieldSpecs", jsonArray);
     }
-    jsonObject.put("primaryKey", _primaryKey);
-    jsonObject.put("offsetKey", _offsetKey);
-    jsonObject.put("updateSchematic", _updateSchematic);
+    jsonObject.put("updateSchematic", _updateSemantic);
+    if (UPSERT_TABLE_CONFIG.equalsIgnoreCase(_updateSemantic)) {
+      jsonObject.put("primaryKey", _primaryKey);
+      jsonObject.put("offsetKey", _offsetKey);
+    }
     return jsonObject;
   }
 

@@ -22,18 +22,20 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Preconditions;
+import org.apache.helix.ZNRecord;
+import org.apache.pinot.common.data.StarTreeIndexSpec;
+import org.apache.pinot.common.utils.CommonConstants.Helix.TableType;
+import org.apache.pinot.common.utils.CommonConstants.UpdateSemantic;
+import org.apache.pinot.common.utils.EqualityUtils;
+import org.apache.pinot.common.utils.JsonUtils;
+import org.apache.pinot.startree.hll.HllConfig;
+
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import javax.annotation.Nullable;
-import org.apache.helix.ZNRecord;
-import org.apache.pinot.common.data.StarTreeIndexSpec;
-import org.apache.pinot.common.utils.CommonConstants.Helix.TableType;
-import org.apache.pinot.common.utils.EqualityUtils;
-import org.apache.pinot.common.utils.JsonUtils;
-import org.apache.pinot.startree.hll.HllConfig;
 
 
 @SuppressWarnings("unused")
@@ -42,6 +44,7 @@ import org.apache.pinot.startree.hll.HllConfig;
 public class TableConfig {
   public static final String TABLE_NAME_KEY = "tableName";
   public static final String TABLE_TYPE_KEY = "tableType";
+  private static final String UPDATE_SEMANTIC_CONFIG_KEY = "updateSemantic";
   public static final String VALIDATION_CONFIG_KEY = "segmentsConfig";
   public static final String TENANT_CONFIG_KEY = "tenants";
   public static final String INDEXING_CONFIG_KEY = "tableIndexConfig";
@@ -51,6 +54,7 @@ public class TableConfig {
   public static final String ROUTING_CONFIG_KEY = "routing";
 
   private static final String FIELD_MISSING_MESSAGE_TEMPLATE = "Mandatory field '%s' is missing";
+
 
   @ConfigKey("name")
   @ConfigDoc(value = "The name for the table.", mandatory = true, exampleValue = "myTable")
@@ -82,6 +86,10 @@ public class TableConfig {
   @NestedConfig
   private RoutingConfig _routingConfig;
 
+  @ConfigKey("updateSemantic")
+  @ConfigDoc(value = "The update semantic of the table, either append or upsert, default as append", mandatory = false)
+  private UpdateSemantic _updateSemantic;
+
   /**
    * NOTE: DO NOT use this constructor, use builder instead. This constructor is for deserializer only.
    */
@@ -94,6 +102,15 @@ public class TableConfig {
   private TableConfig(String tableName, TableType tableType, SegmentsValidationAndRetentionConfig validationConfig,
       TenantConfig tenantConfig, IndexingConfig indexingConfig, TableCustomConfig customConfig,
       @Nullable QuotaConfig quotaConfig, @Nullable TableTaskConfig taskConfig, @Nullable RoutingConfig routingConfig) {
+    this(tableName, tableType, validationConfig, tenantConfig, indexingConfig, customConfig, quotaConfig,
+        taskConfig, routingConfig, UpdateSemantic.APPEND);
+  }
+
+  private TableConfig(String tableName, TableType tableType,
+      SegmentsValidationAndRetentionConfig validationConfig, TenantConfig tenantConfig,
+      IndexingConfig indexingConfig, TableCustomConfig customConfig,
+      @Nullable QuotaConfig quotaConfig, @Nullable TableTaskConfig taskConfig, @Nullable RoutingConfig routingConfig,
+      @Nullable UpdateSemantic updateSemantic) {
     _tableName = TableNameBuilder.forType(tableType).tableNameWithType(tableName);
     _tableType = tableType;
     _validationConfig = validationConfig;
@@ -103,6 +120,7 @@ public class TableConfig {
     _quotaConfig = quotaConfig;
     _taskConfig = taskConfig;
     _routingConfig = routingConfig;
+    _updateSemantic = updateSemantic;
   }
 
   public static TableConfig fromJsonString(String jsonString)
@@ -146,8 +164,13 @@ public class TableConfig {
 
     RoutingConfig routingConfig = extractChildConfig(jsonConfig, ROUTING_CONFIG_KEY, RoutingConfig.class);
 
+    UpdateSemantic updateSemantic = UpdateSemantic.DEFAULT_SEMANTIC;
+    if (jsonConfig.has(UPDATE_SEMANTIC_CONFIG_KEY)) {
+      updateSemantic = UpdateSemantic.getUpdateSemantic(jsonConfig.get(UPDATE_SEMANTIC_CONFIG_KEY).asText());
+    }
+
     return new TableConfig(tableName, tableType, validationConfig, tenantConfig, indexingConfig, customConfig,
-        quotaConfig, taskConfig, routingConfig);
+        quotaConfig, taskConfig, routingConfig, updateSemantic);
   }
 
   /**
@@ -193,6 +216,7 @@ public class TableConfig {
       jsonConfig.set(ROUTING_CONFIG_KEY, JsonUtils.objectToJsonNode(_routingConfig));
     }
 
+    jsonConfig.put(UPDATE_SEMANTIC_CONFIG_KEY, _updateSemantic.toString());
     return jsonConfig;
   }
 
@@ -250,8 +274,10 @@ public class TableConfig {
       routingConfig = JsonUtils.stringToObject(routingConfigString, RoutingConfig.class);
     }
 
+    UpdateSemantic updateSemantic = UpdateSemantic.getUpdateSemantic(simpleFields.get(UPDATE_SEMANTIC_CONFIG_KEY));
+
     return new TableConfig(tableName, tableType, validationConfig, tenantConfig, indexingConfig, customConfig,
-        quotaConfig, taskConfig, routingConfig);
+        quotaConfig, taskConfig, routingConfig, updateSemantic);
   }
 
   public ZNRecord toZNRecord()
@@ -280,6 +306,7 @@ public class TableConfig {
     }
 
     ZNRecord znRecord = new ZNRecord(_tableName);
+    simpleFields.put(UPDATE_SEMANTIC_CONFIG_KEY, _updateSemantic.toString());
     znRecord.setSimpleFields(simpleFields);
     return znRecord;
   }
@@ -372,6 +399,15 @@ public class TableConfig {
     _routingConfig = routingConfig;
   }
 
+
+  public UpdateSemantic getUpdateSemantic() {
+    return _updateSemantic;
+  }
+
+  public void setUpdateSemantic(UpdateSemantic updateSemantic) {
+    _updateSemantic = updateSemantic;
+  }
+
   @Override
   public String toString() {
     try {
@@ -393,7 +429,8 @@ public class TableConfig {
           .isEqual(_tenantConfig, that._tenantConfig) && EqualityUtils.isEqual(_indexingConfig, that._indexingConfig)
           && EqualityUtils.isEqual(_customConfig, that._customConfig) && EqualityUtils
           .isEqual(_quotaConfig, that._quotaConfig) && EqualityUtils.isEqual(_taskConfig, that._taskConfig)
-          && EqualityUtils.isEqual(_routingConfig, that._routingConfig);
+          && EqualityUtils.isEqual(_routingConfig, that._routingConfig) &&
+          EqualityUtils.isEqual(_updateSemantic, that._updateSemantic);
     }
     return false;
   }
@@ -409,6 +446,7 @@ public class TableConfig {
     result = EqualityUtils.hashCodeOf(result, _quotaConfig);
     result = EqualityUtils.hashCodeOf(result, _taskConfig);
     result = EqualityUtils.hashCodeOf(result, _routingConfig);
+    result = EqualityUtils.hashCodeOf(result, _updateSemantic);
     return result;
   }
 
@@ -458,6 +496,8 @@ public class TableConfig {
     private RoutingConfig _routingConfig;
     private HllConfig _hllConfig;
     private StarTreeIndexSpec _starTreeIndexSpec;
+
+    private UpdateSemantic _updateSemantic;
 
     public Builder(TableType tableType) {
       _tableType = tableType;
@@ -609,6 +649,11 @@ public class TableConfig {
       return this;
     }
 
+    public Builder setUpdateSemantic(UpdateSemantic updateSemantic) {
+      _updateSemantic = updateSemantic;
+      return this;
+    }
+
     public TableConfig build() {
       // Validation config
       SegmentsValidationAndRetentionConfig validationConfig = new SegmentsValidationAndRetentionConfig();
@@ -653,8 +698,12 @@ public class TableConfig {
         _customConfig.setCustomConfigs(new HashMap<>());
       }
 
+      if (_updateSemantic == null) {
+        _updateSemantic = UpdateSemantic.DEFAULT_SEMANTIC;
+      }
+
       return new TableConfig(_tableName, _tableType, validationConfig, tenantConfig, indexingConfig, _customConfig,
-          _quotaConfig, _taskConfig, _routingConfig);
+          _quotaConfig, _taskConfig, _routingConfig, _updateSemantic);
     }
   }
 }
