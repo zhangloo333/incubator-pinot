@@ -21,6 +21,7 @@ package org.apache.pinot.core.indexsegment.mutable;
 import com.google.common.base.Preconditions;
 import it.unimi.dsi.fastutil.ints.IntArrays;
 import it.unimi.dsi.fastutil.ints.IntComparator;
+
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -429,12 +430,10 @@ public class MutableSegmentImpl implements MutableSegment {
   }
 
   private ColumnDataSource getVirtualDataSource(String column) {
-    VirtualColumnContext virtualColumnContext =
-        new VirtualColumnContext(NetUtil.getHostnameOrAddress(), getSegmentName(), column, _numDocsIndexed + 1);
-    VirtualColumnProvider provider =
-        VirtualColumnProviderFactory.buildProvider(_schema.getFieldSpecFor(column).getVirtualColumnProvider());
-    return new ColumnDataSource(provider.buildColumnIndexContainer(virtualColumnContext),
-        provider.buildMetadata(virtualColumnContext));
+    VirtualColumnContext virtualColumnContext = new VirtualColumnContext(NetUtil.getHostnameOrAddress(), _segmentMetadata.getTableName(), getSegmentName(),
+        column, _numDocsIndexed + 1, true);
+    VirtualColumnProvider provider = VirtualColumnProviderFactory.buildProvider(_schema.getFieldSpecFor(column).getVirtualColumnProvider());
+    return new ColumnDataSource(provider.buildColumnIndexContainer(virtualColumnContext), provider.buildMetadata(virtualColumnContext));
   }
 
   @Override

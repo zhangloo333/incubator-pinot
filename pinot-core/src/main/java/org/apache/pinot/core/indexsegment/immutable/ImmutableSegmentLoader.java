@@ -43,6 +43,9 @@ import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnContext;
 import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnProvider;
 import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnProviderFactory;
 import org.apache.pinot.core.startree.v2.store.StarTreeIndexContainer;
+import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnContext;
+import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnProvider;
+import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnProviderFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -135,8 +138,9 @@ public class ImmutableSegmentLoader {
         FieldSpec fieldSpec = schema.getFieldSpecFor(columnName);
         VirtualColumnProvider provider =
             VirtualColumnProviderFactory.buildProvider(fieldSpec.getVirtualColumnProvider());
-        VirtualColumnContext context = new VirtualColumnContext(NetUtil.getHostnameOrAddress(), segmentName, columnName,
-            segmentMetadata.getTotalDocs());
+        VirtualColumnContext context =
+            new VirtualColumnContext(NetUtil.getHostnameOrAddress(), segmentMetadata.getTableName(), segmentName,
+                columnName, segmentMetadata.getTotalDocs(), false);
         indexContainerMap.put(columnName, provider.buildColumnIndexContainer(context));
         segmentMetadata.getColumnMetadataMap().put(columnName, provider.buildMetadata(context));
       }
