@@ -21,5 +21,5 @@ package com.linkedin.pinot.opal.common.updateStrategy;
 import com.linkedin.pinot.opal.common.messages.KeyCoordinatorMessageContext;
 
 public interface MessageResolveStrategy {
-  boolean compareMessage(KeyCoordinatorMessageContext message1, KeyCoordinatorMessageContext message2);
+  boolean shouldDeleteFirstMessage(KeyCoordinatorMessageContext oldMessage, KeyCoordinatorMessageContext newMessage);
 }

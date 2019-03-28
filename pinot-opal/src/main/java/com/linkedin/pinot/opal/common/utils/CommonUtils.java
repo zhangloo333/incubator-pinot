@@ -23,23 +23,19 @@ import org.apache.commons.configuration.ConfigurationConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Iterator;
 import java.util.Properties;
 
 public class CommonUtils {
   private static final Logger LOGGER = LoggerFactory.getLogger(CommonUtils.class);
 
-  public static Properties getPropertiesFromConf(Configuration conf, String configName) {
-    printConfiguration(conf, configName);
-    return ConfigurationConverter.getProperties(conf);
+  public static void printConfiguration(Configuration configuration, String name) {
+    LOGGER.info("printing {} configuration", name);
+    configuration.getKeys().forEachRemaining(key -> {
+      LOGGER.info("{}: {}", key, configuration.getProperty((String)key));
+    });
   }
 
-  public static void printConfiguration(Configuration conf, String configName) {
-    LOGGER.info("printing configuration for {}: ", configName);
-    Iterator<String> it = conf.getKeys();
-    while(it.hasNext()) {
-      String key = it.next();
-      LOGGER.info("{}: {}", key, conf.getString(key));
-    }
+  public static Properties getPropertiesFromConf(Configuration conf) {
+    return ConfigurationConverter.getProperties(conf);
   }
 }

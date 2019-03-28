@@ -19,6 +19,7 @@
 package com.linkedin.pinot.opal.common.keyValueStore;
 
 import com.google.common.base.Preconditions;
+import com.linkedin.pinot.opal.common.messages.KeyCoordinatorMessageContext;
 import com.linkedin.pinot.opal.common.utils.CommonUtils;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang.StringUtils;
@@ -38,7 +39,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 
-public class RocksDBKeyValueStoreDB implements KeyValueStoreDB<byte[], byte[]> {
+public class RocksDBKeyValueStoreDB implements KeyValueStoreDB<ByteArrayWrapper, KeyCoordinatorMessageContext> {
   private static final Logger LOGGER = LoggerFactory.getLogger(RocksDBKeyValueStoreDB.class);
 
   private String _DBBasePath;
@@ -59,7 +60,7 @@ public class RocksDBKeyValueStoreDB implements KeyValueStoreDB<byte[], byte[]> {
   }
 
   @Override
-  public KeyValueStoreTable<byte[], byte[]> getTable(String tableName) {
+  public KeyValueStoreTable<ByteArrayWrapper, KeyCoordinatorMessageContext> getTable(String tableName) {
     return _rocksDBTables.computeIfAbsent(tableName, t -> {
       LOGGER.info("adding table {}", tableName);
       String path = getPathForTable(t);

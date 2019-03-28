@@ -22,7 +22,8 @@ import com.linkedin.pinot.opal.common.RpcQueue.KafkaQueueProducer;
 import com.linkedin.pinot.opal.common.RpcQueue.ProduceTask;
 import com.linkedin.pinot.opal.common.messages.LogCoordinatorMessage;
 import com.linkedin.pinot.opal.common.utils.CommonUtils;
-import com.linkedin.pinot.opal.distributed.keyCoordinator.server.KeyCoordinatorQueueProducer;
+import com.linkedin.pinot.opal.distributed.keyCoordinator.common.DistributedCommonUtils;
+import com.linkedin.pinot.opal.distributed.keyCoordinator.serverIngestion.KeyCoordinatorQueueProducer;
 import com.linkedin.pinot.opal.distributed.keyCoordinator.starter.KeyCoordinatorConf;
 import org.apache.commons.configuration.Configuration;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -32,6 +33,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Properties;
 
 public class LogCoordinatorQueueProducer extends KafkaQueueProducer<String, LogCoordinatorMessage> {
 
@@ -40,16 +42,15 @@ public class LogCoordinatorQueueProducer extends KafkaQueueProducer<String, LogC
   private final Configuration _conf;
   private final KafkaProducer<String, LogCoordinatorMessage> _kafkaProducer;
 
-  public LogCoordinatorQueueProducer(Configuration conf) {
-    CommonUtils.printConfiguration(conf, "producer config");
+  public LogCoordinatorQueueProducer(Configuration conf, String hostName) {
     this._conf = conf;
-    final Configuration kafkaProducerConfig = conf.subset(KeyCoordinatorConf.KEY_COORDINATOR_KAFKA_CONF);
-    kafkaProducerConfig.setProperty("key.serializer", StringSerializer.class.getName());
-    kafkaProducerConfig.setProperty("value.serializer", LogCoordinatorMessage.LogCoordinatorMessageSerializer.class.getName());
-    kafkaProducerConfig.addProperty("acks", "all");
-    kafkaProducerConfig.addProperty("retries", "3");
-    this._kafkaProducer = new KafkaProducer<>(CommonUtils.getPropertiesFromConf(kafkaProducerConfig,
-        "key coordinator producer conf"));
+    final Properties kafkaProducerConfig = CommonUtils.getPropertiesFromConf(
+        conf.subset(KeyCoordinatorConf.KEY_COORDINATOR_KAFKA_CONF));
+    kafkaProducerConfig.put("key.serializer", StringSerializer.class.getName());
+    kafkaProducerConfig.put("value.serializer", LogCoordinatorMessage.LogCoordinatorMessageSerializer.class.getName());
+    DistributedCommonUtils.setKakfaLosslessProducerConfig(kafkaProducerConfig, hostName);
+
+    this._kafkaProducer = new KafkaProducer<>(kafkaProducerConfig);
   }
 
   @Override

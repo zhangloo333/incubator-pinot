@@ -22,9 +22,9 @@ package com.linkedin.pinot.opal.common.RpcQueue;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-public interface QueueConsumer<T> {
+public interface QueueConsumer<K, V> {
 
-  List<T> getRequests(long timeout, TimeUnit timeUnit);
+  List<V> getRequests(long timeout, TimeUnit timeUnit);
 
   void ackOffset();
 

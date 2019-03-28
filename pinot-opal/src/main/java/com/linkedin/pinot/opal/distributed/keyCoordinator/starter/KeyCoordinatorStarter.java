@@ -21,7 +21,6 @@ package com.linkedin.pinot.opal.distributed.keyCoordinator.starter;
 import com.linkedin.pinot.opal.common.messages.KeyCoordinatorQueueMsg;
 import com.linkedin.pinot.opal.common.updateStrategy.MessageResolveStrategy;
 import com.linkedin.pinot.opal.common.updateStrategy.MessageTimeResolveStrategy;
-import com.linkedin.pinot.opal.distributed.keyCoordinator.internal.ConfigStore;
 import com.linkedin.pinot.opal.common.RpcQueue.KafkaQueueConsumer;
 import com.linkedin.pinot.opal.common.RpcQueue.KafkaQueueProducer;
 import com.linkedin.pinot.opal.common.messages.LogCoordinatorMessage;
@@ -32,6 +31,8 @@ import com.linkedin.pinot.opal.distributed.keyCoordinator.internal.KeyCoordinato
 import com.linkedin.pinot.opal.distributed.keyCoordinator.internal.LogCoordinatorQueueProducer;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.ConfigurationException;
+import org.apache.commons.lang.StringUtils;
+import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,21 +42,22 @@ import java.util.Iterator;
 public class KeyCoordinatorStarter {
   private static final Logger LOGGER = LoggerFactory.getLogger(KeyCoordinatorStarter.class);
 
-  private ConfigStore configStore;
   private KeyCoordinatorConf _keyCoordinatorConf;
-  private KafkaQueueConsumer<KeyCoordinatorQueueMsg> _consumer;
+  private KafkaQueueConsumer<String, KeyCoordinatorQueueMsg> _consumer;
   private KafkaQueueProducer<String, LogCoordinatorMessage> _producer;
   private MessageResolveStrategy _messageResolveStrategy;
   private DistributedKeyCoordinatorCore _keyCoordinatorCore;
   private KeyCoordinatorApiApplication _application;
+  private String _hostName;
 
   public KeyCoordinatorStarter(KeyCoordinatorConf conf) {
     _keyCoordinatorConf = conf;
-    configStore = ConfigStore.getConfigStore(conf.getConfigStorePathFile());
+    _hostName = conf.getString(KeyCoordinatorConf.HOST_NAME);
+    Preconditions.checkState(StringUtils.isNotEmpty(_hostName), "expect host name in configuration");
     _consumer = new KeyCoordinatorQueueConsumer(
-        _keyCoordinatorConf.subset(KeyCoordinatorConf.KEY_COORDINATOR_CONSUMER_CONF));
+        _keyCoordinatorConf.subset(KeyCoordinatorConf.KEY_COORDINATOR_CONSUMER_CONF), _hostName);
     _producer = new LogCoordinatorQueueProducer(
-        _keyCoordinatorConf.subset(KeyCoordinatorConf.KEY_COORDINATOR_PRODUCER_CONF));
+        _keyCoordinatorConf.subset(KeyCoordinatorConf.KEY_COORDINATOR_PRODUCER_CONF), _hostName);
     _messageResolveStrategy = new MessageTimeResolveStrategy();
     _keyCoordinatorCore = new DistributedKeyCoordinatorCore();
     _application = new KeyCoordinatorApiApplication(this);

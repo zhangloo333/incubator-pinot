@@ -33,6 +33,7 @@ import com.linkedin.pinot.opal.common.messages.LogEventType;
 import com.linkedin.pinot.opal.common.updateStrategy.MessageResolveStrategy;
 import com.linkedin.pinot.opal.common.utils.CommonUtils;
 import com.linkedin.pinot.opal.common.utils.State;
+import com.linkedin.pinot.opal.distributed.keyCoordinator.common.DistributedCommonUtils;
 import com.linkedin.pinot.opal.distributed.keyCoordinator.starter.KeyCoordinatorConf;
 import org.apache.commons.configuration.Configuration;
 import org.slf4j.Logger;
@@ -41,25 +42,26 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+
 public class DistributedKeyCoordinatorCore {
   private static final Logger LOGGER = LoggerFactory.getLogger(DistributedKeyCoordinatorCore.class);
-  private static final String KAFKA_TOPIC_FORMAT = "pinot_upsert_%s";
   private static final long TERMINATION_WAIT_MS = 10000;
 
   private KeyCoordinatorConf _conf;
   private KafkaQueueProducer<String, LogCoordinatorMessage> _outputKafkaProducer;
-  private KafkaQueueConsumer<KeyCoordinatorQueueMsg> _inputKafkaConsumer;
+  private KafkaQueueConsumer<String, KeyCoordinatorQueueMsg> _inputKafkaConsumer;
   private MessageResolveStrategy _messageResolveStrategy;
-  private KeyValueStoreDB<byte[], byte[]> _keyValueStoreDB;
+  private KeyValueStoreDB<ByteArrayWrapper, KeyCoordinatorMessageContext> _keyValueStoreDB;
   private ExecutorService _coreThread;
   private volatile State _state = State.SHUTDOWN;
 
@@ -71,7 +73,7 @@ public class DistributedKeyCoordinatorCore {
   public DistributedKeyCoordinatorCore() {}
 
   public void init(KeyCoordinatorConf conf, KafkaQueueProducer<String, LogCoordinatorMessage> keyCoordinatorProducer,
-                   KafkaQueueConsumer<KeyCoordinatorQueueMsg> keyCoordinatorConsumer,
+                   KafkaQueueConsumer<String, KeyCoordinatorQueueMsg> keyCoordinatorConsumer,
                    MessageResolveStrategy messageResolveStrategy) {
     Preconditions.checkState(_state == State.SHUTDOWN, "can only init if it is not running yet");
     CommonUtils.printConfiguration(conf, "distributed key coordinator core");
@@ -118,8 +120,11 @@ public class DistributedKeyCoordinatorCore {
             LOGGER.info("processed {} messages to log coordinator queue in {} ms", messages.size(),
                 System.currentTimeMillis() - startTime);
             messages.clear();
+          } else {
+            LOGGER.info("no message received in the current loop");
           }
         }
+        _inputKafkaConsumer.ackOffset();
       }
     } catch (Exception ex) {
       LOGGER.warn("key coordinator is exiting due to exception", ex);
@@ -159,37 +164,53 @@ public class DistributedKeyCoordinatorCore {
 
   private void processMessagesForTopic(String tableName, List<KeyCoordinatorQueueMsg> msgList) {
     try {
+      int deleteTaskCount = 0;
       if (msgList == null || msgList.size() == 0) {
         LOGGER.warn("trying to process topic message with empty list {}", tableName);
         return;
       }
-      KeyValueStoreTable<byte[], byte[]> table = _keyValueStoreDB.getTable(tableName);
-      Map<ByteArrayWrapper, KeyCoordinatorMessageContext> primaryKeyToValueMap = new HashMap<>(msgList.size());
+      KeyValueStoreTable<ByteArrayWrapper, KeyCoordinatorMessageContext> table = _keyValueStoreDB.getTable(tableName);
 
       List<ProduceTask<String, LogCoordinatorMessage>> tasks = new ArrayList<>();
+      // get a set of unique primary key and retrieve its corresponding value in kv store
+      Set<ByteArrayWrapper> primaryKeys = msgList.stream().map(msg -> new ByteArrayWrapper(msg.getKey()))
+          .collect(Collectors.toCollection(HashSet::new));
+      Map<ByteArrayWrapper, KeyCoordinatorMessageContext> primaryKeyToValueMap = new HashMap<>(table.multiGet(new ArrayList<>(primaryKeys)));
+      LOGGER.info("input keys got {} results from kv store", primaryKeyToValueMap.size());
+
       for (KeyCoordinatorQueueMsg msg: msgList) {
+        KeyCoordinatorMessageContext currentContext = msg.getContext();
         ByteArrayWrapper key = new ByteArrayWrapper(msg.getKey());
-        if (!primaryKeyToValueMap.containsKey(key) || _messageResolveStrategy.compareMessage(primaryKeyToValueMap.get(key), msg.getContext())) {
-          primaryKeyToValueMap.put(key, msg.getContext());
+        if (primaryKeyToValueMap.containsKey(key)) {
+          deleteTaskCount++;
+          // key conflicts, should resolve which one to delete
+          KeyCoordinatorMessageContext oldContext = primaryKeyToValueMap.get(key);
+          if (_messageResolveStrategy.shouldDeleteFirstMessage(oldContext, currentContext)) {
+            // the existing message we have is older than the message we just processed, create delete for it
+            tasks.add(createMessageToLogCoordinator(tableName, oldContext.getSegmentName(), oldContext.getKafkaOffset(),
+                currentContext.getKafkaOffset(), LogEventType.DELETE));
+            // update the local cache to the latest message, so message within the same batch can override each other
+            primaryKeyToValueMap.put(key, currentContext);
+          } else {
+            // the new message is older than the existing message
+            tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
+                currentContext.getKafkaOffset(), LogEventType.DELETE));
+          }
+        } else {
+          // no key in the existing map, adding this key to the running set
+          primaryKeyToValueMap.put(key, currentContext);
         }
+        // always create a insert event for validFrom
+        tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
+            currentContext.getKafkaOffset(), LogEventType.INSERT));
       }
-      LOGGER.info("found total of {} duplicated keys", msgList.size() - primaryKeyToValueMap.size());
-      Map<byte[], byte[]> result = table.multiGet(
-          primaryKeyToValueMap.keySet().stream().map(ByteArrayWrapper::getData).collect(Collectors.toList()));
-      for (Map.Entry<byte[], byte[]> entry: result.entrySet()) {
-        emitDeleteActionForOldEvents(tableName, KeyCoordinatorMessageContext.fromBytes(entry.getValue()),
-            primaryKeyToValueMap.get(new ByteArrayWrapper(entry.getKey())), tasks);
-      }
-      for (KeyCoordinatorQueueMsg msg: msgList) {
-        emitInsertActionForNewEvents(tableName, msg.getKey(), msg.getContext(), primaryKeyToValueMap, tasks);
-      }
-//      LOGGER.info("table {}: found {} keys in kv store out of {} keys", table, foundKeyCount, msgList.size());
-      LOGGER.info("sending {} tasks to log coordinator queue", tasks.size());
+      LOGGER.info("sending {} tasks including {} deletion to log coordinator queue", tasks.size(), deleteTaskCount);
       long startTime = System.currentTimeMillis();
       List<ProduceTask<String, LogCoordinatorMessage>> failedTasks = sendMessagesToLogCoordinator(tasks, 10, TimeUnit.SECONDS);
       LOGGER.info("send to producer take {} ms and {} failed", System.currentTimeMillis() - startTime, failedTasks.size());
 
-      updateKeyValueStore(table, primaryKeyToValueMap);
+      // update kv store
+      table.multiPut(primaryKeyToValueMap);
       LOGGER.info("updated list of message to key value store");
     } catch (IOException e) {
       throw new RuntimeException("failed to interact with rocksdb", e);
@@ -198,49 +219,10 @@ public class DistributedKeyCoordinatorCore {
     }
   }
 
-  /**
-   * generate a deletion event for an old record in key value store before we update the kv-store
-   */
-  private void emitDeleteActionForOldEvents(String tableName, Optional<KeyCoordinatorMessageContext> oldContext,
-                                            KeyCoordinatorMessageContext newContext, List<ProduceTask<String, LogCoordinatorMessage>> tasks) {
-    if (oldContext.isPresent() && _messageResolveStrategy.compareMessage(oldContext.get(), newContext)) {
-      tasks.add(createMessageToLogCoordinator(tableName, oldContext.get().getSegmentName(), oldContext.get().getKafkaOffset(),
-          newContext.getKafkaOffset(), LogEventType.DELETE));
-    } else {
-      tasks.add(createMessageToLogCoordinator(tableName, newContext.getSegmentName(), newContext.getKafkaOffset(),
-          oldContext.get().getKafkaOffset(), LogEventType.DELETE));
-    }
-  }
-
-  /**
-   * generate a insertion event for an new record we received from pinot ingestion
-   */
-  private void emitInsertActionForNewEvents(String table, byte[] key, KeyCoordinatorMessageContext context,
-                                            Map<ByteArrayWrapper, KeyCoordinatorMessageContext> keyMap,
-                                            List<ProduceTask<String, LogCoordinatorMessage>> tasks) {
-    ByteArrayWrapper keyWrapper = new ByteArrayWrapper(key);
-    if (context != keyMap.get(keyWrapper)) {
-      tasks.add(createMessageToLogCoordinator(table, context.getSegmentName(), context.getKafkaOffset(),
-          keyMap.get(keyWrapper).getKafkaOffset(), LogEventType.DELETE));
-    }
-    tasks.add(createMessageToLogCoordinator(table, context.getSegmentName(), context.getKafkaOffset(),
-        context.getKafkaOffset(), LogEventType.INSERT));
-  }
-
   public ProduceTask<String, LogCoordinatorMessage> createMessageToLogCoordinator(String table, String segment, long oldKafkaOffset,
-                                                                                  long newKafkaOffset, LogEventType eventType) {
-    return new ProduceTask<>(getKafkaTopicName(table), segment,
-        new LogCoordinatorMessage(table, segment, oldKafkaOffset, newKafkaOffset, eventType));
-  }
-
-  private void updateKeyValueStore(KeyValueStoreTable<byte[], byte[]> table, Map<ByteArrayWrapper, KeyCoordinatorMessageContext> keyValueMap) throws IOException {
-    List<byte[]> keys = new ArrayList<>();
-    List<byte[]> values = new ArrayList<>();
-    for (Map.Entry<ByteArrayWrapper, KeyCoordinatorMessageContext> entry: keyValueMap.entrySet()) {
-      keys.add(entry.getKey().getData());
-      values.add(entry.getValue().toBytes());
-    }
-    table.multiPut(keys, values);
+                                                                                  long value, LogEventType eventType) {
+    return new ProduceTask<>(DistributedCommonUtils.getKafkaTopicFromTableName(table), segment,
+        new LogCoordinatorMessage(segment, oldKafkaOffset, value, eventType));
   }
 
   private List<ProduceTask<String, LogCoordinatorMessage>> sendMessagesToLogCoordinator(
@@ -262,11 +244,7 @@ public class DistributedKeyCoordinatorCore {
     }
   }
 
-  private String getKafkaTopicName(String tableName) {
-    return String.format(KAFKA_TOPIC_FORMAT, tableName);
-  }
-
-  protected KeyValueStoreDB<byte[], byte[]> getKeyValueStore(Configuration conf) {
+  protected KeyValueStoreDB<ByteArrayWrapper, KeyCoordinatorMessageContext> getKeyValueStore(Configuration conf) {
     RocksDBKeyValueStoreDB keyValueStore = new RocksDBKeyValueStoreDB();
     keyValueStore.init(conf);
     return keyValueStore;

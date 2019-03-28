@@ -22,7 +22,7 @@ import com.linkedin.pinot.opal.common.messages.KeyCoordinatorMessageContext;
 
 public class MessageTimeResolveStrategy implements MessageResolveStrategy {
   @Override
-  public boolean compareMessage(KeyCoordinatorMessageContext message1, KeyCoordinatorMessageContext message2) {
+  public boolean shouldDeleteFirstMessage(KeyCoordinatorMessageContext message1, KeyCoordinatorMessageContext message2) {
     return message1.getTimestamp() <= message2.getTimestamp();
   }
 }

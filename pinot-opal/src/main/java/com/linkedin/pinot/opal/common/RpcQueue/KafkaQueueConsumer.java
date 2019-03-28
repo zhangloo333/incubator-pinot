@@ -22,6 +22,7 @@ import com.google.common.base.Preconditions;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 
@@ -32,20 +33,17 @@ import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-public abstract class KafkaQueueConsumer<V> implements QueueConsumer<V> {
+public abstract class KafkaQueueConsumer<K, V> implements QueueConsumer<K, V> {
 
+  private KafkaConsumer<K, V> _consumer;
 
-  private Properties _consumerProperties;
-  private Map<String, List<Integer>> _topicPartitionMap;
-  private KafkaConsumer<byte[], V> _consumer;
-
-  public void init(Properties consumerProperties, Map<String, List<Integer>> topicPartitionMap) {
+  public void init(Properties consumerProperties) {
     getLogger().info("starting to init consumer");
-    _consumerProperties = consumerProperties;
-    _topicPartitionMap = topicPartitionMap;
-    Preconditions.checkState(_topicPartitionMap.size() > 0, "topic partition map should not be empty");
-
     _consumer = new KafkaConsumer<>(consumerProperties);
+  }
+
+  public synchronized void subscribe(Map<String, List<Integer>> topicPartitionMap) {
+    Preconditions.checkState(topicPartitionMap.size() > 0, "topic partition map should not be empty");
     List<TopicPartition> subscribePartitions = new ArrayList<>();
     for (Map.Entry<String, List<Integer>> entry: topicPartitionMap.entrySet()) {
       String topic = entry.getKey();
@@ -62,19 +60,40 @@ public abstract class KafkaQueueConsumer<V> implements QueueConsumer<V> {
     _consumer.assign(subscribePartitions);
   }
 
+  public synchronized void subscribe(String topic) {
+    getLogger().info("subscribing to kafka topic {}", topic);
+    List<PartitionInfo> partitionInfos = _consumer.partitionsFor(topic);
+    Preconditions.checkState(partitionInfos != null && partitionInfos.size() > 0,
+        "topic doesn't have any partitions");
+    List<TopicPartition> subscribedTopicPartitions = new ArrayList<>(_consumer.assignment());
+    partitionInfos.forEach(pi -> subscribedTopicPartitions.add(new TopicPartition(topic, pi.partition())));
+    getLogger().info("total subscribed topic partitions count: {}", partitionInfos.size());
+    _consumer.assign(subscribedTopicPartitions);
+  }
+
+  public synchronized void unsubscribe(String topic) {
+    getLogger().info("subscribing to kafka topic {}", topic);
+    List<TopicPartition> resultTopicPartitions = _consumer.assignment()
+        .stream()
+        .filter(tp -> !tp.topic().equals(topic))
+        .collect(Collectors.toList());
+    getLogger().info("total subscribed topic partitions count: {}", resultTopicPartitions.size());
+    _consumer.assign(resultTopicPartitions);
+  }
+
   public abstract Logger getLogger();
 
   @Override
   public List<V> getRequests(long timeout, TimeUnit timeUnit) {
-    ConsumerRecords<byte[], V> records = getConsumerRecords(timeout, timeUnit);
+    ConsumerRecords<K, V> records = getConsumerRecords(timeout, timeUnit);
     List<V> msgList = new ArrayList<>(records.count());
-    for (ConsumerRecord<byte[], V> record : records) {
+    for (ConsumerRecord<K, V> record : records) {
       msgList.add(record.value());
     }
     return msgList;
   }
 
-  public ConsumerRecords<byte[], V> getConsumerRecords(long timeout, TimeUnit timeUnit) {
+  public ConsumerRecords<K, V> getConsumerRecords(long timeout, TimeUnit timeUnit) {
     return _consumer.poll(timeUnit.toMillis(timeout));
   }
 

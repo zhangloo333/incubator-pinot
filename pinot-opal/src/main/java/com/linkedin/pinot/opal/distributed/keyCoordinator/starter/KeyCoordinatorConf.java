@@ -50,6 +50,16 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
   public static final String SERVER_CONFIG = "web.server";
   public static final String PORT = "jersey.port";
   public static final int PORT_DEFAULT = 8092;
+  public static final String HOST_NAME = "hostname";
+
+  // other constants
+  public static final String KAFKA_TOPIC_PREFIX = "pinot_upsert_";
+  public static final String KAFKA_CLIENT_ID_PREFIX = "pinot_upsert_client_";
+  public static final String KAFKA_CONSUMER_GROUP_ID_PREFIX = "pinot_upsert_kc_consumerGroup_";
+
+  // producer related config constants
+  public static final int KAKFA_PRODUCER_RETRIES = 3;
+  public static final int KAKFA_PRODUCER_LINGER_MS = 10;
 
   public KeyCoordinatorConf(File file) throws ConfigurationException {
     super(file);

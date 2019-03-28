@@ -28,5 +28,7 @@ public interface KeyValueStoreTable<K, V> {
 
   void multiPut(List<K> keys, List<V> values) throws IOException;
 
+  void multiPut(Map<K, V> keyValuePairs) throws IOException;
+
   void deleteTable() throws IOException;
 }

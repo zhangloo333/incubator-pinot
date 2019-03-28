@@ -16,9 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package com.linkedin.pinot.opal.distributed.keyCoordinator.server;
+package com.linkedin.pinot.opal.distributed.keyCoordinator.serverIngestion;
 
+import com.google.common.base.Preconditions;
 import org.apache.commons.configuration.Configuration;
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,9 +33,10 @@ public class KeyCoordinatorProvider {
   private Configuration _conf;
   private KeyCoordinatorQueueProducer _producer;
 
-  public KeyCoordinatorProvider(Configuration conf) {
+  public KeyCoordinatorProvider(Configuration conf, String hostname) {
+    Preconditions.checkState(StringUtils.isNotEmpty(hostname), "host name should not be empty");
     _conf = conf;
-    _producer = new KeyCoordinatorQueueProducer(conf.subset(ServerKeyCoordinatorConfig.PRODUCER_CONFIG));
+    _producer = new KeyCoordinatorQueueProducer(conf.subset(ServerKeyCoordinatorConfig.PRODUCER_CONFIG), hostname);
     synchronized (KeyCoordinatorProvider.class) {
       if (_instance == null) {
         _instance = this;

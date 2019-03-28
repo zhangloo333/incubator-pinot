@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package com.linkedin.pinot.opal.distributed.keyCoordinator.server;
+package com.linkedin.pinot.opal.distributed.keyCoordinator.serverIngestion;
 
 public class ServerKeyCoordinatorConfig {
 

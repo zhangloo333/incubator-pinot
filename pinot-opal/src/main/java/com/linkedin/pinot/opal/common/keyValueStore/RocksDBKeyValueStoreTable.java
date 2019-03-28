@@ -19,6 +19,7 @@
 package com.linkedin.pinot.opal.common.keyValueStore;
 
 import com.google.common.base.Preconditions;
+import com.linkedin.pinot.opal.common.messages.KeyCoordinatorMessageContext;
 import org.rocksdb.Options;
 import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDB;
@@ -32,10 +33,13 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
-public class RocksDBKeyValueStoreTable implements KeyValueStoreTable<byte[], byte[]> {
+public class RocksDBKeyValueStoreTable implements KeyValueStoreTable<ByteArrayWrapper, KeyCoordinatorMessageContext> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(RocksDBKeyValueStoreTable.class);
   private final String _path;
@@ -58,16 +62,27 @@ public class RocksDBKeyValueStoreTable implements KeyValueStoreTable<byte[], byt
   }
 
   @Override
-  public Map<byte[], byte[]> multiGet(List<byte[]> keys) throws IOException {
+  public Map<ByteArrayWrapper, KeyCoordinatorMessageContext> multiGet(List<ByteArrayWrapper> keys) throws IOException {
     try {
-      return _db.multiGet(keys);
+      List<byte[]> byteKeys = keys.stream().map(ByteArrayWrapper::getData).collect(Collectors.toList());
+      Map<byte[], byte[]> rocksdbResult = _db.multiGet(byteKeys);
+      Map<ByteArrayWrapper, KeyCoordinatorMessageContext> result = new HashMap<>(rocksdbResult.size());
+      for (Map.Entry<byte[], byte[]> entry : rocksdbResult.entrySet()) {
+        Optional<KeyCoordinatorMessageContext> value = KeyCoordinatorMessageContext.fromBytes(entry.getValue());
+        if (!value.isPresent()) {
+          LOGGER.warn("failed to parse value in kv for key {} and value {}", entry.getKey(), entry.getValue());
+        } else {
+          result.put(new ByteArrayWrapper(entry.getKey()), value.get());
+        }
+      }
+      return result;
     } catch (RocksDBException e) {
       throw new IOException("failed to get keys from rocksdb " + _path, e);
     }
   }
 
   @Override
-  public void multiPut(List<byte[]> keys, List<byte[]> values) throws IOException {
+  public void multiPut(List<ByteArrayWrapper> keys, List<KeyCoordinatorMessageContext> values) throws IOException {
     Preconditions.checkState(keys.size() == values.size(),
         "keys size {} does not match values size {}", keys.size(), values.size());
     if (keys.size() == 0) {
@@ -76,7 +91,23 @@ public class RocksDBKeyValueStoreTable implements KeyValueStoreTable<byte[], byt
     final WriteBatch batch = new WriteBatch();
     try {
       for (int i = 0; i < keys.size(); i++) {
-        batch.put(keys.get(i), values.get(i));
+        batch.put(keys.get(i).getData(), values.get(i).toBytes());
+      }
+      _db.write(_writeOptions, batch);
+    } catch (RocksDBException e) {
+      throw new IOException("failed to put data to rocksdb table " + _path, e);
+    }
+  }
+
+  @Override
+  public void multiPut(Map<ByteArrayWrapper, KeyCoordinatorMessageContext> keyValuePairs) throws IOException {
+    if (keyValuePairs.size() == 0) {
+      return;
+    }
+    final WriteBatch batch = new WriteBatch();
+    try {
+      for (Map.Entry<ByteArrayWrapper, KeyCoordinatorMessageContext> entry: keyValuePairs.entrySet()) {
+        batch.put(entry.getKey().getData(), entry.getValue().toBytes());
       }
       _db.write(_writeOptions, batch);
     } catch (RocksDBException e) {

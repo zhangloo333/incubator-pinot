@@ -25,28 +25,28 @@ import org.apache.kafka.common.serialization.Serializer;
 import java.io.Serializable;
 import java.util.Map;
 
+/**
+ * this message contains the following 4 attributes:
+ * 1. segmentName: the name of the segment for the pinot record we are going to update
+ * 2. value: the value to update the virtual column to, could be any value we desired to use (the value of new validFrom/validUntil column)
+ * 3. updateEventType: insert/delete, used to indicate which column to update
+ * 4. kafka offset: the offset of the pinot record we are going to update.
+ *
+ * segment updater will use the segment name & offset to identify the location of the pinot record, and use the
+ * updateEventType to decide which virtual column to update. And it will use
+ */
 public class LogCoordinatorMessage implements Serializable {
-  private final String _tableName;
   private final String _segmentName;
-  private final long _newOffset;
-  private final long _oldOffset;
+  private final long _value;
   private final LogEventType _updateEventType;
   private long _kafkaOffset;
-
-  public String getTableName() {
-    return _tableName;
-  }
 
   public String getSegmentName() {
     return _segmentName;
   }
 
-  public long getOldOffset() {
-    return _oldOffset;
-  }
-
-  public long getNewOffset() {
-    return _newOffset;
+  public long getValue() {
+    return _value;
   }
 
   public LogEventType getUpdateEventType() {
@@ -61,25 +61,17 @@ public class LogCoordinatorMessage implements Serializable {
     return _kafkaOffset;
   }
 
-  public LogCoordinatorMessage(String tableName, String segmentName, long oldOffset,
-                               long newOffset, LogEventType updateEventType) {
-    this._tableName = tableName;
+  public LogCoordinatorMessage(String segmentName, long kafkaOffset,
+                               long newValue, LogEventType updateEventType) {
     this._segmentName = segmentName;
-    this._oldOffset = oldOffset;
-    this._newOffset= newOffset;
+    this._value = newValue;
     this._updateEventType = updateEventType;
-    this._kafkaOffset = 0;
-  }
-
-  public LogCoordinatorMessage withKafkaOffset(long offset) {
-    this._kafkaOffset = offset;
-    return this;
+    this._kafkaOffset = kafkaOffset;
   }
 
   public static class LogCoordinatorMessageSerializer implements Serializer<LogCoordinatorMessage> {
     @Override
     public void configure(Map map, boolean b) {
-
     }
 
     @Override

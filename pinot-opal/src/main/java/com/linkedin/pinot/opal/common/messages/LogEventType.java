@@ -18,6 +18,8 @@
  */
 package com.linkedin.pinot.opal.common.messages;
 
+import com.google.common.base.Preconditions;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -42,7 +44,8 @@ public enum LogEventType {
     return this._uuid;
   }
 
-  public LogEventType getEventType(int uuid) {
+  public static LogEventType getEventType(int uuid) {
+    Preconditions.checkState(UUID_MAP.containsKey(uuid));
     return UUID_MAP.get(uuid);
   }
 }
