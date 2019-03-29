@@ -18,8 +18,9 @@
  */
 package org.apache.pinot.common.utils;
 
-import java.io.File;
 import org.apache.pinot.common.response.BrokerResponseFactory;
+
+import java.io.File;
 
 
 public class CommonConstants {
@@ -157,6 +158,7 @@ public class CommonConstants {
         "pinot.broker.startup.minResourcePercent";
     public static final double DEFAULT_BROKER_MIN_RESOURCE_PERCENT_FOR_START = 100.0;
 
+    public static final String CONFIG_OF_BROKER_POLLING_SERVER_LWMS_INTERVAL_MS = "pinot.broker.query.polling.server.lwms.interval.ms";
     public static class Request {
       public static final String PQL = "pql";
       public static final String TRACE = "trace";

@@ -49,6 +49,7 @@ import org.apache.pinot.common.config.TagNameUtils;
 import org.apache.pinot.common.metadata.ZKMetadataProvider;
 import org.apache.pinot.common.metrics.BrokerMeter;
 import org.apache.pinot.common.metrics.BrokerMetrics;
+import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.CommonConstants.Broker;
 import org.apache.pinot.common.utils.CommonConstants.Helix;
 import org.apache.pinot.common.utils.NetUtil;
@@ -169,7 +170,6 @@ public class HelixBrokerStarter {
     _propertyStore = _spectatorHelixManager.getHelixPropertyStore();
     _helixDataAccessor = _spectatorHelixManager.getHelixDataAccessor();
 
-    _lwmService = new PollingBasedLowWaterMarkService();
 
     // Set up the broker server builder
     LOGGER.info("Setting up broker server builder");
@@ -244,6 +244,10 @@ public class HelixBrokerStarter {
     _participantHelixManager
         .addPreConnectCallback(() -> brokerMetrics.addMeteredGlobalValue(BrokerMeter.HELIX_ZOOKEEPER_RECONNECTS, 1L));
 
+    _lwmService = new PollingBasedLowWaterMarkService(_participantHelixManager.getHelixDataAccessor(), _clusterName,
+      _brokerConf.getInt(CommonConstants.Broker.CONFIG_OF_BROKER_POLLING_SERVER_LWMS_INTERVAL_MS,
+          5 * 1000)
+        );
     // Register the service status handler
     registerServiceStatusHandler();
 
@@ -318,6 +322,10 @@ public class HelixBrokerStarter {
       _spectatorHelixManager.disconnect();
     }
 
+    if (_lwmService != null) {
+      LOGGER.info("Shutting down low water mark service");
+      _lwmService.shutDown();
+    }
     LOGGER.info("Finish shutting down Pinot broker");
   }
 
@@ -348,6 +356,10 @@ public class HelixBrokerStarter {
     brokerConf.addProperty(Helix.KEY_OF_BROKER_QUERY_PORT, port);
     brokerConf.addProperty(Broker.CONFIG_OF_BROKER_TIMEOUT_MS, 60 * 1000L);
     return new HelixBrokerStarter(brokerConf, "quickstart", "localhost:2122");
+  }
+
+  public LowWaterMarkService getLwmService() {
+    return _lwmService;
   }
 
   public static void main(String[] args)
