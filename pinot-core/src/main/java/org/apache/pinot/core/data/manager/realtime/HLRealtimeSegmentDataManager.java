@@ -19,13 +19,6 @@
 package org.apache.pinot.core.data.manager.realtime;
 
 import com.google.common.util.concurrent.Uninterruptibles;
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.TimerTask;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.io.FileUtils;
 import org.apache.pinot.common.config.IndexingConfig;
 import org.apache.pinot.common.config.TableConfig;
@@ -56,6 +49,14 @@ import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.TimerTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 
 public class HLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
@@ -176,7 +177,7 @@ public class HLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
     // lets create a new realtime segment
     segmentLogger.info("Started {} stream provider", _streamConfig.getType());
     final int capacity = _streamConfig.getFlushThresholdRows();
-    RealtimeSegmentConfig realtimeSegmentConfig = new RealtimeSegmentConfig.Builder().setTableName(tableName)
+    RealtimeSegmentConfig realtimeSegmentConfig = new RealtimeSegmentConfig.Builder().setTableName(tableNameWithType)
         .setSegmentName(segmentName)
         .setStreamName(_streamConfig.getTopicName())
         .setSchema(schema)

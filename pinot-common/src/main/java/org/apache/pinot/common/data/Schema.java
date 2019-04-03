@@ -35,6 +35,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -453,6 +454,26 @@ public final class Schema {
   @JsonIgnore
   public TimeUnit getOutgoingTimeUnit() {
     return (_timeFieldSpec != null) ? _timeFieldSpec.getOutgoingGranularitySpec().getTimeType() : null;
+  }
+
+  /**
+    * method to be used when loading immutable realtime segment to get the hints for upsert schema metrics as
+   * they cannot be found with physical copy of data
+   */
+  @JsonIgnore
+  public void withSchemaHint(@Nullable Schema upsertSchema) {
+    if (upsertSchema == null || !upsertSchema.isTableForUpsert()) {
+      return;
+    } else {
+      this._updateSemantic = UPSERT_TABLE_CONFIG;
+      this._primaryKey = upsertSchema._primaryKey;
+      this._offsetKey = upsertSchema._offsetKey;
+      for (FieldSpec fieldSpec: upsertSchema.getAllFieldSpecs()) {
+        if (fieldSpec.isVirtualColumnField()) {
+          _fieldSpecMap.putIfAbsent(fieldSpec._name, fieldSpec);
+        }
+      }
+    }
   }
 
   /**

@@ -20,8 +20,8 @@ package com.linkedin.pinot.core.segment.updater;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableMap;
-import com.linkedin.pinot.common.utils.LLCSegmentName;
 import com.linkedin.pinot.core.segment.virtualcolumn.StorageProvider.UpdateLogEntry;
+import com.linkedin.pinot.opal.common.utils.PartitionIdMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class UpsertWaterMarkManager {
   private static final Logger LOGGER = LoggerFactory.getLogger(UpsertWaterMarkManager.class);
 
-  private final Map<String, Map<String, Integer>> _tableSegmentPartitionMap = new ConcurrentHashMap<>();
+  private final PartitionIdMapper partitionIdMapper = new PartitionIdMapper();
   private final Map<String, Map<Integer, Long>> _highWaterMarkTablePartitionMap = new ConcurrentHashMap<>();
 
   private static volatile UpsertWaterMarkManager _instance;
@@ -51,19 +51,15 @@ public class UpsertWaterMarkManager {
   }
 
   public void processMessage(String table, String segment, UpdateLogEntry logEntry) {
+    if (logEntry == null) {
+      return;
+    }
     long newOffset = logEntry.getValue();
-    Map<String, Integer> segmentPartitionMap = _tableSegmentPartitionMap.computeIfAbsent(table,
-        t -> new ConcurrentHashMap<>());
-    int partition = segmentPartitionMap.computeIfAbsent(segment, UpsertWaterMarkManager::getPartitionFromSegmentName);
+    int partition = partitionIdMapper.getPartitionFromLLRealtimeSegment(segment);
 
     Map<Integer, Long> partitionToHighWaterMark = _highWaterMarkTablePartitionMap.computeIfAbsent(table, t -> new ConcurrentHashMap<>());
     partitionToHighWaterMark.compute(partition, (key, currentOffset) ->
         (currentOffset == null) ? newOffset: Math.max(newOffset, currentOffset));
-  }
-
-  public static int getPartitionFromSegmentName(String llRealtimeSegmentName) {
-    LLCSegmentName segmentName = new LLCSegmentName(llRealtimeSegmentName);
-    return segmentName.getPartitionId();
   }
 
   public Map<Integer, Long> getHighWaterMarkForTable(String tableName) {

@@ -19,50 +19,8 @@
 package org.apache.pinot.core.indexsegment.mutable;
 
 import com.google.common.base.Preconditions;
-<<<<<<< HEAD:pinot-core/src/main/java/org/apache/pinot/core/indexsegment/mutable/MutableSegmentImpl.java
 import it.unimi.dsi.fastutil.ints.IntArrays;
 import it.unimi.dsi.fastutil.ints.IntComparator;
-=======
-import com.linkedin.pinot.common.config.SegmentPartitionConfig;
-import com.linkedin.pinot.common.data.FieldSpec;
-import com.linkedin.pinot.common.data.Schema;
-import com.linkedin.pinot.common.segment.SegmentMetadata;
-import com.linkedin.pinot.common.utils.NetUtil;
-import com.linkedin.pinot.core.data.GenericRow;
-import com.linkedin.pinot.core.indexsegment.IndexSegmentUtils;
-import com.linkedin.pinot.core.io.reader.DataFileReader;
-import com.linkedin.pinot.core.io.readerwriter.PinotDataBufferMemoryManager;
-import com.linkedin.pinot.core.io.readerwriter.impl.FixedByteSingleColumnMultiValueReaderWriter;
-import com.linkedin.pinot.core.io.readerwriter.impl.FixedByteSingleColumnSingleValueReaderWriter;
-import com.linkedin.pinot.core.realtime.impl.RealtimeSegmentConfig;
-import com.linkedin.pinot.core.realtime.impl.RealtimeSegmentStatsHistory;
-import com.linkedin.pinot.core.realtime.impl.dictionary.MutableDictionary;
-import com.linkedin.pinot.core.realtime.impl.dictionary.MutableDictionaryFactory;
-import com.linkedin.pinot.core.realtime.impl.invertedindex.RealtimeInvertedIndexReader;
-import com.linkedin.pinot.core.segment.creator.impl.V1Constants;
-import com.linkedin.pinot.core.segment.index.SegmentMetadataImpl;
-import com.linkedin.pinot.core.segment.index.data.source.ColumnDataSource;
-import com.linkedin.pinot.core.segment.index.readers.BloomFilterReader;
-import com.linkedin.pinot.core.segment.index.readers.Dictionary;
-import com.linkedin.pinot.core.segment.virtualcolumn.VirtualColumnContext;
-import com.linkedin.pinot.core.segment.virtualcolumn.VirtualColumnProvider;
-import com.linkedin.pinot.core.segment.virtualcolumn.VirtualColumnProviderFactory;
-import com.linkedin.pinot.core.startree.v2.StarTreeV2;
-import com.linkedin.pinot.core.util.FixedIntArray;
-import com.linkedin.pinot.core.util.FixedIntArrayOffHeapIdMap;
-import com.linkedin.pinot.core.util.IdMap;
-import org.roaringbitmap.IntIterator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
->>>>>>> [Part6]add new table/segment manager to handle any special upsert logic:pinot-core/src/main/java/com/linkedin/pinot/core/indexsegment/mutable/MutableSegmentImpl.java
-
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import javax.annotation.Nullable;
 import org.apache.pinot.common.config.SegmentPartitionConfig;
 import org.apache.pinot.common.data.FieldSpec;
 import org.apache.pinot.common.data.Schema;
@@ -80,11 +38,11 @@ import org.apache.pinot.core.realtime.impl.RealtimeSegmentStatsHistory;
 import org.apache.pinot.core.realtime.impl.dictionary.MutableDictionary;
 import org.apache.pinot.core.realtime.impl.dictionary.MutableDictionaryFactory;
 import org.apache.pinot.core.realtime.impl.invertedindex.RealtimeInvertedIndexReader;
-import org.apache.pinot.core.realtime.stream.StreamMessageMetadata;
 import org.apache.pinot.core.segment.creator.impl.V1Constants;
 import org.apache.pinot.core.segment.index.SegmentMetadataImpl;
 import org.apache.pinot.core.segment.index.data.source.ColumnDataSource;
 import org.apache.pinot.core.segment.index.readers.BloomFilterReader;
+import org.apache.pinot.core.segment.index.readers.Dictionary;
 import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnContext;
 import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnProvider;
 import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnProviderFactory;
@@ -95,6 +53,14 @@ import org.apache.pinot.core.util.IdMap;
 import org.roaringbitmap.IntIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nullable;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 
 public class MutableSegmentImpl implements MutableSegment {
@@ -186,6 +152,7 @@ public class MutableSegmentImpl implements MutableSegment {
     Set<String> invertedIndexColumns = config.getInvertedIndexColumns();
     int avgNumMultiValues = config.getAvgNumMultiValues();
 
+
     // Initialize for each column
     for (FieldSpec fieldSpec : _schema.getAllFieldSpecs()) {
       String column = fieldSpec.getName();
@@ -217,18 +184,6 @@ public class MutableSegmentImpl implements MutableSegment {
           // Even though the column is defined as 'no-dictionary' in the config, we did create dictionary for consuming segment.
           noDictionaryColumns.remove(column);
         }
-<<<<<<< HEAD:pinot-core/src/main/java/org/apache/pinot/core/indexsegment/mutable/MutableSegmentImpl.java
-        String allocationContext = buildAllocationContext(_segmentName, column, V1Constants.Dict.FILE_EXTENSION);
-        MutableDictionary dictionary = MutableDictionaryFactory
-            .getMutableDictionary(dataType, _offHeap, _memoryManager, dictionaryColumnSize,
-                Math.min(_statsHistory.getEstimatedCardinality(column), _capacity), allocationContext);
-        _dictionaryMap.put(column, dictionary);
-
-        // Even though the column is defined as 'no-dictionary' in the config, we did create dictionary for consuming segment.
-        noDictionaryColumns.remove(column);
-      }
-=======
->>>>>>> [Part6]add new table/segment manager to handle any special upsert logic:pinot-core/src/main/java/com/linkedin/pinot/core/indexsegment/mutable/MutableSegmentImpl.java
 
         DataFileReader indexReaderWriter;
         if (fieldSpec.isSingleValueField()) {
@@ -298,12 +253,8 @@ public class MutableSegmentImpl implements MutableSegment {
       addInvertedIndex(docId, dictIdMap);
 
       // Update number of document indexed at last to make the latest record queryable
-<<<<<<< HEAD:pinot-core/src/main/java/org/apache/pinot/core/indexsegment/mutable/MutableSegmentImpl.java
       canTakeMore = _numDocsIndexed++ < _capacity;
-=======
       postProcessRecords(row, docId);
-      return _numDocsIndexed++ < _capacity;
->>>>>>> [Part6]add new table/segment manager to handle any special upsert logic:pinot-core/src/main/java/com/linkedin/pinot/core/indexsegment/mutable/MutableSegmentImpl.java
     } else {
       Preconditions
           .checkState(_aggregateMetrics, "Invalid document-id during indexing: " + docId + " expected: " + numDocs);
@@ -521,11 +472,6 @@ public class MutableSegmentImpl implements MutableSegment {
   public GenericRow getRecord(int docId, GenericRow reuse) {
     for (FieldSpec fieldSpec : _schema.getAllFieldSpecs()) {
       String column = fieldSpec.getName();
-<<<<<<< HEAD:pinot-core/src/main/java/org/apache/pinot/core/indexsegment/mutable/MutableSegmentImpl.java
-      reuse.putField(column, IndexSegmentUtils
-          .getValue(docId, fieldSpec, _indexReaderWriterMap.get(column), _dictionaryMap.get(column),
-              _maxNumValuesMap.getOrDefault(column, 0)));
-=======
       if (!fieldSpec.isVirtualColumnField()) {
         reuse.putField(column,
             IndexSegmentUtils.getValue(docId, fieldSpec, _indexReaderWriterMap.get(column), _dictionaryMap.get(column),
@@ -535,7 +481,6 @@ public class MutableSegmentImpl implements MutableSegment {
             IndexSegmentUtils.getValue(docId, fieldSpec, _virtualColumnIndexReader.get(column),
                 _virtualColumnDictionary.get(column), _maxNumValuesMap.getOrDefault(column, 0)));
       }
->>>>>>> [Part6]add new table/segment manager to handle any special upsert logic:pinot-core/src/main/java/com/linkedin/pinot/core/indexsegment/mutable/MutableSegmentImpl.java
     }
     return reuse;
   }

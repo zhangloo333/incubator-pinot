@@ -111,7 +111,7 @@ public class UpsertLLRealtimeSegmentDataManager extends LLRealtimeSegmentDataMan
   private void emitEventToKeyCoordinator(GenericRow row, long offset) {
     final byte[] primaryKeyBytes = getPrimaryKeyBytesFromRow(row);
     final long timestampMillis = getTimestampFromRow(row);
-    ProduceTask<byte[], KeyCoordinatorQueueMsg> task = new ProduceTask<>(primaryKeyBytes, new KeyCoordinatorQueueMsg(_tableNameWithType,
+    ProduceTask<Integer, KeyCoordinatorQueueMsg> task = new ProduceTask<>(_streamPartitionId, new KeyCoordinatorQueueMsg(_tableNameWithType,
         primaryKeyBytes, new KeyCoordinatorMessageContext(_segmentNameStr, timestampMillis, offset)));
     _keyCoordinatorQueueProducer.produce(task);
   }

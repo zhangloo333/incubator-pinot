@@ -18,62 +18,51 @@
  */
 package com.linkedin.pinot.opal.distributed.keyCoordinator.serverIngestion;
 
+import com.linkedin.pinot.opal.common.Config.CommonConfig;
 import com.linkedin.pinot.opal.common.RpcQueue.KafkaQueueProducer;
-import com.linkedin.pinot.opal.common.RpcQueue.ProduceTask;
 import com.linkedin.pinot.opal.common.messages.KeyCoordinatorQueueMsg;
 import com.linkedin.pinot.opal.common.utils.CommonUtils;
 import com.linkedin.pinot.opal.distributed.keyCoordinator.common.DistributedCommonUtils;
+import com.linkedin.pinot.opal.distributed.keyCoordinator.common.IntPartitioner;
 import org.apache.commons.configuration.Configuration;
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
 import java.util.Properties;
 
-public class KeyCoordinatorQueueProducer extends KafkaQueueProducer<byte[], KeyCoordinatorQueueMsg> {
+public class KeyCoordinatorQueueProducer extends KafkaQueueProducer<Integer, KeyCoordinatorQueueMsg> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(KeyCoordinatorQueueProducer.class);
 
   private final Configuration _conf;
   private final String _topic;
-  private final KafkaProducer<byte[], KeyCoordinatorQueueMsg> _kafkaProducer;
+  private final KafkaProducer<Integer, KeyCoordinatorQueueMsg> _kafkaProducer;
 
   public KeyCoordinatorQueueProducer(Configuration conf, String hostname) {
     _conf = conf;
 
-    _topic = _conf.getString(ServerKeyCoordinatorConfig.KAFKA_TOPIC_CONFIG);
+    _topic = _conf.getString(CommonConfig.KAFKA_CONFIG.TOPIC_KEY);
     final Properties kafkaProducerConfig = CommonUtils.getPropertiesFromConf(
-        conf.subset(ServerKeyCoordinatorConfig.KAFKA_PRODUCER_CONFIG));
+        conf.subset(CommonConfig.KAFKA_CONFIG.KAFKA_CONFIG_KEY));
 
-    kafkaProducerConfig.put("key.serializer", ByteArraySerializer.class.getName());
-    kafkaProducerConfig.put("value.serializer", KeyCoordinatorQueueMsg.KeyCoordinatorQueueMsgSerializer.class.getName());
+    kafkaProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class.getName());
+    kafkaProducerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KeyCoordinatorQueueMsg.KeyCoordinatorQueueMsgSerializer.class.getName());
+    kafkaProducerConfig.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, IntPartitioner.class.getName());
     DistributedCommonUtils.setKakfaLosslessProducerConfig(kafkaProducerConfig, hostname);
 
-    this._kafkaProducer = new KafkaProducer<>(kafkaProducerConfig);
+    _kafkaProducer = new KafkaProducer<>(kafkaProducerConfig);
   }
 
   @Override
-  public void produce(ProduceTask<byte[], KeyCoordinatorQueueMsg> produceTask) {
-    _kafkaProducer.send(new ProducerRecord<>(_topic, produceTask.getKey(), produceTask.getValue()),
-        produceTask::markComplete);
+  protected KafkaProducer<Integer, KeyCoordinatorQueueMsg> getKafkaNativeProducer() {
+    return _kafkaProducer;
   }
 
   @Override
-  public void batchProduce(List<ProduceTask<byte[], KeyCoordinatorQueueMsg>> produceTasks) {
-    for (ProduceTask<byte[], KeyCoordinatorQueueMsg> task: produceTasks) {
-      produce(task);
-    }
-  }
-
-  public void flush() {
-    _kafkaProducer.flush();
-  }
-
-  @Override
-  public void close() {
-
+  protected String getDefaultTopic() {
+    return _topic;
   }
 }

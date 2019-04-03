@@ -19,6 +19,8 @@
 package com.linkedin.pinot.core.indexsegment.immutable;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.Multimap;
 import com.linkedin.pinot.core.indexsegment.UpsertSegment;
 import com.linkedin.pinot.core.segment.updater.UpsertWaterMarkManager;
 import com.linkedin.pinot.core.segment.virtualcolumn.StorageProvider.UpdateLogEntry;
@@ -45,7 +47,7 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -135,8 +137,10 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
   public void initVirtualColumn() throws IOException {
     List<UpdateLogEntry> updateLogEntries = UpsertVirtualColumnStorageProvider.getInstance().getAllMessages(_tableNameWithType, _segmentName);
     LOGGER.info("got {} update log entries for current segment {}", updateLogEntries.size(), _segmentName);
-    Map<Long, UpdateLogEntry> updateLogEntryMap = new HashMap<>();
-    updateLogEntries.forEach(e -> updateLogEntryMap.put(e.getOffset(), e));
+    Multimap<Long, UpdateLogEntry> updateLogEntryMap = ArrayListMultimap.create();
+    for (UpdateLogEntry logEntry: updateLogEntries) {
+      updateLogEntryMap.put(logEntry.getOffset(), logEntry);
+    }
 
     // go through all records and update the value
     final DataFileReader reader = _kafkaOffsetColumnIndexContainer.getForwardIndex();
@@ -146,12 +150,16 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
         long offset = (Long) dictionary.get(((BaseSingleColumnSingleValueReader) reader).getInt(i));
         if (updateLogEntryMap.containsKey(offset)) {
           boolean updated = false;
-          UpdateLogEntry entry = updateLogEntryMap.get(offset);
-          for (VirtualColumnLongValueReaderWriter readerWriter: _virtualColumnsReaderWriter) {
-            updated = readerWriter.update(i, entry.getValue(), entry.getType()) || updated;
+          Collection<UpdateLogEntry> entries = updateLogEntryMap.get(offset);
+          UpdateLogEntry lastEntry = null;
+          for (UpdateLogEntry entry : entries) {
+            lastEntry = entry;
+            for (VirtualColumnLongValueReaderWriter readerWriter : _virtualColumnsReaderWriter) {
+              updated = readerWriter.update(i, entry.getValue(), entry.getType()) || updated;
+            }
           }
           if (updated) {
-            _upsertWaterMarkManager.processMessage(_tableNameWithType, _segmentName, entry);
+            _upsertWaterMarkManager.processMessage(_tableNameWithType, _segmentName, lastEntry);
           }
         }
       }

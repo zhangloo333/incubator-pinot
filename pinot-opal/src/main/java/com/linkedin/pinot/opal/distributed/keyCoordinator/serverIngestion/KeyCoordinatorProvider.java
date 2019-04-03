@@ -19,6 +19,7 @@
 package com.linkedin.pinot.opal.distributed.keyCoordinator.serverIngestion;
 
 import com.google.common.base.Preconditions;
+import com.linkedin.pinot.opal.common.Config.CommonConfig;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
@@ -36,13 +37,14 @@ public class KeyCoordinatorProvider {
   public KeyCoordinatorProvider(Configuration conf, String hostname) {
     Preconditions.checkState(StringUtils.isNotEmpty(hostname), "host name should not be empty");
     _conf = conf;
-    _producer = new KeyCoordinatorQueueProducer(conf.subset(ServerKeyCoordinatorConfig.PRODUCER_CONFIG), hostname);
+    _producer = new KeyCoordinatorQueueProducer(conf.subset(CommonConfig.KAFKA_CONFIG.PRODUCER_CONFIG_KEY), hostname);
     synchronized (KeyCoordinatorProvider.class) {
       if (_instance == null) {
         _instance = this;
       } else {
         throw new RuntimeException("cannot re-initialize key coordinator provide when there is already one instance");
       }
+
     }
   }
 

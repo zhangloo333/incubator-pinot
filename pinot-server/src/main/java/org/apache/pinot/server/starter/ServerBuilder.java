@@ -18,11 +18,6 @@
  */
 package org.apache.pinot.server.starter;
 
-import com.linkedin.pinot.opal.distributed.keyCoordinator.server.KeyCoordinatorProvider;
-import com.yammer.metrics.core.MetricsRegistry;
-import org.apache.commons.configuration.ConfigurationException;
-import org.apache.helix.ZNRecord;
-import org.apache.helix.store.zk.ZkHelixPropertyStore;
 import org.apache.pinot.common.metrics.MetricsHelper;
 import org.apache.pinot.common.metrics.ServerMetrics;
 import org.apache.pinot.core.data.manager.InstanceDataManager;
@@ -34,6 +29,14 @@ import org.apache.pinot.core.query.scheduler.QuerySchedulerFactory;
 import org.apache.pinot.server.conf.ServerConf;
 import org.apache.pinot.transport.netty.NettyServer;
 import org.apache.pinot.transport.netty.NettyTCPServer;
+import com.linkedin.pinot.core.segment.updater.SegmentUpdater;
+import com.linkedin.pinot.core.segment.virtualcolumn.StorageProvider.UpsertVirtualColumnStorageProvider;
+import com.linkedin.pinot.opal.distributed.keyCoordinator.serverIngestion.KeyCoordinatorProvider;
+import com.linkedin.pinot.opal.distributed.keyCoordinator.serverUpdater.SegmentUpdaterProvider;
+import com.yammer.metrics.core.MetricsRegistry;
+import org.apache.commons.configuration.ConfigurationException;
+import org.apache.helix.ZNRecord;
+import org.apache.helix.store.zk.ZkHelixPropertyStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -125,7 +128,19 @@ public class ServerBuilder {
     return new NettyTCPServer(nettyPort, requestHandlerFactory, null);
   }
 
-  public KeyCoordinatorProvider buildKeyCoordinatorProvider() throws Exception {
-    return new KeyCoordinatorProvider(_serverConf.getOpalConfig());
+  public KeyCoordinatorProvider buildKeyCoordinatorProvider() {
+    return new KeyCoordinatorProvider(_serverConf.getUpsertKcProviderConfig(), _serverConf.getPinotServerHostname());
+  }
+
+  public SegmentUpdaterProvider buildSegmentUpdaterProvider() {
+    return new SegmentUpdaterProvider(_serverConf.getUpsertSegmentUpdateProviderConfig(), _serverConf.getPinotServerHostname());
+  }
+
+  public SegmentUpdater buildSegmentUpdater(SegmentUpdaterProvider updateProvider) {
+    return new SegmentUpdater(_serverConf.getUpsertSegmentUpdaterConfig(), updateProvider);
+  }
+
+  public void initVirtualColumnStorageProvider() {
+    UpsertVirtualColumnStorageProvider.init(_serverConf.getUpsertSegmentStorageProviderConfig());
   }
 }

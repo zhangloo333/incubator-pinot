@@ -38,12 +38,9 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
   public static final int FETCH_MSG_MAX_BATCH_SIZE_DEFAULT = 1000;
 
   public static final String KEY_COORDINATOR_KV_STORE = "kvstore";
-  public static final String KEY_COORDINATOR_TOPIC_MANAGER_ZK = "kafka.zookeeper";
 
   public static final String KEY_COORDINATOR_CONSUMER_CONF = "consumer";
   public static final String KEY_COORDINATOR_PRODUCER_CONF = "producer";
-  public static final String KEY_COORDINATOR_KAFKA_CONF = "kafka.conf";
-  public static final String KEY_COORDINATOR_TOPIC = "topic";
   public static final String KEY_COORDINATOR_PARTITIONS = "partitions";
 
   // server related config

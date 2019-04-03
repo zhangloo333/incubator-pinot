@@ -16,11 +16,37 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package com.linkedin.pinot.opal.distributed.keyCoordinator.serverIngestion;
+package com.linkedin.pinot.opal.distributed.keyCoordinator.internal;
 
-public class ServerKeyCoordinatorConfig {
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
-  public static final String PRODUCER_CONFIG = "producer";
-  public static final String KAFKA_PRODUCER_CONFIG = "kafkaConfig";
-  public static final String KAFKA_TOPIC_CONFIG = "topic";
+import static org.testng.Assert.*;
+
+public class DistributedKeyCoordinatorCoreTest {
+
+  @BeforeMethod
+  public void setUp() {
+  }
+
+  @AfterMethod
+  public void tearDown() {
+  }
+
+  @Test
+  public void testStart() {
+  }
+
+  @Test
+  public void testMessageProcessLoop() {
+  }
+
+  @Test
+  public void testStop() {
+  }
+
+  @Test
+  public void testGetState() {
+  }
 }

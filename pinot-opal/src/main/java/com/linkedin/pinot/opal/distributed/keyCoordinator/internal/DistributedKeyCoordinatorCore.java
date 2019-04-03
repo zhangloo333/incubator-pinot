@@ -18,6 +18,7 @@
  */
 package com.linkedin.pinot.opal.distributed.keyCoordinator.internal;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.linkedin.pinot.opal.common.RpcQueue.KafkaQueueConsumer;
 import com.linkedin.pinot.opal.common.RpcQueue.KafkaQueueProducer;
@@ -32,6 +33,7 @@ import com.linkedin.pinot.opal.common.messages.LogCoordinatorMessage;
 import com.linkedin.pinot.opal.common.messages.LogEventType;
 import com.linkedin.pinot.opal.common.updateStrategy.MessageResolveStrategy;
 import com.linkedin.pinot.opal.common.utils.CommonUtils;
+import com.linkedin.pinot.opal.common.utils.PartitionIdMapper;
 import com.linkedin.pinot.opal.common.utils.State;
 import com.linkedin.pinot.opal.distributed.keyCoordinator.common.DistributedCommonUtils;
 import com.linkedin.pinot.opal.distributed.keyCoordinator.starter.KeyCoordinatorConf;
@@ -58,11 +60,12 @@ public class DistributedKeyCoordinatorCore {
   private static final long TERMINATION_WAIT_MS = 10000;
 
   private KeyCoordinatorConf _conf;
-  private KafkaQueueProducer<String, LogCoordinatorMessage> _outputKafkaProducer;
-  private KafkaQueueConsumer<String, KeyCoordinatorQueueMsg> _inputKafkaConsumer;
+  private KafkaQueueProducer<Integer, LogCoordinatorMessage> _outputKafkaProducer;
+  private KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> _inputKafkaConsumer;
   private MessageResolveStrategy _messageResolveStrategy;
   private KeyValueStoreDB<ByteArrayWrapper, KeyCoordinatorMessageContext> _keyValueStoreDB;
   private ExecutorService _coreThread;
+  private PartitionIdMapper _partitionIdMapper;
   private volatile State _state = State.SHUTDOWN;
 
   private int fetchMsgDelayMs;
@@ -72,17 +75,28 @@ public class DistributedKeyCoordinatorCore {
 
   public DistributedKeyCoordinatorCore() {}
 
-  public void init(KeyCoordinatorConf conf, KafkaQueueProducer<String, LogCoordinatorMessage> keyCoordinatorProducer,
-                   KafkaQueueConsumer<String, KeyCoordinatorQueueMsg> keyCoordinatorConsumer,
+  public void init(KeyCoordinatorConf conf, KafkaQueueProducer<Integer, LogCoordinatorMessage> keyCoordinatorProducer,
+                   KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> keyCoordinatorConsumer,
                    MessageResolveStrategy messageResolveStrategy) {
-    Preconditions.checkState(_state == State.SHUTDOWN, "can only init if it is not running yet");
+    init(conf, keyCoordinatorProducer, keyCoordinatorConsumer, messageResolveStrategy,
+        getKeyValueStore(conf.subset(KeyCoordinatorConf.KEY_COORDINATOR_KV_STORE)), Executors.newSingleThreadExecutor());
+  }
+
+  @VisibleForTesting
+  public void init(KeyCoordinatorConf conf, KafkaQueueProducer<Integer, LogCoordinatorMessage> keyCoordinatorProducer,
+                   KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> keyCoordinatorConsumer,
+                   MessageResolveStrategy messageResolveStrategy,
+                   KeyValueStoreDB<ByteArrayWrapper, KeyCoordinatorMessageContext> keyValueStoreDB,
+                   ExecutorService coreThread) {
     CommonUtils.printConfiguration(conf, "distributed key coordinator core");
+    Preconditions.checkState(_state == State.SHUTDOWN, "can only init if it is not running yet");
     _conf = conf;
     _outputKafkaProducer = keyCoordinatorProducer;
     _inputKafkaConsumer = keyCoordinatorConsumer;
     _messageResolveStrategy = messageResolveStrategy;
-    _keyValueStoreDB = getKeyValueStore(conf.subset(KeyCoordinatorConf.KEY_COORDINATOR_KV_STORE));
-    _coreThread = Executors.newSingleThreadExecutor();
+    _keyValueStoreDB = keyValueStoreDB;
+    _coreThread = coreThread;
+    _partitionIdMapper = new PartitionIdMapper();
 
     fetchMsgDelayMs = conf.getInt(KeyCoordinatorConf.FETCH_MSG_DELAY_MS,
         KeyCoordinatorConf.FETCH_MSG_DELAY_MS_DEFAULT);
@@ -171,7 +185,7 @@ public class DistributedKeyCoordinatorCore {
       }
       KeyValueStoreTable<ByteArrayWrapper, KeyCoordinatorMessageContext> table = _keyValueStoreDB.getTable(tableName);
 
-      List<ProduceTask<String, LogCoordinatorMessage>> tasks = new ArrayList<>();
+      List<ProduceTask<Integer, LogCoordinatorMessage>> tasks = new ArrayList<>();
       // get a set of unique primary key and retrieve its corresponding value in kv store
       Set<ByteArrayWrapper> primaryKeys = msgList.stream().map(msg -> new ByteArrayWrapper(msg.getKey()))
           .collect(Collectors.toCollection(HashSet::new));
@@ -206,7 +220,7 @@ public class DistributedKeyCoordinatorCore {
       }
       LOGGER.info("sending {} tasks including {} deletion to log coordinator queue", tasks.size(), deleteTaskCount);
       long startTime = System.currentTimeMillis();
-      List<ProduceTask<String, LogCoordinatorMessage>> failedTasks = sendMessagesToLogCoordinator(tasks, 10, TimeUnit.SECONDS);
+      List<ProduceTask<Integer, LogCoordinatorMessage>> failedTasks = sendMessagesToLogCoordinator(tasks, 10, TimeUnit.SECONDS);
       LOGGER.info("send to producer take {} ms and {} failed", System.currentTimeMillis() - startTime, failedTasks.size());
 
       // update kv store
@@ -219,14 +233,16 @@ public class DistributedKeyCoordinatorCore {
     }
   }
 
-  public ProduceTask<String, LogCoordinatorMessage> createMessageToLogCoordinator(String table, String segment, long oldKafkaOffset,
-                                                                                  long value, LogEventType eventType) {
-    return new ProduceTask<>(DistributedCommonUtils.getKafkaTopicFromTableName(table), segment,
-        new LogCoordinatorMessage(segment, oldKafkaOffset, value, eventType));
+  public ProduceTask<Integer, LogCoordinatorMessage> createMessageToLogCoordinator(String tableName, String segmentName,
+                                                                                   long oldKafkaOffset, long value,
+                                                                                   LogEventType eventType) {
+    return new ProduceTask<>(DistributedCommonUtils.getKafkaTopicFromTableName(tableName),
+        _partitionIdMapper.getPartitionFromLLRealtimeSegment(segmentName),
+        new LogCoordinatorMessage(segmentName, oldKafkaOffset, value, eventType));
   }
 
-  private List<ProduceTask<String, LogCoordinatorMessage>> sendMessagesToLogCoordinator(
-      List<ProduceTask<String, LogCoordinatorMessage>> tasks, long timeout, TimeUnit timeUnit) {
+  private List<ProduceTask<Integer, LogCoordinatorMessage>> sendMessagesToLogCoordinator(
+      List<ProduceTask<Integer, LogCoordinatorMessage>> tasks, long timeout, TimeUnit timeUnit) {
 
     // send all and wait for result, batch for better perf
     CountDownLatch countDownLatch = new CountDownLatch(tasks.size());

@@ -18,56 +18,50 @@
  */
 package com.linkedin.pinot.opal.distributed.keyCoordinator.internal;
 
+import com.linkedin.pinot.opal.common.Config.CommonConfig;
 import com.linkedin.pinot.opal.common.RpcQueue.KafkaQueueProducer;
-import com.linkedin.pinot.opal.common.RpcQueue.ProduceTask;
 import com.linkedin.pinot.opal.common.messages.LogCoordinatorMessage;
 import com.linkedin.pinot.opal.common.utils.CommonUtils;
 import com.linkedin.pinot.opal.distributed.keyCoordinator.common.DistributedCommonUtils;
+import com.linkedin.pinot.opal.distributed.keyCoordinator.common.IntPartitioner;
 import com.linkedin.pinot.opal.distributed.keyCoordinator.serverIngestion.KeyCoordinatorQueueProducer;
-import com.linkedin.pinot.opal.distributed.keyCoordinator.starter.KeyCoordinatorConf;
 import org.apache.commons.configuration.Configuration;
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
 import java.util.Properties;
 
-public class LogCoordinatorQueueProducer extends KafkaQueueProducer<String, LogCoordinatorMessage> {
+public class LogCoordinatorQueueProducer extends KafkaQueueProducer<Integer, LogCoordinatorMessage> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(KeyCoordinatorQueueProducer.class);
 
-  private final Configuration _conf;
-  private final KafkaProducer<String, LogCoordinatorMessage> _kafkaProducer;
+  private final KafkaProducer<Integer, LogCoordinatorMessage> _kafkaProducer;
+  private final String _topic;
 
-  public LogCoordinatorQueueProducer(Configuration conf, String hostName) {
-    this._conf = conf;
+  public LogCoordinatorQueueProducer(Configuration conf) {
     final Properties kafkaProducerConfig = CommonUtils.getPropertiesFromConf(
-        conf.subset(KeyCoordinatorConf.KEY_COORDINATOR_KAFKA_CONF));
-    kafkaProducerConfig.put("key.serializer", StringSerializer.class.getName());
-    kafkaProducerConfig.put("value.serializer", LogCoordinatorMessage.LogCoordinatorMessageSerializer.class.getName());
+        conf.subset(CommonConfig.KAFKA_CONFIG.KAFKA_CONFIG_KEY));
+    String hostName = conf.getString(CommonConfig.KAFKA_CONFIG.HOSTNAME_KEY);
+    _topic = conf.getString(CommonConfig.KAFKA_CONFIG.TOPIC_KEY);
+
+    kafkaProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class.getName());
+    kafkaProducerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, LogCoordinatorMessage.LogCoordinatorMessageSerializer.class.getName());
+    kafkaProducerConfig.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, IntPartitioner.class.getName());
     DistributedCommonUtils.setKakfaLosslessProducerConfig(kafkaProducerConfig, hostName);
 
     this._kafkaProducer = new KafkaProducer<>(kafkaProducerConfig);
   }
 
   @Override
-  public void produce(ProduceTask<String, LogCoordinatorMessage> produceTask) {
-    _kafkaProducer.send(new ProducerRecord<>(produceTask.getTopic(), produceTask.getKey(), produceTask.getValue()),
-        produceTask::markComplete);
+  protected KafkaProducer<Integer, LogCoordinatorMessage> getKafkaNativeProducer() {
+    return _kafkaProducer;
   }
 
   @Override
-  public void batchProduce(List<ProduceTask<String, LogCoordinatorMessage>> produceTasks) {
-    for (ProduceTask<String, LogCoordinatorMessage> task: produceTasks) {
-      produce(task);
-    }
-  }
-
-  @Override
-  public void close() {
-    _kafkaProducer.close();
+  protected String getDefaultTopic() {
+    return _topic;
   }
 }

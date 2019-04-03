@@ -20,6 +20,7 @@ package com.linkedin.pinot.core.segment.virtualcolumn.StorageProvider;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.linkedin.pinot.opal.common.messages.LogEventType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,15 +52,25 @@ public class SegmentVirtualColumnStorageProvider {
   }
 
   public List<UpdateLogEntry> readAllMessagesFromFile() throws IOException {
-    if (_file.length() > 0) {
-      ByteBuffer buffer = ByteBuffer.allocate((int) _file.length());
+    int insertMessageCount = 0;
+    int deleteMessageCount = 0;
+    int fileLength = (int) _file.length();
+    if (fileLength > 0) {
+      ByteBuffer buffer = ByteBuffer.allocate(fileLength);
       readFullyFromBeginning(_channel, buffer);
-      int messageCount = (int) (_file.length() / UpdateLogEntry.SIZE);
-      List<UpdateLogEntry> logs = new ArrayList<>((int) _file.length() / UpdateLogEntry.SIZE);
+      int messageCount = fileLength / UpdateLogEntry.SIZE;
+      List<UpdateLogEntry> logs = new ArrayList<>(messageCount);
       for (int i = 0; i < messageCount; i++) {
-        logs.add(UpdateLogEntry.fromBytesBuffer(buffer));
+        UpdateLogEntry logEntry = UpdateLogEntry.fromBytesBuffer(buffer);
+        if ((logEntry.getType() == LogEventType.INSERT)) {
+          insertMessageCount++;
+        } else {
+          deleteMessageCount++;
+        }
+        logs.add(logEntry);
       }
       buffer.clear();
+      LOGGER.info("loaded {} message from file, {} insert and {} delete", messageCount, insertMessageCount, deleteMessageCount);
       return logs;
     } else {
       return ImmutableList.of();

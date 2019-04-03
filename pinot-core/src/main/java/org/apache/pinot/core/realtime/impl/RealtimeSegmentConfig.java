@@ -26,6 +26,7 @@ import org.apache.pinot.core.io.readerwriter.PinotDataBufferMemoryManager;
 
 
 public class RealtimeSegmentConfig {
+  private final String _tableName;
   private final String _segmentName;
   private final String _streamName;
   private final Schema _schema;
@@ -40,11 +41,12 @@ public class RealtimeSegmentConfig {
   private final SegmentPartitionConfig _segmentPartitionConfig;
   private final boolean _aggregateMetrics;
 
-  private RealtimeSegmentConfig(String segmentName, String streamName, Schema schema, int capacity,
+  private RealtimeSegmentConfig(String tableName, String segmentName, String streamName, Schema schema, int capacity,
       int avgNumMultiValues, Set<String> noDictionaryColumns, Set<String> invertedIndexColumns,
       RealtimeSegmentZKMetadata realtimeSegmentZKMetadata, boolean offHeap, PinotDataBufferMemoryManager memoryManager,
       RealtimeSegmentStatsHistory statsHistory, SegmentPartitionConfig segmentPartitionConfig,
       boolean aggregateMetrics) {
+    _tableName = tableName;
     _segmentName = segmentName;
     _streamName = streamName;
     _schema = schema;
@@ -58,6 +60,10 @@ public class RealtimeSegmentConfig {
     _statsHistory = statsHistory;
     _segmentPartitionConfig = segmentPartitionConfig;
     _aggregateMetrics = aggregateMetrics;
+  }
+
+  public String getTableName() {
+    return _tableName;
   }
 
   public String getSegmentName() {
@@ -113,6 +119,7 @@ public class RealtimeSegmentConfig {
   }
 
   public static class Builder {
+    private String _tableName;
     private String _segmentName;
     private String _streamName;
     private Schema _schema;
@@ -128,6 +135,11 @@ public class RealtimeSegmentConfig {
     private boolean _aggregateMetrics = false;
 
     public Builder() {
+    }
+
+    public Builder setTableName(String tableName) {
+      _tableName = tableName;
+      return this;
     }
 
     public Builder setSegmentName(String segmentName) {
@@ -196,7 +208,7 @@ public class RealtimeSegmentConfig {
     }
 
     public RealtimeSegmentConfig build() {
-      return new RealtimeSegmentConfig(_segmentName, _streamName, _schema, _capacity, _avgNumMultiValues,
+      return new RealtimeSegmentConfig(_tableName, _segmentName, _streamName, _schema, _capacity, _avgNumMultiValues,
           _noDictionaryColumns, _invertedIndexColumns, _realtimeSegmentZKMetadata, _offHeap, _memoryManager,
           _statsHistory, _segmentPartitionConfig, _aggregateMetrics);
     }

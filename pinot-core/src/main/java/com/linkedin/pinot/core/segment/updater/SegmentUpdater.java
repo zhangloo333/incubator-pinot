@@ -28,6 +28,7 @@ import com.linkedin.pinot.opal.common.messages.LogCoordinatorMessage;
 import com.linkedin.pinot.opal.distributed.keyCoordinator.common.DistributedCommonUtils;
 import com.linkedin.pinot.opal.distributed.keyCoordinator.serverUpdater.SegmentUpdaterProvider;
 import com.linkedin.pinot.opal.distributed.keyCoordinator.serverUpdater.SegmentUpdateQueueConsumer;
+import io.netty.util.internal.ConcurrentSet;
 import org.apache.commons.configuration.Configuration;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.slf4j.Logger;
@@ -136,7 +137,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
             for (Map.Entry<String, List<UpdateLogEntry>> segmentEntry: entry.getValue().entrySet()) {
               final String segmentNameStr = segmentEntry.getKey();
               updateVirtualColumn(tableName, segmentEntry.getKey(),
-                  segmentManagersMap.computeIfAbsent(segmentNameStr, sn -> new HashSet<>()), segmentDataMap.get(segmentNameStr));
+                  segmentManagersMap.computeIfAbsent(segmentNameStr, sn -> new ConcurrentSet<>()), segmentDataMap.get(segmentNameStr));
             }
           } else {
             LOGGER.warn("got messages for table {} not in this server", tableName);

@@ -21,7 +21,11 @@ package org.apache.pinot.server.starter;
 import java.util.concurrent.atomic.LongAccumulator;
 import javax.annotation.Nonnull;
 
-import com.linkedin.pinot.opal.distributed.keyCoordinator.server.KeyCoordinatorProvider;
+import com.google.common.collect.ImmutableList;
+import com.linkedin.pinot.core.segment.updater.SegmentUpdater;
+import com.linkedin.pinot.opal.distributed.keyCoordinator.serverIngestion.KeyCoordinatorProvider;
+import com.linkedin.pinot.opal.distributed.keyCoordinator.serverUpdater.SegmentUpdaterProvider;
+import com.linkedin.pinot.server.starter.helix.SegmentDeletionHandler;
 import org.apache.commons.configuration.Configuration;
 import org.apache.helix.ZNRecord;
 import org.apache.helix.store.zk.ZkHelixPropertyStore;
@@ -54,6 +58,9 @@ public class ServerInstance {
   private NettyServer _nettyServer;
   private LongAccumulator _latestQueryTime;
   private KeyCoordinatorProvider _keyCoordinatorProvider;
+  private SegmentUpdaterProvider _updaterProvider;
+  private SegmentUpdater _segmentUpdater;
+  private SegmentDeletionHandler _segmentDeletionHandler;
 
   private boolean _started = false;
 
@@ -75,7 +82,17 @@ public class ServerInstance {
         return _requestHandler;
       }
     });
-    _keyCoordinatorProvider = serverBuilder.buildKeyCoordinatorProvider();
+    if (serverConf.isUpsertEnabled()) {
+      LOGGER.info("starting pinot server upsert components");
+      serverBuilder.initVirtualColumnStorageProvider();
+      _keyCoordinatorProvider = serverBuilder.buildKeyCoordinatorProvider();
+      _updaterProvider = serverBuilder.buildSegmentUpdaterProvider();
+      _segmentUpdater = serverBuilder.buildSegmentUpdater(_updaterProvider);
+      _segmentDeletionHandler = new SegmentDeletionHandler(ImmutableList.of(_segmentUpdater));
+    } else {
+      _segmentDeletionHandler = new SegmentDeletionHandler();
+      LOGGER.info("starting pinot server without upsert component");
+    }
 
     LOGGER.info("Finish initializing server instance");
   }
@@ -113,8 +130,10 @@ public class ServerInstance {
     _queryScheduler.stop();
     LOGGER.info("Shutting down query executor");
     _queryExecutor.shutDown();
-    LOGGER.info("shutting down key coordinator");
-    _keyCoordinatorProvider.close();
+    if (_serverConf.isUpsertEnabled()) {
+      LOGGER.info("shutting down key coordinator");
+      _keyCoordinatorProvider.close();
+    }
     LOGGER.info("Shutting down instance data manager");
     _instanceDataManager.shutDown();
 
@@ -128,6 +147,24 @@ public class ServerInstance {
 
   public InstanceDataManager getInstanceDataManager() {
     return _instanceDataManager;
+  }
+
+  public void maybeStartSegmentUpdater() {
+    if (_segmentUpdater != null) {
+      _segmentUpdater.start();
+      LOGGER.info("started segment updater");
+    }
+  }
+
+  public void maybeStopSegmentUpdater() {
+    if (_segmentUpdater != null) {
+      LOGGER.info("Shutting down segment updater");
+      _segmentUpdater.shutdown();
+    }
+  }
+
+  public SegmentDeletionHandler getSegmentDeletionHandler() {
+    return _segmentDeletionHandler;
   }
 
   public long getLatestQueryTime() {

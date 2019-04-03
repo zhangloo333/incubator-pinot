@@ -19,6 +19,7 @@
 package com.linkedin.pinot.opal.distributed.keyCoordinator.serverUpdater;
 
 import com.google.common.base.Preconditions;
+import com.linkedin.pinot.opal.common.Config.CommonConfig;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
@@ -38,7 +39,10 @@ public class SegmentUpdaterProvider {
   public SegmentUpdaterProvider(Configuration conf, String hostName) {
     Preconditions.checkState(StringUtils.isNotEmpty(hostName), "host name should not be empty");
     _conf = conf;
-    _consumer = new SegmentUpdateQueueConsumer(conf.subset(SegmentUpdaterQueueConfig.CONSUMER_CONFIG), hostName);
+
+    Configuration consumerConfig = conf.subset(SegmentUpdaterQueueConfig.CONSUMER_CONFIG);
+    consumerConfig.setProperty(CommonConfig.KAFKA_CONFIG.HOSTNAME_KEY, hostName);
+    _consumer = new SegmentUpdateQueueConsumer(consumerConfig);
     synchronized (SegmentUpdaterProvider.class) {
       if (_instance == null) {
         _instance = this;

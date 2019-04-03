@@ -20,6 +20,7 @@ package com.linkedin.pinot.opal.distributed.keyCoordinator.internal;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
+import com.linkedin.pinot.opal.common.Config.CommonConfig;
 import com.linkedin.pinot.opal.common.RpcQueue.KafkaQueueConsumer;
 import com.linkedin.pinot.opal.common.messages.KeyCoordinatorQueueMsg;
 import com.linkedin.pinot.opal.common.utils.CommonUtils;
@@ -27,7 +28,8 @@ import com.linkedin.pinot.opal.distributed.keyCoordinator.common.DistributedComm
 import com.linkedin.pinot.opal.distributed.keyCoordinator.starter.KeyCoordinatorConf;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang.StringUtils;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,7 +37,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
-public class KeyCoordinatorQueueConsumer extends KafkaQueueConsumer<String, KeyCoordinatorQueueMsg> {
+public class KeyCoordinatorQueueConsumer extends KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(KeyCoordinatorQueueConsumer.class);
 
@@ -45,21 +47,21 @@ public class KeyCoordinatorQueueConsumer extends KafkaQueueConsumer<String, KeyC
 
   /**
    * @param conf configuration of the kafka key coordinator queue consumer
-   * @param hostname the local host name
    */
-  public KeyCoordinatorQueueConsumer(Configuration conf, String hostname) {
+  public KeyCoordinatorQueueConsumer(Configuration conf) {
     _conf = conf;
-    _topic = conf.getString(KeyCoordinatorConf.KEY_COORDINATOR_TOPIC);
+    _topic = conf.getString(CommonConfig.KAFKA_CONFIG.TOPIC_KEY);
     _partitions = conf.getList(KeyCoordinatorConf.KEY_COORDINATOR_PARTITIONS);
+    String hostname = conf.getString(CommonConfig.KAFKA_CONFIG.HOSTNAME_KEY);
     Preconditions.checkState(StringUtils.isNotEmpty(_topic), "kafka consumer topic should not be empty");
     Preconditions.checkState(_partitions != null && _partitions.size() > 0, "kafka partitions list should not be empty");
 
-    Properties kafkaProperties = CommonUtils.getPropertiesFromConf(conf.subset(KeyCoordinatorConf.KEY_COORDINATOR_KAFKA_CONF));
-    kafkaProperties.put("key.deserializer", ByteArrayDeserializer.class.getName());
-    kafkaProperties.put("value.deserializer", KeyCoordinatorQueueMsg.KeyCoordinatorQueueMsgDeserializer.class.getName());
-    kafkaProperties.put("group.id", KeyCoordinatorConf.KAFKA_CONSUMER_GROUP_ID_PREFIX + hostname);
-    kafkaProperties.put("client.id", DistributedCommonUtils.getClientId(hostname));
-    kafkaProperties.put("enable.auto.commit", false);
+    Properties kafkaProperties = CommonUtils.getPropertiesFromConf(conf.subset(CommonConfig.KAFKA_CONFIG.KAFKA_CONFIG_KEY));
+    kafkaProperties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class.getName());
+    kafkaProperties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KeyCoordinatorQueueMsg.KeyCoordinatorQueueMsgDeserializer.class.getName());
+    kafkaProperties.put(ConsumerConfig.GROUP_ID_CONFIG, KeyCoordinatorConf.KAFKA_CONSUMER_GROUP_ID_PREFIX + hostname);
+    kafkaProperties.put(ConsumerConfig.CLIENT_ID_CONFIG, DistributedCommonUtils.getClientId(hostname));
+    kafkaProperties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
     try {
       List<Integer> integerPartitions = _partitions.stream().map(Integer::parseInt).collect(Collectors.toList());
       init(kafkaProperties);

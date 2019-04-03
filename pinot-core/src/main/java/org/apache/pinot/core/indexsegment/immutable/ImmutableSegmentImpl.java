@@ -18,12 +18,6 @@
  */
 package org.apache.pinot.core.indexsegment.immutable;
 
-import java.io.IOException;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import javax.annotation.Nullable;
 import org.apache.pinot.common.data.FieldSpec;
 import org.apache.pinot.core.data.GenericRow;
 import org.apache.pinot.core.indexsegment.IndexSegmentUtils;
@@ -39,14 +33,22 @@ import org.apache.pinot.core.startree.v2.store.StarTreeIndexContainer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 
 public class ImmutableSegmentImpl implements ImmutableSegment {
   private static final Logger LOGGER = LoggerFactory.getLogger(ImmutableSegmentImpl.class);
 
-  protected final SegmentDirectory _segmentDirectory;
-  protected final SegmentMetadataImpl _segmentMetadata;
-  protected final Map<String, ColumnIndexContainer> _indexContainerMap;
-  protected final StarTreeIndexContainer _starTreeIndexContainer;
+  //TODO change them back to protect
+  public final SegmentDirectory _segmentDirectory;
+  public final SegmentMetadataImpl _segmentMetadata;
+  public final Map<String, ColumnIndexContainer> _indexContainerMap;
+  public final StarTreeIndexContainer _starTreeIndexContainer;
 
   public ImmutableSegmentImpl(SegmentDirectory segmentDirectory, SegmentMetadataImpl segmentMetadata,
       Map<String, ColumnIndexContainer> columnIndexContainerMap,

@@ -18,11 +18,13 @@
  */
 package com.linkedin.pinot.opal.distributed.keyCoordinator.starter;
 
+import com.google.common.base.Preconditions;
+import com.linkedin.pinot.opal.common.Config.CommonConfig;
+import com.linkedin.pinot.opal.common.RpcQueue.KafkaQueueConsumer;
+import com.linkedin.pinot.opal.common.RpcQueue.KafkaQueueProducer;
 import com.linkedin.pinot.opal.common.messages.KeyCoordinatorQueueMsg;
 import com.linkedin.pinot.opal.common.updateStrategy.MessageResolveStrategy;
 import com.linkedin.pinot.opal.common.updateStrategy.MessageTimeResolveStrategy;
-import com.linkedin.pinot.opal.common.RpcQueue.KafkaQueueConsumer;
-import com.linkedin.pinot.opal.common.RpcQueue.KafkaQueueProducer;
 import com.linkedin.pinot.opal.common.messages.LogCoordinatorMessage;
 import com.linkedin.pinot.opal.common.utils.State;
 import com.linkedin.pinot.opal.distributed.keyCoordinator.internal.DistributedKeyCoordinatorCore;
@@ -32,7 +34,6 @@ import com.linkedin.pinot.opal.distributed.keyCoordinator.internal.LogCoordinato
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.lang.StringUtils;
-import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,8 +44,8 @@ public class KeyCoordinatorStarter {
   private static final Logger LOGGER = LoggerFactory.getLogger(KeyCoordinatorStarter.class);
 
   private KeyCoordinatorConf _keyCoordinatorConf;
-  private KafkaQueueConsumer<String, KeyCoordinatorQueueMsg> _consumer;
-  private KafkaQueueProducer<String, LogCoordinatorMessage> _producer;
+  private KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> _consumer;
+  private KafkaQueueProducer<Integer, LogCoordinatorMessage> _producer;
   private MessageResolveStrategy _messageResolveStrategy;
   private DistributedKeyCoordinatorCore _keyCoordinatorCore;
   private KeyCoordinatorApiApplication _application;
@@ -54,13 +55,21 @@ public class KeyCoordinatorStarter {
     _keyCoordinatorConf = conf;
     _hostName = conf.getString(KeyCoordinatorConf.HOST_NAME);
     Preconditions.checkState(StringUtils.isNotEmpty(_hostName), "expect host name in configuration");
-    _consumer = new KeyCoordinatorQueueConsumer(
-        _keyCoordinatorConf.subset(KeyCoordinatorConf.KEY_COORDINATOR_CONSUMER_CONF), _hostName);
-    _producer = new LogCoordinatorQueueProducer(
-        _keyCoordinatorConf.subset(KeyCoordinatorConf.KEY_COORDINATOR_PRODUCER_CONF), _hostName);
+    _consumer = getConsumer(_keyCoordinatorConf.subset(KeyCoordinatorConf.KEY_COORDINATOR_CONSUMER_CONF));
+    _producer = getProducer(_keyCoordinatorConf.subset(KeyCoordinatorConf.KEY_COORDINATOR_PRODUCER_CONF));
     _messageResolveStrategy = new MessageTimeResolveStrategy();
     _keyCoordinatorCore = new DistributedKeyCoordinatorCore();
     _application = new KeyCoordinatorApiApplication(this);
+  }
+
+  private KeyCoordinatorQueueConsumer getConsumer(Configuration consumerConfig) {
+    consumerConfig.setProperty(CommonConfig.KAFKA_CONFIG.HOSTNAME_KEY, _hostName);
+    return new KeyCoordinatorQueueConsumer(consumerConfig);
+  }
+
+  private LogCoordinatorQueueProducer getProducer(Configuration producerConfig) {
+    producerConfig.setProperty(CommonConfig.KAFKA_CONFIG.HOSTNAME_KEY, _hostName);
+    return new LogCoordinatorQueueProducer(producerConfig);
   }
 
   public void start() {

@@ -91,6 +91,7 @@ public class UpsertVirtualColumnStorageProvider {
   }
 
   public List<UpdateLogEntry> getAllMessages(String tableName, String segmentName) throws IOException {
+    LOGGER.info("loading all message for table {} segment {}", tableName, segmentName);
     if (_virtualColumnStorage.containsKey(tableName)) {
       SegmentVirtualColumnStorageProvider provider = _virtualColumnStorage.get(tableName).get(segmentName);
       if (provider != null) {
@@ -100,8 +101,8 @@ public class UpsertVirtualColumnStorageProvider {
         return ImmutableList.of();
       }
     } else {
-      LOGGER.warn("don't have data for table {}", tableName);
-      return null;
+      LOGGER.error("don't have data for table {}", tableName);
+      return ImmutableList.of();
     }
   }
   public void addDataToFile(String tableName, String segmentName, List<UpdateLogEntry> messages) throws IOException {

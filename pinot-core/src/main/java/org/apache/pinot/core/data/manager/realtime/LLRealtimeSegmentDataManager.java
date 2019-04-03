@@ -21,6 +21,7 @@ package org.apache.pinot.core.data.manager.realtime;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.Uninterruptibles;
+import com.linkedin.pinot.core.data.manager.realtime.UpsertLLRealtimeSegmentDataManager;
 import com.yammer.metrics.core.Meter;
 import org.apache.commons.io.FileUtils;
 import org.apache.pinot.common.Utils;
@@ -228,7 +229,7 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
 
   private Thread _consumerThread;
   private final String _streamTopic;
-  private final int _streamPartitionId;
+  protected final int _streamPartitionId;
   final String _clientId;
   protected final LLCSegmentName _segmentName;
   private final RecordTransformer _recordTransformer;

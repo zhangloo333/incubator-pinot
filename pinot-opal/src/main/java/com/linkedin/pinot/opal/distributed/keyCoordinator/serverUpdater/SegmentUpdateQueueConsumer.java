@@ -18,12 +18,14 @@
  */
 package com.linkedin.pinot.opal.distributed.keyCoordinator.serverUpdater;
 
+import com.linkedin.pinot.opal.common.Config.CommonConfig;
 import com.linkedin.pinot.opal.common.RpcQueue.KafkaQueueConsumer;
 import com.linkedin.pinot.opal.common.messages.LogCoordinatorMessage;
 import com.linkedin.pinot.opal.common.utils.CommonUtils;
 import com.linkedin.pinot.opal.distributed.keyCoordinator.common.DistributedCommonUtils;
 import org.apache.commons.configuration.Configuration;
-import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,17 +44,18 @@ public class SegmentUpdateQueueConsumer extends KafkaQueueConsumer<String, LogCo
   private final Configuration _conf;
   private final String _topic;
 
-  public SegmentUpdateQueueConsumer(Configuration conf, String hostName) {
+  public SegmentUpdateQueueConsumer(Configuration conf) {
     _conf = conf;
+    String hostName = conf.getString(CommonConfig.KAFKA_CONFIG.HOSTNAME_KEY);
     final String groupid = conf.getString(CONSUMER_GROUP_ID_PREFIX, CONSUMER_GROUP_ID_PREFIX_DEFAULT) + hostName;
 
     LOGGER.info("creating segment updater kafka consumer with group id {}", groupid);
     Properties kafkaProperties = CommonUtils.getPropertiesFromConf(conf.subset(SegmentUpdaterQueueConfig.KAFKA_CONSUMER_CONFIG));
-    kafkaProperties.put("key.deserializer", StringDeserializer.class.getName());
-    kafkaProperties.put("value.deserializer", LogCoordinatorMessage.LogCoordinatorMessageDeserializer.class.getName());
-    kafkaProperties.put("group.id", groupid);
-    kafkaProperties.put("client.id", DistributedCommonUtils.getClientId(hostName));
-    kafkaProperties.put("enable.auto.commit", false);
+    kafkaProperties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class.getName());
+    kafkaProperties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, LogCoordinatorMessage.LogCoordinatorMessageDeserializer.class.getName());
+    kafkaProperties.put(ConsumerConfig.GROUP_ID_CONFIG, groupid);
+    kafkaProperties.put(ConsumerConfig.CLIENT_ID_CONFIG, DistributedCommonUtils.getClientId(hostName));
+    kafkaProperties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
     _topic = conf.getString(TOPIC_CONFIG_KEY);
     try {
       init(kafkaProperties);

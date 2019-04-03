@@ -18,20 +18,44 @@
  */
 package com.linkedin.pinot.opal.common.RpcQueue;
 
+import org.apache.commons.lang.StringUtils;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+
 import java.util.List;
 
 public abstract class KafkaQueueProducer<K, V> implements QueueProducer<K, V>{
 
+  protected abstract KafkaProducer<K, V> getKafkaNativeProducer();
+
+  protected abstract String getDefaultTopic();
+
   @Override
   public void produce(ProduceTask<K, V> produceTask) {
-    return;
+    getKafkaNativeProducer().send(new ProducerRecord<>(getTopic(produceTask), produceTask.getKey(), produceTask.getValue()),
+        produceTask::markComplete);
+  }
+
+  public String getTopic(ProduceTask<K, V> produceTask) {
+    if (StringUtils.isNotEmpty(produceTask.getTopic())) {
+      return produceTask.getTopic();
+    }
+    return getDefaultTopic();
   }
 
   @Override
   public void batchProduce(List<ProduceTask<K, V>> produceTasks) {
-    return;
+    for (ProduceTask<K, V> task: produceTasks) {
+      produce(task);
+    }
+  }
+
+  public void flush() {
+    getKafkaNativeProducer().flush();
   }
 
   @Override
-  public abstract void close();
+  public void close() {
+    getKafkaNativeProducer().close();
+  }
 }

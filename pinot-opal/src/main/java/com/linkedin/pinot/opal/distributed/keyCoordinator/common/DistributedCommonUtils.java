@@ -20,6 +20,7 @@ package com.linkedin.pinot.opal.distributed.keyCoordinator.common;
 
 import com.google.common.base.Preconditions;
 import com.linkedin.pinot.opal.distributed.keyCoordinator.starter.KeyCoordinatorConf;
+import org.apache.kafka.clients.producer.ProducerConfig;
 
 import java.util.Properties;
 
@@ -43,18 +44,18 @@ public class DistributedCommonUtils {
   }
 
   public static void setKakfaLosslessProducerConfig(Properties kafkaProducerConfig, String hostname) {
-    kafkaProducerConfig.put("acks", "all");
-    if (!kafkaProducerConfig.containsKey("retries")) {
-      kafkaProducerConfig.put("retries", KeyCoordinatorConf.KAKFA_PRODUCER_RETRIES);
+    kafkaProducerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
+    if (!kafkaProducerConfig.containsKey(ProducerConfig.RETRIES_CONFIG)) {
+      kafkaProducerConfig.put(ProducerConfig.RETRIES_CONFIG, KeyCoordinatorConf.KAKFA_PRODUCER_RETRIES);
     }
-    if (!kafkaProducerConfig.containsKey("linger.ms")) {
-      kafkaProducerConfig.put("linger.ms", KeyCoordinatorConf.KAKFA_PRODUCER_LINGER_MS);
+    if (!kafkaProducerConfig.containsKey(ProducerConfig.LINGER_MS_CONFIG)) {
+      kafkaProducerConfig.put(ProducerConfig.LINGER_MS_CONFIG, KeyCoordinatorConf.KAKFA_PRODUCER_LINGER_MS);
     }
-    if (!kafkaProducerConfig.containsKey("block.on.buffer.full")) {
-      kafkaProducerConfig.put("block.on.buffer.full", true);
+    if (!kafkaProducerConfig.containsKey(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG)) {
+      kafkaProducerConfig.put(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, true);
     }
-    if (!kafkaProducerConfig.containsKey("client.id")) {
-      kafkaProducerConfig.put("client.id", DistributedCommonUtils.getClientId(hostname));
+    if (!kafkaProducerConfig.containsKey(ProducerConfig.CLIENT_ID_CONFIG)) {
+      kafkaProducerConfig.put(ProducerConfig.CLIENT_ID_CONFIG, DistributedCommonUtils.getClientId(hostname));
     }
   }
 }
