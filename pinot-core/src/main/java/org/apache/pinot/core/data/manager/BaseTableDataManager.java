@@ -123,7 +123,7 @@ public abstract class BaseTableDataManager implements TableDataManager {
         immutableSegment.getSegmentMetadata().getTotalRawDocs());
     _serverMetrics.addValueToTableGauge(_tableNameWithType, ServerGauge.SEGMENT_COUNT, 1L);
 
-    ImmutableSegmentDataManager newSegmentManager = new ImmutableSegmentDataManager(immutableSegment);
+    ImmutableSegmentDataManager newSegmentManager = getImmutableSegmentDataManager(immutableSegment);
     SegmentDataManager oldSegmentManager = _segmentDataManagerMap.put(segmentName, newSegmentManager);
 
     // release old segment if needed
@@ -252,5 +252,9 @@ public abstract class BaseTableDataManager implements TableDataManager {
   @Override
   public String getTableName() {
     return _tableNameWithType;
+  }
+
+  protected ImmutableSegmentDataManager getImmutableSegmentDataManager(ImmutableSegment immutableSegment) {
+    return new ImmutableSegmentDataManager(immutableSegment);
   }
 }

@@ -98,9 +98,9 @@ public class HLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
   // An instance of this class exists only for the duration of the realtime segment that is currently being consumed.
   // Once the segment is committed, the segment is handled by OfflineSegmentDataManager
   public HLRealtimeSegmentDataManager(final RealtimeSegmentZKMetadata realtimeSegmentZKMetadata,
-      final TableConfig tableConfig, InstanceZKMetadata instanceMetadata,
-      final RealtimeTableDataManager realtimeTableDataManager, final String resourceDataDir,
-      final IndexLoadingConfig indexLoadingConfig, final Schema schema, final ServerMetrics serverMetrics)
+                                      final TableConfig tableConfig, InstanceZKMetadata instanceMetadata,
+                                      final RealtimeTableDataManager realtimeTableDataManager, final String resourceDataDir,
+                                      final IndexLoadingConfig indexLoadingConfig, final Schema schema, final ServerMetrics serverMetrics)
       throws Exception {
     super();
     _segmentVersion = indexLoadingConfig.getSegmentVersion();
@@ -176,17 +176,21 @@ public class HLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
     // lets create a new realtime segment
     segmentLogger.info("Started {} stream provider", _streamConfig.getType());
     final int capacity = _streamConfig.getFlushThresholdRows();
-    RealtimeSegmentConfig realtimeSegmentConfig =
-        new RealtimeSegmentConfig.Builder().setSegmentName(segmentName).setStreamName(_streamConfig.getTopicName())
-            .setSchema(schema).setCapacity(capacity)
-            .setAvgNumMultiValues(indexLoadingConfig.getRealtimeAvgMultiValueCount())
-            .setNoDictionaryColumns(indexLoadingConfig.getNoDictionaryColumns())
-            .setInvertedIndexColumns(invertedIndexColumns).setRealtimeSegmentZKMetadata(realtimeSegmentZKMetadata)
-            .setOffHeap(indexLoadingConfig.isRealtimeOffheapAllocation()).setMemoryManager(
-            getMemoryManager(realtimeTableDataManager.getConsumerDir(), segmentName,
-                indexLoadingConfig.isRealtimeOffheapAllocation(),
-                indexLoadingConfig.isDirectRealtimeOffheapAllocation(), serverMetrics))
-            .setStatsHistory(realtimeTableDataManager.getStatsHistory()).build();
+    RealtimeSegmentConfig realtimeSegmentConfig = new RealtimeSegmentConfig.Builder().setTableName(tableName)
+        .setSegmentName(segmentName)
+        .setStreamName(_streamConfig.getTopicName())
+        .setSchema(schema)
+        .setCapacity(capacity)
+        .setAvgNumMultiValues(indexLoadingConfig.getRealtimeAvgMultiValueCount())
+        .setNoDictionaryColumns(indexLoadingConfig.getNoDictionaryColumns())
+        .setInvertedIndexColumns(invertedIndexColumns)
+        .setRealtimeSegmentZKMetadata(realtimeSegmentZKMetadata)
+        .setOffHeap(indexLoadingConfig.isRealtimeOffheapAllocation())
+        .setMemoryManager(getMemoryManager(realtimeTableDataManager.getConsumerDir(), segmentName,
+            indexLoadingConfig.isRealtimeOffheapAllocation(), indexLoadingConfig.isDirectRealtimeOffheapAllocation(),
+            serverMetrics))
+        .setStatsHistory(realtimeTableDataManager.getStatsHistory())
+        .build();
     realtimeSegment = new MutableSegmentImpl(realtimeSegmentConfig);
 
     notifier = realtimeTableDataManager;

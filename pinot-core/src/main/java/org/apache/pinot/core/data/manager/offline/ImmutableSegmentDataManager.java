@@ -27,7 +27,7 @@ import org.apache.pinot.core.indexsegment.immutable.ImmutableSegment;
  */
 public class ImmutableSegmentDataManager extends SegmentDataManager {
 
-  private final ImmutableSegment _immutableSegment;
+  protected final ImmutableSegment _immutableSegment;
 
   public ImmutableSegmentDataManager(ImmutableSegment immutableSegment) {
     _immutableSegment = immutableSegment;

@@ -43,10 +43,10 @@ import org.slf4j.LoggerFactory;
 public class ImmutableSegmentImpl implements ImmutableSegment {
   private static final Logger LOGGER = LoggerFactory.getLogger(ImmutableSegmentImpl.class);
 
-  private final SegmentDirectory _segmentDirectory;
-  private final SegmentMetadataImpl _segmentMetadata;
-  private final Map<String, ColumnIndexContainer> _indexContainerMap;
-  private final StarTreeIndexContainer _starTreeIndexContainer;
+  protected final SegmentDirectory _segmentDirectory;
+  protected final SegmentMetadataImpl _segmentMetadata;
+  protected final Map<String, ColumnIndexContainer> _indexContainerMap;
+  protected final StarTreeIndexContainer _starTreeIndexContainer;
 
   public ImmutableSegmentImpl(SegmentDirectory segmentDirectory, SegmentMetadataImpl segmentMetadata,
       Map<String, ColumnIndexContainer> columnIndexContainerMap,

@@ -20,7 +20,7 @@ package com.linkedin.pinot.core.segment.updater;
 
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.Uninterruptibles;
-import com.linkedin.pinot.common.utils.LLCSegmentName;
+import org.apache.pinot.common.utils.LLCSegmentName;
 import com.linkedin.pinot.core.data.manager.UpsertSegmentDataManager;
 import com.linkedin.pinot.core.segment.virtualcolumn.StorageProvider.UpdateLogEntry;
 import com.linkedin.pinot.core.segment.virtualcolumn.StorageProvider.UpsertVirtualColumnStorageProvider;

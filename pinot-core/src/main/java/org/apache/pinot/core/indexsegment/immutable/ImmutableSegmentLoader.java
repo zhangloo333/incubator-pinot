@@ -19,11 +19,7 @@
 package org.apache.pinot.core.indexsegment.immutable;
 
 import com.google.common.base.Preconditions;
-import java.io.File;
-import java.util.HashMap;
-import java.util.Map;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
+import com.linkedin.pinot.core.indexsegment.immutable.ImmutableUpsertSegmentImpl;
 import org.apache.pinot.common.data.FieldSpec;
 import org.apache.pinot.common.data.Schema;
 import org.apache.pinot.common.segment.ReadMode;
@@ -43,11 +39,14 @@ import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnContext;
 import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnProvider;
 import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnProviderFactory;
 import org.apache.pinot.core.startree.v2.store.StarTreeIndexContainer;
-import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnContext;
-import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnProvider;
-import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnProviderFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.io.File;
+import java.util.HashMap;
+import java.util.Map;
 
 
 public class ImmutableSegmentLoader {
@@ -82,10 +81,23 @@ public class ImmutableSegmentLoader {
    * For segments from OFFLINE table.
    */
   public static ImmutableSegment load(@Nonnull File indexDir, @Nonnull IndexLoadingConfig indexLoadingConfig,
-      @Nullable Schema schema)
+      @Nullable Schema schema) throws Exception {
+    return loadHelper(indexDir, indexLoadingConfig, schema);
+  }
+
+  /**
+   * to load upsert related segment
+   */
+  public static ImmutableUpsertSegmentImpl loadUpsertSegment(@Nonnull File indexDir, @Nonnull IndexLoadingConfig indexLoadingConfig)
       throws Exception {
-    Preconditions
-        .checkArgument(indexDir.isDirectory(), "Index directory: {} does not exist or is not a directory", indexDir);
+    ImmutableSegmentImpl segment = loadHelper(indexDir, indexLoadingConfig, null);
+    return ImmutableUpsertSegmentImpl.copyOf(segment);
+  }
+
+  private static ImmutableSegmentImpl loadHelper(@Nonnull File indexDir, @Nonnull IndexLoadingConfig indexLoadingConfig,
+        @Nullable Schema schema) throws Exception {
+    Preconditions.checkArgument(indexDir.isDirectory(), "Index directory: {} does not exist or is not a directory",
+        indexDir);
 
     // Convert segment version if necessary
     // NOTE: this step may modify the segment metadata
@@ -156,4 +168,5 @@ public class ImmutableSegmentLoader {
 
     return new ImmutableSegmentImpl(segmentDirectory, segmentMetadata, indexContainerMap, starTreeIndexContainer);
   }
+
 }

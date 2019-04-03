@@ -18,8 +18,7 @@
  */
 package org.apache.pinot.core.data.manager.offline;
 
-import java.util.concurrent.Semaphore;
-import javax.annotation.Nonnull;
+import com.linkedin.pinot.core.data.manager.realtime.UpsertRealtimeTableDataManager;
 import org.apache.helix.ZNRecord;
 import org.apache.helix.store.zk.ZkHelixPropertyStore;
 import org.apache.pinot.common.metrics.ServerMetrics;
@@ -28,12 +27,19 @@ import org.apache.pinot.core.data.manager.TableDataManager;
 import org.apache.pinot.core.data.manager.config.InstanceDataManagerConfig;
 import org.apache.pinot.core.data.manager.config.TableDataManagerConfig;
 import org.apache.pinot.core.data.manager.realtime.RealtimeTableDataManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nonnull;
+import java.util.concurrent.Semaphore;
 
 
 /**
  * Factory for {@link TableDataManager}.
  */
 public class TableDataManagerProvider {
+  private static final Logger LOGGER = LoggerFactory.getLogger(TableDataManagerProvider.class);
+
   private static Semaphore _segmentBuildSemaphore;
 
   private TableDataManagerProvider() {
@@ -55,7 +61,13 @@ public class TableDataManagerProvider {
         tableDataManager = new OfflineTableDataManager();
         break;
       case REALTIME:
-        tableDataManager = new RealtimeTableDataManager(_segmentBuildSemaphore);
+        if (tableDataManagerConfig.getUpdateSemantic() == CommonConstants.UpdateSemantic.UPSERT) {
+          LOGGER.info("getting upsert table manager");
+          tableDataManager = new UpsertRealtimeTableDataManager(_segmentBuildSemaphore);
+        } else {
+          LOGGER.info("getting regular realtime table manager");
+          tableDataManager = new RealtimeTableDataManager(_segmentBuildSemaphore);
+        }
         break;
       default:
         throw new IllegalStateException();

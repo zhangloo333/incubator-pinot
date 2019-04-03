@@ -19,8 +19,42 @@
 package org.apache.pinot.core.indexsegment.mutable;
 
 import com.google.common.base.Preconditions;
+<<<<<<< HEAD:pinot-core/src/main/java/org/apache/pinot/core/indexsegment/mutable/MutableSegmentImpl.java
 import it.unimi.dsi.fastutil.ints.IntArrays;
 import it.unimi.dsi.fastutil.ints.IntComparator;
+=======
+import com.linkedin.pinot.common.config.SegmentPartitionConfig;
+import com.linkedin.pinot.common.data.FieldSpec;
+import com.linkedin.pinot.common.data.Schema;
+import com.linkedin.pinot.common.segment.SegmentMetadata;
+import com.linkedin.pinot.common.utils.NetUtil;
+import com.linkedin.pinot.core.data.GenericRow;
+import com.linkedin.pinot.core.indexsegment.IndexSegmentUtils;
+import com.linkedin.pinot.core.io.reader.DataFileReader;
+import com.linkedin.pinot.core.io.readerwriter.PinotDataBufferMemoryManager;
+import com.linkedin.pinot.core.io.readerwriter.impl.FixedByteSingleColumnMultiValueReaderWriter;
+import com.linkedin.pinot.core.io.readerwriter.impl.FixedByteSingleColumnSingleValueReaderWriter;
+import com.linkedin.pinot.core.realtime.impl.RealtimeSegmentConfig;
+import com.linkedin.pinot.core.realtime.impl.RealtimeSegmentStatsHistory;
+import com.linkedin.pinot.core.realtime.impl.dictionary.MutableDictionary;
+import com.linkedin.pinot.core.realtime.impl.dictionary.MutableDictionaryFactory;
+import com.linkedin.pinot.core.realtime.impl.invertedindex.RealtimeInvertedIndexReader;
+import com.linkedin.pinot.core.segment.creator.impl.V1Constants;
+import com.linkedin.pinot.core.segment.index.SegmentMetadataImpl;
+import com.linkedin.pinot.core.segment.index.data.source.ColumnDataSource;
+import com.linkedin.pinot.core.segment.index.readers.BloomFilterReader;
+import com.linkedin.pinot.core.segment.index.readers.Dictionary;
+import com.linkedin.pinot.core.segment.virtualcolumn.VirtualColumnContext;
+import com.linkedin.pinot.core.segment.virtualcolumn.VirtualColumnProvider;
+import com.linkedin.pinot.core.segment.virtualcolumn.VirtualColumnProviderFactory;
+import com.linkedin.pinot.core.startree.v2.StarTreeV2;
+import com.linkedin.pinot.core.util.FixedIntArray;
+import com.linkedin.pinot.core.util.FixedIntArrayOffHeapIdMap;
+import com.linkedin.pinot.core.util.IdMap;
+import org.roaringbitmap.IntIterator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+>>>>>>> [Part6]add new table/segment manager to handle any special upsert logic:pinot-core/src/main/java/com/linkedin/pinot/core/indexsegment/mutable/MutableSegmentImpl.java
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -66,44 +100,52 @@ import org.slf4j.LoggerFactory;
 public class MutableSegmentImpl implements MutableSegment {
   // For multi-valued column, forward-index.
   // Maximum number of multi-values per row. We assert on this.
-  private static final int MAX_MULTI_VALUES_PER_ROW = 1000;
-  private static final String RECORD_ID_MAP = "__recordIdMap__";
-  private static final int EXPECTED_COMPRESSION = 1000;
-  private static final int MIN_ROWS_TO_INDEX = 1000_000; // Min size of recordIdMap for updatable metrics.
-  private static final int MIN_RECORD_ID_MAP_CACHE_SIZE = 10000; // Min overflow map size for updatable metrics.
+  protected static final int MAX_MULTI_VALUES_PER_ROW = 1000;
+  protected static final String RECORD_ID_MAP = "__recordIdMap__";
+  protected static final int EXPECTED_COMPRESSION = 1000;
+  protected static final int MIN_ROWS_TO_INDEX = 1000_000; // Min size of recordIdMap for updatable metrics.
+  protected static final int MIN_RECORD_ID_MAP_CACHE_SIZE = 10000; // Min overflow map size for updatable metrics.
 
-  private final Logger _logger;
-  private final long _startTimeMillis = System.currentTimeMillis();
+  protected final Logger _logger;
+  protected final long _startTimeMillis = System.currentTimeMillis();
 
-  private final String _segmentName;
-  private final Schema _schema;
-  private final int _capacity;
-  private final SegmentMetadata _segmentMetadata;
-  private final boolean _offHeap;
-  private final PinotDataBufferMemoryManager _memoryManager;
-  private final RealtimeSegmentStatsHistory _statsHistory;
-  private final SegmentPartitionConfig _segmentPartitionConfig;
+  protected final String _tableName;
+  protected final String _segmentName;
+  protected final Schema _schema;
+  protected final int _capacity;
+  protected final SegmentMetadata _segmentMetadata;
+  protected final boolean _offHeap;
+  protected final PinotDataBufferMemoryManager _memoryManager;
+  protected final RealtimeSegmentStatsHistory _statsHistory;
+  protected final SegmentPartitionConfig _segmentPartitionConfig;
 
-  private final Map<String, MutableDictionary> _dictionaryMap = new HashMap<>();
-  private final Map<String, DataFileReader> _indexReaderWriterMap = new HashMap<>();
-  private final Map<String, Integer> _maxNumValuesMap = new HashMap<>();
-  private final Map<String, RealtimeInvertedIndexReader> _invertedIndexMap = new HashMap<>();
-  private final Map<String, BloomFilterReader> _bloomFilterMap = new HashMap<>();
-  private final IdMap<FixedIntArray> _recordIdMap;
-  private boolean _aggregateMetrics;
+  protected final Map<String, MutableDictionary> _dictionaryMap = new HashMap<>();
+  protected final Map<String, DataFileReader> _indexReaderWriterMap = new HashMap<>();
+  protected final Map<String, Integer> _maxNumValuesMap = new HashMap<>();
+  protected final Map<String, RealtimeInvertedIndexReader> _invertedIndexMap = new HashMap<>();
+  protected final Map<String, BloomFilterReader> _bloomFilterMap = new HashMap<>();
+  protected final IdMap<FixedIntArray> _recordIdMap;
 
-  private volatile int _numDocsIndexed = 0;
+  // virtual columns
+  protected final Map<String, VirtualColumnProvider> _virtualColumnProviderMap = new HashMap<>();
+  protected final Map<String, Dictionary> _virtualColumnDictionary = new HashMap<>();
+  protected final Map<String, DataFileReader> _virtualColumnIndexReader = new HashMap<>();
+
+  protected boolean _aggregateMetrics;
+
+  protected volatile int _numDocsIndexed = 0;
 
   // to compute the rolling interval
-  private volatile long _minTime = Long.MAX_VALUE;
-  private volatile long _maxTime = Long.MIN_VALUE;
-  private final int _numKeyColumns;
+  protected volatile long _minTime = Long.MAX_VALUE;
+  protected volatile long _maxTime = Long.MIN_VALUE;
+  protected final int _numKeyColumns;
 
   // default message metadata
   private volatile long _lastIndexedTimeMs = Long.MIN_VALUE;
   private volatile long _latestIngestionTimeMs = Long.MIN_VALUE;
 
   public MutableSegmentImpl(RealtimeSegmentConfig config) {
+    _tableName = config.getTableName();
     _segmentName = config.getSegmentName();
     _schema = config.getSchema();
     _capacity = config.getCapacity();
@@ -147,24 +189,35 @@ public class MutableSegmentImpl implements MutableSegment {
     // Initialize for each column
     for (FieldSpec fieldSpec : _schema.getAllFieldSpecs()) {
       String column = fieldSpec.getName();
-      _maxNumValuesMap.put(column, 0);
+      if (!_schema.isVirtualColumn(column)) {
+        _maxNumValuesMap.put(column, 0);
 
-      // Check whether to generate raw index for the column while consuming
-      // Only support generating raw index on single-value non-string columns that do not have inverted index while
-      // consuming. After consumption completes and the segment is built, all single-value columns can have raw index
-      FieldSpec.DataType dataType = fieldSpec.getDataType();
-      int indexColumnSize = FieldSpec.DataType.INT.size();
-      if (noDictionaryColumns.contains(column) && fieldSpec.isSingleValueField()
-          && dataType != FieldSpec.DataType.STRING && !invertedIndexColumns.contains(column)) {
-        // No dictionary
-        indexColumnSize = dataType.size();
-      } else {
-        int dictionaryColumnSize;
-        if (dataType == FieldSpec.DataType.STRING) {
-          dictionaryColumnSize = _statsHistory.getEstimatedAvgColSize(column);
+        // Check whether to generate raw index for the column while consuming
+        // Only support generating raw index on single-value non-string columns that do not have inverted index while
+        // consuming. After consumption completes and the segment is built, all single-value columns can have raw index
+        FieldSpec.DataType dataType = fieldSpec.getDataType();
+        int indexColumnSize = FieldSpec.DataType.INT.size();
+        if (noDictionaryColumns.contains(column) && fieldSpec.isSingleValueField()
+            && dataType != FieldSpec.DataType.STRING && !invertedIndexColumns.contains(column)) {
+          // No dictionary
+          indexColumnSize = dataType.size();
         } else {
-          dictionaryColumnSize = dataType.size();
+          int dictionaryColumnSize;
+          if (dataType == FieldSpec.DataType.STRING) {
+            dictionaryColumnSize = _statsHistory.getEstimatedAvgColSize(column);
+          } else {
+            dictionaryColumnSize = dataType.size();
+          }
+          String allocationContext = buildAllocationContext(_segmentName, column, V1Constants.Dict.FILE_EXTENSION);
+          MutableDictionary dictionary =
+              MutableDictionaryFactory.getMutableDictionary(dataType, _offHeap, _memoryManager, dictionaryColumnSize,
+                  Math.min(_statsHistory.getEstimatedCardinality(column), _capacity), allocationContext);
+          _dictionaryMap.put(column, dictionary);
+
+          // Even though the column is defined as 'no-dictionary' in the config, we did create dictionary for consuming segment.
+          noDictionaryColumns.remove(column);
         }
+<<<<<<< HEAD:pinot-core/src/main/java/org/apache/pinot/core/indexsegment/mutable/MutableSegmentImpl.java
         String allocationContext = buildAllocationContext(_segmentName, column, V1Constants.Dict.FILE_EXTENSION);
         MutableDictionary dictionary = MutableDictionaryFactory
             .getMutableDictionary(dataType, _offHeap, _memoryManager, dictionaryColumnSize,
@@ -174,25 +227,37 @@ public class MutableSegmentImpl implements MutableSegment {
         // Even though the column is defined as 'no-dictionary' in the config, we did create dictionary for consuming segment.
         noDictionaryColumns.remove(column);
       }
+=======
+>>>>>>> [Part6]add new table/segment manager to handle any special upsert logic:pinot-core/src/main/java/com/linkedin/pinot/core/indexsegment/mutable/MutableSegmentImpl.java
 
-      DataFileReader indexReaderWriter;
-      if (fieldSpec.isSingleValueField()) {
-        String allocationContext =
-            buildAllocationContext(_segmentName, column, V1Constants.Indexes.UNSORTED_SV_FORWARD_INDEX_FILE_EXTENSION);
-        indexReaderWriter = new FixedByteSingleColumnSingleValueReaderWriter(_capacity, indexColumnSize, _memoryManager,
-            allocationContext);
+        DataFileReader indexReaderWriter;
+        if (fieldSpec.isSingleValueField()) {
+          String allocationContext =
+              buildAllocationContext(_segmentName, column, V1Constants.Indexes.UNSORTED_SV_FORWARD_INDEX_FILE_EXTENSION);
+          indexReaderWriter = new FixedByteSingleColumnSingleValueReaderWriter(_capacity, indexColumnSize, _memoryManager,
+              allocationContext);
+        } else {
+          // TODO: Start with a smaller capacity on FixedByteSingleColumnMultiValueReaderWriter and let it expand
+          String allocationContext =
+              buildAllocationContext(_segmentName, column, V1Constants.Indexes.UNSORTED_MV_FORWARD_INDEX_FILE_EXTENSION);
+          indexReaderWriter =
+              new FixedByteSingleColumnMultiValueReaderWriter(MAX_MULTI_VALUES_PER_ROW, avgNumMultiValues, _capacity,
+                  indexColumnSize, _memoryManager, allocationContext);
+        }
+        _indexReaderWriterMap.put(column, indexReaderWriter);
+
+        if (invertedIndexColumns.contains(column)) {
+          _invertedIndexMap.put(column, new RealtimeInvertedIndexReader());
+        }
       } else {
-        // TODO: Start with a smaller capacity on FixedByteSingleColumnMultiValueReaderWriter and let it expand
-        String allocationContext =
-            buildAllocationContext(_segmentName, column, V1Constants.Indexes.UNSORTED_MV_FORWARD_INDEX_FILE_EXTENSION);
-        indexReaderWriter =
-            new FixedByteSingleColumnMultiValueReaderWriter(MAX_MULTI_VALUES_PER_ROW, avgNumMultiValues, _capacity,
-                indexColumnSize, _memoryManager, allocationContext);
-      }
-      _indexReaderWriterMap.put(column, indexReaderWriter);
-
-      if (invertedIndexColumns.contains(column)) {
-        _invertedIndexMap.put(column, new RealtimeInvertedIndexReader());
+        VirtualColumnContext virtualColumnContext = new VirtualColumnContext(NetUtil.getHostnameOrAddress(),
+            config.getTableName(), _segmentName, column, _capacity, true);
+        final VirtualColumnProvider provider = VirtualColumnProviderFactory.buildProvider(fieldSpec.getVirtualColumnProvider());
+        DataFileReader reader = provider.buildReader(virtualColumnContext);
+        Dictionary dictionary = provider.buildDictionary(virtualColumnContext);
+        _virtualColumnProviderMap.put(column, provider);
+        _virtualColumnIndexReader.put(column, reader);
+        _virtualColumnDictionary.put(column, dictionary);
       }
     }
 
@@ -233,7 +298,12 @@ public class MutableSegmentImpl implements MutableSegment {
       addInvertedIndex(docId, dictIdMap);
 
       // Update number of document indexed at last to make the latest record queryable
+<<<<<<< HEAD:pinot-core/src/main/java/org/apache/pinot/core/indexsegment/mutable/MutableSegmentImpl.java
       canTakeMore = _numDocsIndexed++ < _capacity;
+=======
+      postProcessRecords(row, docId);
+      return _numDocsIndexed++ < _capacity;
+>>>>>>> [Part6]add new table/segment manager to handle any special upsert logic:pinot-core/src/main/java/com/linkedin/pinot/core/indexsegment/mutable/MutableSegmentImpl.java
     } else {
       Preconditions
           .checkState(_aggregateMetrics, "Invalid document-id during indexing: " + docId + " expected: " + numDocs);
@@ -251,7 +321,7 @@ public class MutableSegmentImpl implements MutableSegment {
 
   private Map<String, Object> updateDictionary(GenericRow row) {
     Map<String, Object> dictIdMap = new HashMap<>();
-    for (FieldSpec fieldSpec : _schema.getAllFieldSpecs()) {
+    for (FieldSpec fieldSpec : _schema.getAllPhysicalFieldSpecs()) {
       String column = fieldSpec.getName();
       Object value = row.getValue(column);
       MutableDictionary dictionary = _dictionaryMap.get(column);
@@ -295,7 +365,7 @@ public class MutableSegmentImpl implements MutableSegment {
 
   private void addForwardIndex(GenericRow row, int docId, Map<String, Object> dictIdMap) {
     // Store dictionary Id(s) for columns with dictionary
-    for (FieldSpec fieldSpec : _schema.getAllFieldSpecs()) {
+    for (FieldSpec fieldSpec : _schema.getAllPhysicalFieldSpecs()) {
       String column = fieldSpec.getName();
       Object value = row.getValue(column);
       if (fieldSpec.isSingleValueField()) {
@@ -337,7 +407,7 @@ public class MutableSegmentImpl implements MutableSegment {
     // Update inverted index at last
     // NOTE: inverted index have to be updated at last because once it gets updated, the latest record will become
     // queryable
-    for (FieldSpec fieldSpec : _schema.getAllFieldSpecs()) {
+    for (FieldSpec fieldSpec : _schema.getAllPhysicalFieldSpecs()) {
       String column = fieldSpec.getName();
       RealtimeInvertedIndexReader invertedIndex = _invertedIndexMap.get(column);
       if (invertedIndex != null) {
@@ -351,6 +421,10 @@ public class MutableSegmentImpl implements MutableSegment {
         }
       }
     }
+  }
+
+  protected void postProcessRecords(GenericRow row, int docId) {
+    // to be override by upsert component
   }
 
   private boolean aggregateMetrics(GenericRow row, int docId) {
@@ -432,8 +506,10 @@ public class MutableSegmentImpl implements MutableSegment {
   private ColumnDataSource getVirtualDataSource(String column) {
     VirtualColumnContext virtualColumnContext = new VirtualColumnContext(NetUtil.getHostnameOrAddress(), _segmentMetadata.getTableName(), getSegmentName(),
         column, _numDocsIndexed + 1, true);
-    VirtualColumnProvider provider = VirtualColumnProviderFactory.buildProvider(_schema.getFieldSpecFor(column).getVirtualColumnProvider());
-    return new ColumnDataSource(provider.buildColumnIndexContainer(virtualColumnContext), provider.buildMetadata(virtualColumnContext));
+    VirtualColumnProvider provider = _virtualColumnProviderMap.get(column);
+    return new ColumnDataSource(provider.buildColumnIndexContainer(virtualColumnContext,
+        _virtualColumnIndexReader.get(column), _virtualColumnDictionary.get(column), null),
+        provider.buildMetadata(virtualColumnContext));
   }
 
   @Override
@@ -445,9 +521,21 @@ public class MutableSegmentImpl implements MutableSegment {
   public GenericRow getRecord(int docId, GenericRow reuse) {
     for (FieldSpec fieldSpec : _schema.getAllFieldSpecs()) {
       String column = fieldSpec.getName();
+<<<<<<< HEAD:pinot-core/src/main/java/org/apache/pinot/core/indexsegment/mutable/MutableSegmentImpl.java
       reuse.putField(column, IndexSegmentUtils
           .getValue(docId, fieldSpec, _indexReaderWriterMap.get(column), _dictionaryMap.get(column),
               _maxNumValuesMap.getOrDefault(column, 0)));
+=======
+      if (!fieldSpec.isVirtualColumnField()) {
+        reuse.putField(column,
+            IndexSegmentUtils.getValue(docId, fieldSpec, _indexReaderWriterMap.get(column), _dictionaryMap.get(column),
+                _maxNumValuesMap.getOrDefault(column, 0)));
+      } else {
+        reuse.putField(column,
+            IndexSegmentUtils.getValue(docId, fieldSpec, _virtualColumnIndexReader.get(column),
+                _virtualColumnDictionary.get(column), _maxNumValuesMap.getOrDefault(column, 0)));
+      }
+>>>>>>> [Part6]add new table/segment manager to handle any special upsert logic:pinot-core/src/main/java/com/linkedin/pinot/core/indexsegment/mutable/MutableSegmentImpl.java
     }
     return reuse;
   }

@@ -21,21 +21,14 @@ package org.apache.pinot.core.data.manager.realtime;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.Uninterruptibles;
-import com.linkedin.pinot.opal.common.RpcQueue.ProduceTask;
-import com.linkedin.pinot.opal.common.messages.KeyCoordinatorMessageContext;
-import com.linkedin.pinot.opal.common.messages.KeyCoordinatorQueueMsg;
-import com.linkedin.pinot.opal.distributed.keyCoordinator.server.KeyCoordinatorProvider;
-import com.linkedin.pinot.opal.distributed.keyCoordinator.server.KeyCoordinatorQueueProducer;
 import com.yammer.metrics.core.Meter;
 import org.apache.commons.io.FileUtils;
 import org.apache.pinot.common.Utils;
 import org.apache.pinot.common.config.IndexingConfig;
 import org.apache.pinot.common.config.SegmentPartitionConfig;
 import org.apache.pinot.common.config.TableConfig;
-import org.apache.pinot.common.data.DimensionFieldSpec;
 import org.apache.pinot.common.data.Schema;
 import org.apache.pinot.common.data.StarTreeIndexSpec;
-import org.apache.pinot.common.data.TimeFieldSpec;
 import org.apache.pinot.common.metadata.RowMetadata;
 import org.apache.pinot.common.metadata.instance.InstanceZKMetadata;
 import org.apache.pinot.common.metadata.segment.LLCRealtimeSegmentZKMetadata;
@@ -81,7 +74,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -207,22 +199,23 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
   private final int _segmentMaxRowCount;
   private final String _resourceDataDir;
   private final IndexLoadingConfig _indexLoadingConfig;
-  private final Schema _schema;
+  protected final Schema _schema;
   private final String _metricKeyName;
   private final ServerMetrics _serverMetrics;
-  private final MutableSegmentImpl _realtimeSegment;
+  protected final MutableSegmentImpl _realtimeSegment;
   private volatile long _currentOffset;
-  private volatile State _state;
+  protected volatile State _state;
   private volatile int _numRowsConsumed = 0;
   private volatile int _numRowsIndexed = 0; // Can be different from _numRowsConsumed when metrics update is enabled.
   private volatile int _numRowsErrored = 0;
   private volatile int consecutiveErrorCount = 0;
   private long _startTimeMs = 0;
-  private final String _segmentNameStr;
   private final SegmentVersion _segmentVersion;
   private final SegmentBuildTimeLeaseExtender _leaseExtender;
   private SegmentBuildDescriptor _segmentBuildDescriptor;
   private StreamConsumerFactory _streamConsumerFactory;
+
+  protected final String _segmentNameStr;
 
   // Segment end criteria
   private volatile long _consumeEndTime = 0;
@@ -237,18 +230,18 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
   private final String _streamTopic;
   private final int _streamPartitionId;
   final String _clientId;
-  private final LLCSegmentName _segmentName;
+  protected final LLCSegmentName _segmentName;
   private final RecordTransformer _recordTransformer;
   private PartitionLevelConsumer _partitionLevelConsumer = null;
   private StreamMetadataProvider _streamMetadataProvider = null;
   private final File _resourceTmpDir;
-  private final String _tableNameWithType;
+  protected final String _tableNameWithType;
   private final String _timeColumnName;
   private final List<String> _invertedIndexColumns;
   private final List<String> _noDictionaryColumns;
   private final StarTreeIndexSpec _starTreeIndexSpec;
   private final String _sortedColumn;
-  private Logger segmentLogger;
+  protected Logger segmentLogger;
   private final String _tableStreamName;
   private final PinotDataBufferMemoryManager _memoryManager;
   private AtomicLong _lastUpdatedRowsIndexed = new AtomicLong(0);
@@ -263,10 +256,6 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
   private String _stopReason = null;
   private final Semaphore _segBuildSemaphore;
   private final boolean _isOffHeap;
-
-  // upsert related info
-  private boolean _isCurrentSegmentForUpsert;
-  private KeyCoordinatorQueueProducer _keyCoordinatorQueueProducer = null;
 
   // TODO each time this method is called, we print reason for stop. Good to print only once.
   private boolean endCriteriaReached() {
@@ -464,18 +453,14 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
           GenericRow transformedRow = _recordTransformer.transform(decodedRow);
 
           if (transformedRow != null) {
-            if (_isCurrentSegmentForUpsert) {
-              transformedRow.putField(_schema.getOffsetKey(), _currentOffset);
-            }
-
-            realtimeRowsConsumedMeter = _serverMetrics
-                .addMeteredTableValue(_metricKeyName, ServerMeter.REALTIME_ROWS_CONSUMED, 1, realtimeRowsConsumedMeter);
+            processTransformedRow(transformedRow, _currentOffset);
+            realtimeRowsConsumedMeter =
+                _serverMetrics.addMeteredTableValue(_metricKeyName, ServerMeter.REALTIME_ROWS_CONSUMED, 1,
+                    realtimeRowsConsumedMeter);
             indexedMessageCount++;
 
             canTakeMore = _realtimeSegment.index(transformedRow, msgMetadata);
-            if (_isCurrentSegmentForUpsert) {
-              emitEventToKeyCoordinator(transformedRow, _currentOffset);
-            }
+            postIndexProcessing(transformedRow, _currentOffset);
           } else {
             realtimeRowsDroppedMeter = _serverMetrics
                 .addMeteredTableValue(_metricKeyName, ServerMeter.INVALID_REALTIME_ROWS_DROPPED, 1,
@@ -506,33 +491,13 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
     }
   }
 
-  private void emitEventToKeyCoordinator(GenericRow row, long offset) {
-    if (_keyCoordinatorQueueProducer != null) {
-      final byte[] primaryKeyBytes = getPrimaryKeyBytesFromRow(row);
-      final long timestampMillis = getTimestampFromRow(row);
-      ProduceTask<byte[], KeyCoordinatorQueueMsg> task = new ProduceTask<>(primaryKeyBytes, new KeyCoordinatorQueueMsg(_tableNameWithType,
-          primaryKeyBytes, new KeyCoordinatorMessageContext(_segmentNameStr, timestampMillis, offset)));
-      CountDownLatch countDownLatch = new CountDownLatch(1);
-      task.setCountDownLatch(countDownLatch);
-      _keyCoordinatorQueueProducer.produce(task);
-      try {
-        countDownLatch.wait();
-      } catch (InterruptedException e) {
-        throw new RuntimeException("failed to produce the task");
-      }
-    } else {
-      throw new RuntimeException("kafka producer is not initialized while ingesting for upsert table");
-    }
+  protected void processTransformedRow(GenericRow row, long offset) {
+    //nothing, to be override by upsert component
   }
 
-  private byte[] getPrimaryKeyBytesFromRow(GenericRow row) {
-    DimensionFieldSpec primaryKeyDimension = _schema.getPrimaryKeyFieldSpec();
-    return _schema.getByteArrayFromField(row.getValue(primaryKeyDimension.getName()), primaryKeyDimension);
-  }
 
-  private long getTimestampFromRow(GenericRow row) {
-    TimeFieldSpec spec = _schema.getTimeFieldSpec();
-    return spec.getIncomingGranularitySpec().toMillis(row.getValue(spec.getIncomingTimeColumnName()));
+  protected void postIndexProcessing(GenericRow row, long offset) {
+    //nothing, to be override by upsert component
   }
 
   public class PartitionConsumer implements Runnable {
@@ -1088,14 +1053,6 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
     _leaseExtender = SegmentBuildTimeLeaseExtender.getLeaseExtender(_instanceId);
     _protocolHandler = new ServerSegmentCompletionProtocolHandler(_serverMetrics);
 
-    // verify upsert config
-    _isCurrentSegmentForUpsert = _schema.isTableForUpsert();
-    if (_isCurrentSegmentForUpsert) {
-      _keyCoordinatorQueueProducer = KeyCoordinatorProvider.getInstance().getProducer();
-      Preconditions.checkState(_schema.getPrimaryKeyFieldSpec() != null, "primary key not found");
-      Preconditions.checkState(_schema.getOffsetKeyFieldSpec() != null, "offset key not found");
-    }
-
     // TODO Validate configs
     IndexingConfig indexingConfig = _tableConfig.getIndexingConfig();
     _partitionLevelStreamConfig = new PartitionLevelStreamConfig(indexingConfig.getStreamConfigs());
@@ -1159,8 +1116,11 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
 
     // Start new realtime segment
     RealtimeSegmentConfig.Builder realtimeSegmentConfigBuilder =
-        new RealtimeSegmentConfig.Builder().setSegmentName(_segmentNameStr).setStreamName(_streamTopic)
-            .setSchema(schema).setCapacity(_segmentMaxRowCount)
+        new RealtimeSegmentConfig.Builder().setTableName(_tableNameWithType)
+            .setSegmentName(_segmentNameStr)
+            .setStreamName(_streamTopic)
+            .setSchema(schema)
+            .setCapacity(_segmentMaxRowCount)
             .setAvgNumMultiValues(indexLoadingConfig.getRealtimeAvgMultiValueCount())
             .setNoDictionaryColumns(indexLoadingConfig.getNoDictionaryColumns())
             .setInvertedIndexColumns(invertedIndexColumns).setRealtimeSegmentZKMetadata(segmentZKMetadata)
@@ -1189,7 +1149,7 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
       }
     }
 
-    _realtimeSegment = new MutableSegmentImpl(realtimeSegmentConfigBuilder.build());
+    _realtimeSegment = createMutableSegment(realtimeSegmentConfigBuilder.build());
     _startOffset = _segmentZKMetadata.getStartOffset();
     _currentOffset = _startOffset;
     _resourceTmpDir = new File(resourceDataDir, "_tmp");
@@ -1206,6 +1166,15 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
         .info("Starting consumption on realtime consuming segment {} maxRowCount {} maxEndTime {}", _segmentName,
             _segmentMaxRowCount, new DateTime(_consumeEndTime, DateTimeZone.UTC).toString());
     start();
+  }
+
+  /**
+   * allow {@link UpsertLLRealtimeSegmentDataManager to override this method}
+   * @param config
+   * @return
+   */
+  protected MutableSegmentImpl createMutableSegment(RealtimeSegmentConfig config) {
+    return new MutableSegmentImpl(config);
   }
 
   /**
