@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 #!/bin/bash -x
+=======
+#!/bin/bash
+>>>>>>> [Part8]perf changes for kc
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -16,6 +20,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+<<<<<<< HEAD
 
 #
 # Merge from the open source Pinot. If the merge failed due to conflict, the Jenkin release will fail, and the user need
@@ -29,6 +34,9 @@ git merge upstream/master -m "Jenkin release auto merge from the open source Pin
 if [[ $? -ne 0 ]] ; then
     exit 1
 fi
+=======
+#
+>>>>>>> [Part8]perf changes for kc
 
 # ThirdEye related changes
 export MAVEN_OPTS="-Xmx8G -Xss128M -XX:MetaspaceSize=512M -XX:MaxMetaspaceSize=1024M -XX:+CMSClassUnloadingEnabled"
@@ -39,5 +47,9 @@ fi
 if [ -n "$NEXT_VERSION" ]; then
 release_opts="$release_opts -DdevelopmentVersion=$NEXT_VERSION"
 fi
+<<<<<<< HEAD
 # This step also push the merged change to the Uber pinot
 mvn -e -B release:clean release:prepare release:perform -Darguments="-Dgpg.skip=true -Drat.skip=true -Dlicense.skip=true -DskipTests -Dmaven.javadoc.skip=true -P build-shaded-jar" $release_opts
+=======
+mvn -e -B release:clean release:prepare release:perform -Darguments="-DskipTests -Dmaven.javadoc.skip=true -P build-shaded-jar" $release_opts
+>>>>>>> [Part8]perf changes for kc

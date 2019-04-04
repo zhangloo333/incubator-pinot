@@ -24,6 +24,10 @@ public class CommonConfig {
     public static String KAFKA_CONFIG_KEY = "kafka.conf";
     public static String TOPIC_KEY = "topic";
     public static String HOSTNAME_KEY = "hostname";
+    public static int PRODUCER_LINGER_MS = 50;
+    public static String COMPRESS_TYPE = "snappy";
+    public static int PRODUCER_RETRIES = 3;
+    public static int PRODUCER_MAX_BLOCK_TIME_MS = 60000;
 
     public static String PRODUCER_CONFIG_KEY = "producer";
     public static String CONSUMER_CONFIG_KEY = "consumer";

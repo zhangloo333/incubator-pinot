@@ -55,8 +55,8 @@ public class KeyCoordinatorStarter {
     _keyCoordinatorConf = conf;
     _hostName = conf.getString(KeyCoordinatorConf.HOST_NAME);
     Preconditions.checkState(StringUtils.isNotEmpty(_hostName), "expect host name in configuration");
-    _consumer = getConsumer(_keyCoordinatorConf.subset(KeyCoordinatorConf.KEY_COORDINATOR_CONSUMER_CONF));
-    _producer = getProducer(_keyCoordinatorConf.subset(KeyCoordinatorConf.KEY_COORDINATOR_PRODUCER_CONF));
+    _consumer = getConsumer(_keyCoordinatorConf.subset(CommonConfig.KAFKA_CONFIG.CONSUMER_CONFIG_KEY));
+    _producer = getProducer(_keyCoordinatorConf.subset(CommonConfig.KAFKA_CONFIG.PRODUCER_CONFIG_KEY));
     _messageResolveStrategy = new MessageTimeResolveStrategy();
     _keyCoordinatorCore = new DistributedKeyCoordinatorCore();
     _application = new KeyCoordinatorApiApplication(this);

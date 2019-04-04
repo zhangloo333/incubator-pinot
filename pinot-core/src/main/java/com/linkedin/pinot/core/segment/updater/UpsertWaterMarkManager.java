@@ -66,6 +66,10 @@ public class UpsertWaterMarkManager {
     return ImmutableMap.copyOf(_highWaterMarkTablePartitionMap.getOrDefault(tableName, ImmutableMap.of()));
   }
 
+  public Map<String, Map<Integer, Long>> getHighWaterMarkTablePartitionMap() {
+    return ImmutableMap.copyOf(_highWaterMarkTablePartitionMap);
+  }
+
   @Override
   public String toString() {
     return Joiner.on(",").withKeyValueSeparator("=").join(_highWaterMarkTablePartitionMap);

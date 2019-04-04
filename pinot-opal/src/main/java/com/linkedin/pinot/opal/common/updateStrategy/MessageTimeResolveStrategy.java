@@ -18,11 +18,21 @@
  */
 package com.linkedin.pinot.opal.common.updateStrategy;
 
+import org.apache.pinot.common.utils.LLCSegmentName;
 import com.linkedin.pinot.opal.common.messages.KeyCoordinatorMessageContext;
 
 public class MessageTimeResolveStrategy implements MessageResolveStrategy {
   @Override
   public boolean shouldDeleteFirstMessage(KeyCoordinatorMessageContext message1, KeyCoordinatorMessageContext message2) {
-    return message1.getTimestamp() <= message2.getTimestamp();
+    if (message1.getTimestamp() < message2.getTimestamp()) {
+      return true;
+    } else if (message1.getTimestamp() > message2.getTimestamp()) {
+      return false;
+    } else {
+      LLCSegmentName messageSegmentName1 = new LLCSegmentName(message1.getSegmentName());
+      LLCSegmentName messageSegmentName2 = new LLCSegmentName(message2.getSegmentName());
+      // if a message in the later segment, it should delete the same message belong to the earlier segment
+      return messageSegmentName1.getSequenceNumber() < messageSegmentName2.getSequenceNumber();
+    }
   }
 }

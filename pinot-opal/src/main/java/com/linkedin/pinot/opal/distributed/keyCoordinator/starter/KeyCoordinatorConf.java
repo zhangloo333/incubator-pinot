@@ -32,15 +32,16 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
   public static final int FETCH_MSG_DELAY_MS_DEFAULT = 100;
 
   public static final String FETCH_MSG_MAX_DELAY_MS = "kc.queue.fetch.delay.max.ms";
-  public static final int FETCH_MSG_MAX_DELAY_MS_DEFAULT = 10000;
+  public static final int FETCH_MSG_MAX_DELAY_MS_DEFAULT = 5000;
 
   public static final String FETCH_MSG_MAX_BATCH_SIZE = "kc.queue.fetch.size";
-  public static final int FETCH_MSG_MAX_BATCH_SIZE_DEFAULT = 1000;
+  public static final int FETCH_MSG_MAX_BATCH_SIZE_DEFAULT = 10000;
+
+  public static final String CONSUMER_BLOCKING_QUEUE_SIZE = "consumer.queue.size";
+  public static final int CONSUMER_BLOCKING_QUEUE_SIZE_DEFAULT = 10000;
 
   public static final String KEY_COORDINATOR_KV_STORE = "kvstore";
 
-  public static final String KEY_COORDINATOR_CONSUMER_CONF = "consumer";
-  public static final String KEY_COORDINATOR_PRODUCER_CONF = "producer";
   public static final String KEY_COORDINATOR_PARTITIONS = "partitions";
 
   // server related config
@@ -49,14 +50,10 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
   public static final int PORT_DEFAULT = 8092;
   public static final String HOST_NAME = "hostname";
 
-  // other constants
+  // kafka prefix
   public static final String KAFKA_TOPIC_PREFIX = "pinot_upsert_";
   public static final String KAFKA_CLIENT_ID_PREFIX = "pinot_upsert_client_";
   public static final String KAFKA_CONSUMER_GROUP_ID_PREFIX = "pinot_upsert_kc_consumerGroup_";
-
-  // producer related config constants
-  public static final int KAKFA_PRODUCER_RETRIES = 3;
-  public static final int KAKFA_PRODUCER_LINGER_MS = 10;
 
   public KeyCoordinatorConf(File file) throws ConfigurationException {
     super(file);
@@ -73,5 +70,7 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
     return CONFIG_STORE_FILE_PATH_DEFAULT;
   }
 
-
+  public int getConsumerBlockingQueueSize() {
+    return getInt(CONSUMER_BLOCKING_QUEUE_SIZE, CONSUMER_BLOCKING_QUEUE_SIZE_DEFAULT);
+  }
 }

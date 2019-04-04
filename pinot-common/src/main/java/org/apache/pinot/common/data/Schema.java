@@ -158,10 +158,12 @@ public final class Schema {
     _updateSemantic = updateSemantic;
   }
 
+  @JsonIgnore
   public boolean isTableForUpsert() {
     return UPSERT_TABLE_CONFIG.equalsIgnoreCase(_updateSemantic);
   }
 
+  @JsonIgnore
   public DimensionFieldSpec getPrimaryKeyFieldSpec() {
     if (_primaryKeyFieldSpec == null) {
       Preconditions.checkState(_dimensionFieldSpecs.size() > 0, "should have more than 1 dimensions");
@@ -178,6 +180,7 @@ public final class Schema {
     return _primaryKeyFieldSpec;
   }
 
+  @JsonIgnore
   public DimensionFieldSpec getOffsetKeyFieldSpec() {
     if (_offsetKeyFieldSpec == null) {
       Preconditions.checkState(_dimensionFieldSpecs.size() > 0, "should have more than 1 dimensions");

@@ -114,8 +114,6 @@ public class SegmentUpdater implements SegmentDeletionListener {
     try {
       LOGGER.info("starting update loop");
       while(isStarted) {
-        long startTime = System.currentTimeMillis();
-
         final ConsumerRecords<String, LogCoordinatorMessage> records = _consumer.getConsumerRecords(_updateSleepMs, TimeUnit.MILLISECONDS);
         final Map<String, Map<String, List<UpdateLogEntry>>> tableSegmentToUpdateLogs = new HashMap<>();
         int eventCount = records.count();

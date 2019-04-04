@@ -21,6 +21,7 @@ package com.linkedin.pinot.opal.common.messages;
 import org.apache.commons.lang.SerializationUtils;
 
 import java.io.Serializable;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -64,4 +65,20 @@ public class KeyCoordinatorMessageContext implements Serializable {
   public long getKafkaOffset() {
     return _kafkaOffset;
   }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+    KeyCoordinatorMessageContext that = (KeyCoordinatorMessageContext) o;
+    return _timestamp == that._timestamp &&
+        _kafkaOffset == that._kafkaOffset &&
+        Objects.equals(_segmentName, that._segmentName);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(_segmentName, _timestamp, _kafkaOffset);
+  }
+
 }

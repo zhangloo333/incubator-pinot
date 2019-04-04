@@ -19,6 +19,7 @@
 package org.apache.pinot.server.starter.helix;
 
 import com.google.common.base.Preconditions;
+import com.linkedin.pinot.core.segment.updater.UpsertWaterMarkManager;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -313,8 +314,7 @@ public class HelixInstanceDataManager implements InstanceDataManager {
 
   @Override
   public Map<String, Map<Integer, Long>> getLowWaterMarks() {
-    // TODO(tingchen/sjames) fill the content of this method.
-    return Collections.EMPTY_MAP;
+    return UpsertWaterMarkManager.getInstance().getHighWaterMarkTablePartitionMap();
   }
 
   @Nonnull

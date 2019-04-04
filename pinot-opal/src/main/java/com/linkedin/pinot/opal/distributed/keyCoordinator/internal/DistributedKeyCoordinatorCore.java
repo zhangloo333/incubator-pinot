@@ -20,6 +20,7 @@ package com.linkedin.pinot.opal.distributed.keyCoordinator.internal;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.Uninterruptibles;
 import com.linkedin.pinot.opal.common.RpcQueue.KafkaQueueConsumer;
 import com.linkedin.pinot.opal.common.RpcQueue.KafkaQueueProducer;
 import com.linkedin.pinot.opal.common.RpcQueue.ProduceTask;
@@ -36,8 +37,11 @@ import com.linkedin.pinot.opal.common.utils.CommonUtils;
 import com.linkedin.pinot.opal.common.utils.PartitionIdMapper;
 import com.linkedin.pinot.opal.common.utils.State;
 import com.linkedin.pinot.opal.distributed.keyCoordinator.common.DistributedCommonUtils;
+import com.linkedin.pinot.opal.distributed.keyCoordinator.common.OffsetInfo;
 import com.linkedin.pinot.opal.distributed.keyCoordinator.starter.KeyCoordinatorConf;
 import org.apache.commons.configuration.Configuration;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,6 +52,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -64,7 +70,9 @@ public class DistributedKeyCoordinatorCore {
   private KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> _inputKafkaConsumer;
   private MessageResolveStrategy _messageResolveStrategy;
   private KeyValueStoreDB<ByteArrayWrapper, KeyCoordinatorMessageContext> _keyValueStoreDB;
-  private ExecutorService _coreThread;
+  private ExecutorService _messageProcessThread;
+  private ExecutorService _consumerThread;
+  private BlockingQueue<ConsumerRecord<Integer, KeyCoordinatorQueueMsg>> _consumerRecordBlockingQueue;
   private PartitionIdMapper _partitionIdMapper;
   private volatile State _state = State.SHUTDOWN;
 
@@ -95,8 +103,11 @@ public class DistributedKeyCoordinatorCore {
     _inputKafkaConsumer = keyCoordinatorConsumer;
     _messageResolveStrategy = messageResolveStrategy;
     _keyValueStoreDB = keyValueStoreDB;
-    _coreThread = coreThread;
+    _messageProcessThread = coreThread;
     _partitionIdMapper = new PartitionIdMapper();
+
+    _consumerThread = Executors.newSingleThreadExecutor();
+    _consumerRecordBlockingQueue = new ArrayBlockingQueue<>(_conf.getConsumerBlockingQueueSize());
 
     fetchMsgDelayMs = conf.getInt(KeyCoordinatorConf.FETCH_MSG_DELAY_MS,
         KeyCoordinatorConf.FETCH_MSG_DELAY_MS_DEFAULT);
@@ -104,6 +115,8 @@ public class DistributedKeyCoordinatorCore {
         KeyCoordinatorConf.FETCH_MSG_MAX_DELAY_MS_DEFAULT);
     fetchMsgMaxCount = conf.getInt(KeyCoordinatorConf.FETCH_MSG_MAX_BATCH_SIZE,
         KeyCoordinatorConf.FETCH_MSG_MAX_BATCH_SIZE_DEFAULT);
+    LOGGER.info("starting with fetch delay: {} max delay: {}, fetch max count: {}", fetchMsgDelayMs, fetchMsgMaxDelayMs,
+        fetchMsgMaxCount);
 
     _state = State.INIT;
   }
@@ -111,34 +124,50 @@ public class DistributedKeyCoordinatorCore {
   public void start() {
     Preconditions.checkState(_state == State.INIT, "key coordinate is not in correct state");
     LOGGER.info("starting key coordinator message process loop");
-    _coreThread.submit(this::messageProcessLoop);
+    _state = State.RUNNING;
+    _consumerThread.submit(this::consumerIngestLoop);
+    _messageProcessThread.submit(this::messageProcessLoop);
   }
 
-  public void messageProcessLoop() {
-    try {
-      _state = State.RUNNING;
-      LOGGER.info("starting key coordinator");
-      long flushDeadline = System.currentTimeMillis() + fetchMsgMaxDelayMs;
-      List<KeyCoordinatorQueueMsg> messages = new ArrayList<>(fetchMsgMaxCount);
-      while (_state == State.RUNNING) {
-        // process message when we got max message count or reach max delay ms
-        List<KeyCoordinatorQueueMsg> data = _inputKafkaConsumer.
-            getRequests(fetchMsgMaxDelayMs, TimeUnit.MILLISECONDS);
-        messages.addAll(data);
-
-        if (messages.size() > fetchMsgMaxCount || System.currentTimeMillis() >= flushDeadline) {
-          long startTime = System.currentTimeMillis();
-          flushDeadline = System.currentTimeMillis() + fetchMsgMaxDelayMs;
-          if (messages.size() > 0) {
-            processMessages(messages);
-            LOGGER.info("processed {} messages to log coordinator queue in {} ms", messages.size(),
-                System.currentTimeMillis() - startTime);
-            messages.clear();
-          } else {
-            LOGGER.info("no message received in the current loop");
+  private void consumerIngestLoop() {
+    while (_state == State.RUNNING) {
+      try {
+        ConsumerRecords<Integer, KeyCoordinatorQueueMsg> records = _inputKafkaConsumer.getConsumerRecords(fetchMsgMaxDelayMs,
+            TimeUnit.MILLISECONDS);
+        records.forEach(c -> {
+          try {
+            _consumerRecordBlockingQueue.put(c);
+          } catch (InterruptedException e) {
+            LOGGER.warn("exception while trying to put message to queue", e);
           }
+        });
+      } catch (Exception ex) {
+        LOGGER.error("encountered exception in consumer ingest loop, will retry", ex);
+      }
+    }
+    LOGGER.info("exiting consumer ingest loop");
+  }
+
+  private void messageProcessLoop() {
+    try {
+      long deadline = System.currentTimeMillis() + fetchMsgMaxDelayMs;
+      while (_state == State.RUNNING) {
+        LOGGER.info("starting new loop");
+        long start = System.currentTimeMillis();
+        // process message when we got max message count or reach max delay ms
+        MessageAndOffset<KeyCoordinatorQueueMsg> messageAndOffset = getMessagesFromQueue(_consumerRecordBlockingQueue, deadline);
+        List<KeyCoordinatorQueueMsg> messages = messageAndOffset.getMessages();
+        deadline = System.currentTimeMillis() + fetchMsgMaxDelayMs;
+
+        if (messages.size() > 0) {
+          LOGGER.info("fetch {} messages in {} ms", messages.size(), System.currentTimeMillis() - start);
+          processMessages(messages);
+          _inputKafkaConsumer.ackOffset(messageAndOffset.getOffsetInfo());
+          LOGGER.info("kc message processed {} messages in this loop for {} ms", messages.size(),
+              System.currentTimeMillis() - start);
+        } else {
+          LOGGER.info("no message received in the current loop");
         }
-        _inputKafkaConsumer.ackOffset();
       }
     } catch (Exception ex) {
       LOGGER.warn("key coordinator is exiting due to exception", ex);
@@ -149,15 +178,36 @@ public class DistributedKeyCoordinatorCore {
     LOGGER.info("existing key coordinator core /procthread");
   }
 
+  private MessageAndOffset<KeyCoordinatorQueueMsg> getMessagesFromQueue(
+      BlockingQueue<ConsumerRecord<Integer, KeyCoordinatorQueueMsg>> queue, long deadline) {
+    List<ConsumerRecord<Integer, KeyCoordinatorQueueMsg>> buffer = new ArrayList<>(fetchMsgMaxCount * 2);
+    while(System.currentTimeMillis() < deadline && buffer.size() < fetchMsgMaxCount) {
+      queue.drainTo(buffer, fetchMsgMaxCount - buffer.size());
+      if (buffer.size() < fetchMsgMaxCount) {
+        Uninterruptibles.sleepUninterruptibly(fetchMsgDelayMs, TimeUnit.MILLISECONDS);
+      }
+    }
+    OffsetInfo offsetInfo = new OffsetInfo();
+    List<KeyCoordinatorQueueMsg> messages = new ArrayList<>(buffer.size());
+    for (ConsumerRecord<Integer, KeyCoordinatorQueueMsg> record: buffer) {
+      offsetInfo.updateOffsetIfNecessary(record);
+      messages.add(record.value());
+    }
+    return new MessageAndOffset<>(messages, offsetInfo);
+  }
+
   public void stop() {
     _state = State.SHUTTING_DOWN;
-    _coreThread.shutdown();
+    _messageProcessThread.shutdown();
+    _consumerThread.shutdownNow();
     try {
-      _coreThread.awaitTermination(TERMINATION_WAIT_MS, TimeUnit.MILLISECONDS);
+      _consumerThread.awaitTermination(TERMINATION_WAIT_MS, TimeUnit.MILLISECONDS);
+      _messageProcessThread.awaitTermination(TERMINATION_WAIT_MS, TimeUnit.MILLISECONDS);
     } catch (InterruptedException ex) {
       LOGGER.error("failed to wait for key coordinator thread to shutdown", ex);
     }
-    _coreThread.shutdownNow();
+    _consumerThread.shutdownNow();
+    _messageProcessThread.shutdownNow();
     _state = State.SHUTDOWN;
   }
 
@@ -171,13 +221,13 @@ public class DistributedKeyCoordinatorCore {
       topicMsgMap.computeIfAbsent(msg.getPinotTable(), t -> new ArrayList<>()).add(msg);
     }
     for (Map.Entry<String, List<KeyCoordinatorQueueMsg>> entry: topicMsgMap.entrySet()) {
-      processMessagesForTopic(entry.getKey(), entry.getValue());
+      processMessagesForTable(entry.getKey(), entry.getValue());
     }
   }
 
-
-  private void processMessagesForTopic(String tableName, List<KeyCoordinatorQueueMsg> msgList) {
+  private void processMessagesForTable(String tableName, List<KeyCoordinatorQueueMsg> msgList) {
     try {
+      long start = System.currentTimeMillis();
       int deleteTaskCount = 0;
       if (msgList == null || msgList.size() == 0) {
         LOGGER.warn("trying to process topic message with empty list {}", tableName);
@@ -190,42 +240,57 @@ public class DistributedKeyCoordinatorCore {
       Set<ByteArrayWrapper> primaryKeys = msgList.stream().map(msg -> new ByteArrayWrapper(msg.getKey()))
           .collect(Collectors.toCollection(HashSet::new));
       Map<ByteArrayWrapper, KeyCoordinatorMessageContext> primaryKeyToValueMap = new HashMap<>(table.multiGet(new ArrayList<>(primaryKeys)));
-      LOGGER.info("input keys got {} results from kv store", primaryKeyToValueMap.size());
+      LOGGER.info("input keys got {} results from kv store in {} ms", primaryKeyToValueMap.size(), System.currentTimeMillis() - start);
+      start = System.currentTimeMillis();
 
       for (KeyCoordinatorQueueMsg msg: msgList) {
         KeyCoordinatorMessageContext currentContext = msg.getContext();
         ByteArrayWrapper key = new ByteArrayWrapper(msg.getKey());
+        boolean isDuplicatedInput = false;
         if (primaryKeyToValueMap.containsKey(key)) {
           deleteTaskCount++;
           // key conflicts, should resolve which one to delete
           KeyCoordinatorMessageContext oldContext = primaryKeyToValueMap.get(key);
-          if (_messageResolveStrategy.shouldDeleteFirstMessage(oldContext, currentContext)) {
-            // the existing message we have is older than the message we just processed, create delete for it
-            tasks.add(createMessageToLogCoordinator(tableName, oldContext.getSegmentName(), oldContext.getKafkaOffset(),
-                currentContext.getKafkaOffset(), LogEventType.DELETE));
-            // update the local cache to the latest message, so message within the same batch can override each other
-            primaryKeyToValueMap.put(key, currentContext);
-          } else {
-            // the new message is older than the existing message
-            tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
-                currentContext.getKafkaOffset(), LogEventType.DELETE));
+          if (!oldContext.equals(currentContext)) {
+            // message are equals, it is from another replica and should skip
+            if (_messageResolveStrategy.shouldDeleteFirstMessage(oldContext, currentContext)) {
+              // the existing message we have is older than the message we just processed, create delete for it
+              tasks.add(createMessageToLogCoordinator(tableName, oldContext.getSegmentName(), oldContext.getKafkaOffset(),
+                  currentContext.getKafkaOffset(), LogEventType.DELETE));
+              // update the local cache to the latest message, so message within the same batch can override each other
+              primaryKeyToValueMap.put(key, currentContext);
+            } else {
+              // the new message is older than the existing message
+
+              // check if the input message is older than our existing message
+              if (currentContext.getKafkaOffset() <= oldContext.getKafkaOffset()) {
+                isDuplicatedInput = true;
+              } else {
+                tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
+                    currentContext.getKafkaOffset(), LogEventType.DELETE));
+              }
+            }
           }
         } else {
           // no key in the existing map, adding this key to the running set
           primaryKeyToValueMap.put(key, currentContext);
         }
-        // always create a insert event for validFrom
-        tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
-            currentContext.getKafkaOffset(), LogEventType.INSERT));
+        // always create a insert event for validFrom if is not a duplicated input
+        if (!isDuplicatedInput) {
+          tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
+              currentContext.getKafkaOffset(), LogEventType.INSERT));
+        }
       }
+      LOGGER.info("processed all messages in {} ms", System.currentTimeMillis() - start);
       LOGGER.info("sending {} tasks including {} deletion to log coordinator queue", tasks.size(), deleteTaskCount);
       long startTime = System.currentTimeMillis();
       List<ProduceTask<Integer, LogCoordinatorMessage>> failedTasks = sendMessagesToLogCoordinator(tasks, 10, TimeUnit.SECONDS);
       LOGGER.info("send to producer take {} ms and {} failed", System.currentTimeMillis() - startTime, failedTasks.size());
 
+      start = System.currentTimeMillis();
       // update kv store
       table.multiPut(primaryKeyToValueMap);
-      LOGGER.info("updated list of message to key value store");
+      LOGGER.info("updated {} message to key value store in {} ms", primaryKeyToValueMap.size(), System.currentTimeMillis() - start);
     } catch (IOException e) {
       throw new RuntimeException("failed to interact with rocksdb", e);
     } catch (RuntimeException e) {
@@ -248,6 +313,7 @@ public class DistributedKeyCoordinatorCore {
     CountDownLatch countDownLatch = new CountDownLatch(tasks.size());
     tasks.forEach(t -> t.setCountDownLatch(countDownLatch));
     _outputKafkaProducer.batchProduce(tasks);
+    _outputKafkaProducer.flush();
     try {
       boolean allFinished = countDownLatch.await(timeout, timeUnit);
       if (allFinished) {
@@ -264,5 +330,23 @@ public class DistributedKeyCoordinatorCore {
     RocksDBKeyValueStoreDB keyValueStore = new RocksDBKeyValueStoreDB();
     keyValueStore.init(conf);
     return keyValueStore;
+  }
+
+  private static class MessageAndOffset<K> {
+    private List<K> _messages;
+    private OffsetInfo _offsetInfo;
+
+    public MessageAndOffset(List<K> messages, OffsetInfo offsetInfo) {
+      _messages = messages;
+      _offsetInfo  = offsetInfo;
+    }
+
+    public List<K> getMessages() {
+      return _messages;
+    }
+
+    public OffsetInfo getOffsetInfo() {
+      return _offsetInfo;
+    }
   }
 }

@@ -19,9 +19,11 @@
 package com.linkedin.pinot.opal.common.RpcQueue;
 
 import com.google.common.base.Preconditions;
+import com.linkedin.pinot.opal.distributed.keyCoordinator.common.OffsetInfo;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
@@ -84,7 +86,7 @@ public abstract class KafkaQueueConsumer<K, V> implements QueueConsumer<K, V> {
   public abstract Logger getLogger();
 
   @Override
-  public List<V> getRequests(long timeout, TimeUnit timeUnit) {
+  public synchronized List<V> getRequests(long timeout, TimeUnit timeUnit) {
     ConsumerRecords<K, V> records = getConsumerRecords(timeout, timeUnit);
     List<V> msgList = new ArrayList<>(records.count());
     for (ConsumerRecord<K, V> record : records) {
@@ -93,13 +95,22 @@ public abstract class KafkaQueueConsumer<K, V> implements QueueConsumer<K, V> {
     return msgList;
   }
 
-  public ConsumerRecords<K, V> getConsumerRecords(long timeout, TimeUnit timeUnit) {
+  public synchronized ConsumerRecords<K, V> getConsumerRecords(long timeout, TimeUnit timeUnit) {
     return _consumer.poll(timeUnit.toMillis(timeout));
   }
 
   @Override
-  public void ackOffset() {
+  public synchronized void ackOffset() {
     _consumer.commitSync();
+  }
+
+  public synchronized void ackOffset(OffsetInfo offsetInfo) {
+    getLogger().info("committing offset for consumer");
+    for (Map.Entry<TopicPartition, OffsetAndMetadata> entry: offsetInfo.getOffsetMap().entrySet())  {
+      getLogger().info("topic {} partition {} offset {}", entry.getKey().topic(), entry.getKey().partition(),
+          entry.getValue().offset());
+    }
+      _consumer.commitSync(offsetInfo.getOffsetMap());
   }
 
   public void close() {

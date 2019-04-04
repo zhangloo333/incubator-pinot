@@ -19,7 +19,7 @@
 package com.linkedin.pinot.opal.distributed.keyCoordinator.common;
 
 import com.google.common.base.Preconditions;
-import com.linkedin.pinot.opal.distributed.keyCoordinator.starter.KeyCoordinatorConf;
+import com.linkedin.pinot.opal.common.Config.CommonConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 
 import java.util.Properties;
@@ -46,13 +46,19 @@ public class DistributedCommonUtils {
   public static void setKakfaLosslessProducerConfig(Properties kafkaProducerConfig, String hostname) {
     kafkaProducerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
     if (!kafkaProducerConfig.containsKey(ProducerConfig.RETRIES_CONFIG)) {
-      kafkaProducerConfig.put(ProducerConfig.RETRIES_CONFIG, KeyCoordinatorConf.KAKFA_PRODUCER_RETRIES);
+      kafkaProducerConfig.put(ProducerConfig.RETRIES_CONFIG, CommonConfig.KAFKA_CONFIG.PRODUCER_RETRIES);
+    }
+    if (!kafkaProducerConfig.containsKey(ProducerConfig.COMPRESSION_TYPE_CONFIG)) {
+      kafkaProducerConfig.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, CommonConfig.KAFKA_CONFIG.COMPRESS_TYPE);
     }
     if (!kafkaProducerConfig.containsKey(ProducerConfig.LINGER_MS_CONFIG)) {
-      kafkaProducerConfig.put(ProducerConfig.LINGER_MS_CONFIG, KeyCoordinatorConf.KAKFA_PRODUCER_LINGER_MS);
+      kafkaProducerConfig.put(ProducerConfig.LINGER_MS_CONFIG, CommonConfig.KAFKA_CONFIG.PRODUCER_LINGER_MS);
     }
     if (!kafkaProducerConfig.containsKey(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG)) {
       kafkaProducerConfig.put(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, true);
+    }
+    if (!kafkaProducerConfig.containsKey(ProducerConfig.MAX_BLOCK_MS_CONFIG)) {
+      kafkaProducerConfig.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, CommonConfig.KAFKA_CONFIG.PRODUCER_MAX_BLOCK_TIME_MS);
     }
     if (!kafkaProducerConfig.containsKey(ProducerConfig.CLIENT_ID_CONFIG)) {
       kafkaProducerConfig.put(ProducerConfig.CLIENT_ID_CONFIG, DistributedCommonUtils.getClientId(hostname));
