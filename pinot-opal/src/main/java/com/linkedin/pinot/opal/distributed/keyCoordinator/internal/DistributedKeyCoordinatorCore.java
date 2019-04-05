@@ -246,7 +246,6 @@ public class DistributedKeyCoordinatorCore {
       for (KeyCoordinatorQueueMsg msg: msgList) {
         KeyCoordinatorMessageContext currentContext = msg.getContext();
         ByteArrayWrapper key = new ByteArrayWrapper(msg.getKey());
-        boolean isDuplicatedInput = false;
         if (primaryKeyToValueMap.containsKey(key)) {
           deleteTaskCount++;
           // key conflicts, should resolve which one to delete
@@ -261,14 +260,8 @@ public class DistributedKeyCoordinatorCore {
               primaryKeyToValueMap.put(key, currentContext);
             } else {
               // the new message is older than the existing message
-
-              // check if the input message is older than our existing message
-              if (currentContext.getKafkaOffset() <= oldContext.getKafkaOffset()) {
-                isDuplicatedInput = true;
-              } else {
-                tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
-                    currentContext.getKafkaOffset(), LogEventType.DELETE));
-              }
+              tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
+                  currentContext.getKafkaOffset(), LogEventType.DELETE));
             }
           }
         } else {
@@ -276,10 +269,8 @@ public class DistributedKeyCoordinatorCore {
           primaryKeyToValueMap.put(key, currentContext);
         }
         // always create a insert event for validFrom if is not a duplicated input
-        if (!isDuplicatedInput) {
-          tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
-              currentContext.getKafkaOffset(), LogEventType.INSERT));
-        }
+        tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
+            currentContext.getKafkaOffset(), LogEventType.INSERT));
       }
       LOGGER.info("processed all messages in {} ms", System.currentTimeMillis() - start);
       LOGGER.info("sending {} tasks including {} deletion to log coordinator queue", tasks.size(), deleteTaskCount);

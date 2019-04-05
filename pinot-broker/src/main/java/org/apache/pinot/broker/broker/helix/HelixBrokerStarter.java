@@ -161,6 +161,12 @@ public class HelixBrokerStarter {
     LOGGER.info("Starting Pinot broker");
     Utils.logVersions();
 
+    // start lwm service
+    _lwmService = new PollingBasedLowWaterMarkService(_participantHelixManager.getHelixDataAccessor(), _clusterName,
+      _brokerConf.getInt(CommonConstants.Broker.CONFIG_OF_BROKER_POLLING_SERVER_LWMS_INTERVAL_MS,
+          5 * 1000)
+        );
+
     // Connect the spectator Helix manager
     LOGGER.info("Connecting spectator Helix manager");
     _spectatorHelixManager =
@@ -244,10 +250,7 @@ public class HelixBrokerStarter {
     _participantHelixManager
         .addPreConnectCallback(() -> brokerMetrics.addMeteredGlobalValue(BrokerMeter.HELIX_ZOOKEEPER_RECONNECTS, 1L));
 
-    _lwmService = new PollingBasedLowWaterMarkService(_participantHelixManager.getHelixDataAccessor(), _clusterName,
-      _brokerConf.getInt(CommonConstants.Broker.CONFIG_OF_BROKER_POLLING_SERVER_LWMS_INTERVAL_MS,
-          5 * 1000)
-        );
+
     // Register the service status handler
     registerServiceStatusHandler();
 

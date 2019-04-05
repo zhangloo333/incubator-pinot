@@ -23,7 +23,7 @@
   <parent>
     <artifactId>pinot</artifactId>
     <groupId>com.linkedin.pinot</groupId>
-    <version>0.1.084-upsert-SNAPSHOT</version>
+    <version>0.1.078-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
   <artifactId>pinot-opal</artifactId>

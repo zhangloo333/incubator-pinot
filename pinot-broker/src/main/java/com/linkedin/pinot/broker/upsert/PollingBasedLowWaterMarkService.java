@@ -26,6 +26,7 @@ import org.apache.helix.ZNRecord;
 import org.apache.helix.manager.zk.ZkBaseDataAccessor;
 import org.apache.helix.manager.zk.ZkCacheBaseDataAccessor;
 import org.apache.helix.model.InstanceConfig;
+import org.apache.pinot.common.utils.CommonConstants;
 import org.glassfish.jersey.client.ClientProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -108,6 +109,10 @@ public class PollingBasedLowWaterMarkService implements LowWaterMarkService {
                     Map<String, Map<Integer, Long>> latestLowWaterMarks = new ConcurrentHashMap<>();
                     // 1. Find out all the alive servers.
                     List<String> serverInstances = _cacheInstanceConfigsDataAccessor.getChildNames("/", AccessOption.PERSISTENT);
+                    List<ZNRecord> instances = _cacheInstanceConfigsDataAccessor.getChildren("/", null, AccessOption.PERSISTENT);
+                    for (ZNRecord r : instances) {
+                        LOGGER.info("Instance info for lwms: {}", r.toString());
+                    }
                     // 2. Ask each server for its low water mark info.
                     for (String serverIntanceId : serverInstances) {
                         // Check the instance is in fact a server.
@@ -116,17 +121,19 @@ public class PollingBasedLowWaterMarkService implements LowWaterMarkService {
                         InstanceConfig serverConfig = InstanceConfig.toInstanceConfig(serverIntanceId.substring(
                             SERVER_PREFIX.length()));
                         try {
-                            WebTarget webTarget = _httpClient.target(getURI(serverConfig.getHostName(), serverConfig.getPort()));
+                            // (TODO) Fixing this. Hardcode using the default server admin port for now.
+                            WebTarget webTarget = _httpClient.target(getURI(serverConfig.getHostName(),
+                                String.valueOf(CommonConstants.Server.DEFAULT_ADMIN_API_PORT)));
                             TableLowWaterMarksInfo lwms = webTarget.path(PollingBasedLowWaterMarkService.LWMS_PATH).request().
                                     get(TableLowWaterMarksInfo.class);
+                            LOGGER.info("Found low water mark info for server {}: {}", serverIntanceId, lwms.getTableLowWaterMarks());
                             // 3. Update the low water marks.
                             if (lwms != null) {
                                 LwmMerger.updateLowWaterMarks(latestLowWaterMarks, lwms.getTableLowWaterMarks());
                             }
                         } catch (Exception e) {
-                            // TODO(tingchen) Handle server failures. We could keep the last known lwms of a servers.
-                            LOGGER.error("Error during getting low water marks from server {}", serverIntanceId, e);
-                            break;
+                            // TODO(tingchen) Handle server failures. We could keep the last known lwms of a server.
+                            LOGGER.warn("Error during getting low water marks from server {}", serverIntanceId, e);
                         }
                     }
                     // 4. Replace the broker's low water marks table with the latest low water mark info.

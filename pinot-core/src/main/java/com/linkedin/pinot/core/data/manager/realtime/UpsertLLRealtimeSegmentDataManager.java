@@ -113,7 +113,7 @@ public class UpsertLLRealtimeSegmentDataManager extends LLRealtimeSegmentDataMan
     final long timestampMillis = getTimestampFromRow(row);
     ProduceTask<Integer, KeyCoordinatorQueueMsg> task = new ProduceTask<>(_streamPartitionId, new KeyCoordinatorQueueMsg(_tableNameWithType,
         primaryKeyBytes, new KeyCoordinatorMessageContext(_segmentNameStr, timestampMillis, offset)));
-    _keyCoordinatorQueueProducer.produce(task);
+    _keyCoordinatorQueueProducer.produceSync(task);
   }
 
   private byte[] getPrimaryKeyBytesFromRow(GenericRow row) {

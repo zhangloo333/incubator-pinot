@@ -76,9 +76,9 @@ public class BrokerServerBuilder {
     _brokerMetrics =
         new BrokerMetrics(_metricsRegistry, !_config.getBoolean(Broker.CONFIG_OF_ENABLE_TABLE_LEVEL_METRICS, true));
     _brokerMetrics.initializeGlobalMeters();
+    _lwmService = lowWaterMarkService;
     _brokerRequestHandler = buildRequestHandler();
     _brokerAdminApplication = new BrokerAdminApiApplication(this);
-    _lwmService = lowWaterMarkService;
   }
 
   private BrokerRequestHandler buildRequestHandler() {

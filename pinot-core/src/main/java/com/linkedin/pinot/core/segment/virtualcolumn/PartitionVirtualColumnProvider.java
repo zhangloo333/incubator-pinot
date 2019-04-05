@@ -23,7 +23,6 @@ import org.apache.pinot.common.utils.LLCSegmentName;
 import org.apache.pinot.common.utils.Pairs;
 import org.apache.pinot.core.io.reader.BaseSingleColumnSingleValueReader;
 import org.apache.pinot.core.io.reader.DataFileReader;
-import org.apache.pinot.core.io.reader.impl.ChunkReaderContext;
 import org.apache.pinot.core.io.reader.impl.v1.SortedIndexReader;
 import org.apache.pinot.core.io.reader.impl.v1.SortedIndexReaderImpl;
 import org.apache.pinot.core.io.util.DictionaryDelegatingValueReader;
@@ -33,7 +32,10 @@ import org.apache.pinot.core.segment.index.readers.Dictionary;
 import org.apache.pinot.core.segment.index.readers.IntDictionary;
 import org.apache.pinot.core.segment.index.readers.InvertedIndexReader;
 import org.apache.pinot.core.segment.virtualcolumn.BaseVirtualColumnProvider;
+import org.apache.pinot.core.segment.virtualcolumn.IntSingleValueDataFileReader;
 import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -43,9 +45,11 @@ import java.io.IOException;
  */
 public class PartitionVirtualColumnProvider extends BaseVirtualColumnProvider {
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(PartitionVirtualColumnProvider.class);
+
   @Override
   public DataFileReader buildReader(VirtualColumnContext context) {
-    return new PartitionIdSingleValueReader(getPartitionIdFromContext(context));
+    return new IntSingleValueDataFileReader(0);
   }
 
   @Override
@@ -60,7 +64,7 @@ public class PartitionVirtualColumnProvider extends BaseVirtualColumnProvider {
   @Override
   public ColumnMetadata buildMetadata(VirtualColumnContext context) {
     ColumnMetadata.Builder columnMetadataBuilder = super.getColumnMetadataBuilder(context);
-    columnMetadataBuilder.setCardinality(context.getTotalDocCount())
+    columnMetadataBuilder.setCardinality(1)
         .setHasDictionary(true)
         .setHasInvertedIndex(true)
         .setFieldType(FieldSpec.FieldType.DIMENSION)
@@ -81,48 +85,6 @@ public class PartitionVirtualColumnProvider extends BaseVirtualColumnProvider {
     return segmentName.getPartitionId();
   }
 
-  private class PartitionIdSingleValueReader extends BaseSingleColumnSingleValueReader<ChunkReaderContext> {
-
-    private final int _partitionId;
-
-    public PartitionIdSingleValueReader(int partitionId) {
-      _partitionId = partitionId;
-    }
-
-    @Override
-    public ChunkReaderContext createContext() {
-      return null;
-    }
-
-    @Override
-    public int getInt(int row) {
-      return _partitionId;
-    }
-
-    @Override
-    public int getInt(int rowId, ChunkReaderContext context) {
-      return _partitionId;
-    }
-
-    @Override
-    public long getLong(int row) {
-      return _partitionId;
-    }
-
-    @Override
-    public long getLong(int rowId, ChunkReaderContext context) {
-      return _partitionId;
-    }
-
-    @Override
-    public void readValues(int[] rows, int rowStartPos, int rowSize, int[] values, int valuesStartPos) {
-      System.arraycopy(rows, rowStartPos, values, valuesStartPos, rowSize);
-    }
-
-    @Override
-    public void close() throws IOException {
-    }
-  }
 
   private class PartitionInvertedIndexReader extends BaseSingleColumnSingleValueReader<SortedIndexReaderImpl.Context> implements SortedIndexReader<SortedIndexReaderImpl.Context> {
 
@@ -151,29 +113,31 @@ public class PartitionVirtualColumnProvider extends BaseVirtualColumnProvider {
 
     @Override
     public int getInt(int row) {
-      return row;
+      return 0;
     }
 
     @Override
     public int getInt(int rowId, SortedIndexReaderImpl.Context context) {
-      return rowId;
+      return 0;
     }
   }
 
   private class PartitionDictionary extends IntDictionary {
     private final int _length;
     private final int _partition;
+    private final String _partitionStr;
 
     public PartitionDictionary(ValueReader valueReader, int length, int partition) {
       super(valueReader, length);
       _length = length;
       _partition = partition;
+      _partitionStr = String.valueOf(partition);
     }
 
     @Override
     public int indexOf(Object rawValue) {
-      if (rawValue != null && rawValue.equals(_partition)) {
-        return 1;
+      if (rawValue != null && (rawValue.equals(_partitionStr) || rawValue.equals(_partition))) {
+        return 0;
       } else {
         return -1;
       }
@@ -206,7 +170,7 @@ public class PartitionVirtualColumnProvider extends BaseVirtualColumnProvider {
 
     @Override
     public String getStringValue(int dictId) {
-      return Integer.toString(_partition);
+      return _partitionStr;
     }
 
     @Override

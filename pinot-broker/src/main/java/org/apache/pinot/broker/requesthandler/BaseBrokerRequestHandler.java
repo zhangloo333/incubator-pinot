@@ -487,12 +487,15 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
   }
 
   private void addLowWaterMarkToQuery(BrokerRequest realtimeBrokerRequest, String rawTableName) {
-    Map<Integer, Long> lowWaterMarks = _lwmService.getLowWaterMarks(rawTableName);
+    final String realtimeTableName = rawTableName + "_REALTIME";
+    Map<Integer, Long> lowWaterMarks = _lwmService.getLowWaterMarks(realtimeTableName);
     if (lowWaterMarks == null || lowWaterMarks.size() == 0) {
+      LOGGER.info("No low water marks info found for table {}", realtimeTableName);
       return;
     }
-    LOGGER.info("Found low water marks {} for table {}", String.valueOf(lowWaterMarks), rawTableName);
+    LOGGER.info("Found low water marks {} for table {}", String.valueOf(lowWaterMarks), realtimeTableName);
     LowWaterMarkQueryWriter.addLowWaterMarkToQuery(realtimeBrokerRequest, lowWaterMarks);
+    LOGGER.info("Query augmented with LWMS info for table {} : {}", realtimeTableName, realtimeBrokerRequest);
   }
 
   /**
