@@ -19,7 +19,6 @@
 package com.linkedin.pinot.core.data.manager.realtime;
 
 import com.linkedin.pinot.core.data.manager.offline.UpsertImmutableSegmentDataManager;
-import com.linkedin.pinot.core.segment.virtualcolumn.StorageProvider.UpsertVirtualColumnStorageProvider;
 import org.apache.pinot.common.config.TableConfig;
 import org.apache.pinot.common.data.Schema;
 import org.apache.pinot.common.metadata.instance.InstanceZKMetadata;
@@ -31,6 +30,7 @@ import org.apache.pinot.core.data.manager.realtime.RealtimeTableDataManager;
 import org.apache.pinot.core.indexsegment.immutable.ImmutableSegment;
 import org.apache.pinot.core.indexsegment.immutable.ImmutableSegmentLoader;
 import org.apache.pinot.core.segment.index.loader.IndexLoadingConfig;
+import com.linkedin.pinot.opal.common.StorageProvider.UpdateLogStorageProvider;
 
 import javax.annotation.Nonnull;
 import java.io.File;
@@ -38,18 +38,18 @@ import java.io.IOException;
 import java.util.concurrent.Semaphore;
 
 public class UpsertRealtimeTableDataManager extends RealtimeTableDataManager {
-  private UpsertVirtualColumnStorageProvider _upsertVirtualColumnStorageProvider;
+  private UpdateLogStorageProvider _updateLogStorageProvider;
 
   public UpsertRealtimeTableDataManager(Semaphore segmentBuildSemaphore) {
     super(segmentBuildSemaphore);
-    _upsertVirtualColumnStorageProvider = UpsertVirtualColumnStorageProvider.getInstance();
+    _updateLogStorageProvider = UpdateLogStorageProvider.getInstance();
   }
 
   @Override
   // for adding
   public void addSegment(@Nonnull String segmentName, @Nonnull TableConfig tableConfig,
                          @Nonnull IndexLoadingConfig indexLoadingConfig) throws Exception {
-    _upsertVirtualColumnStorageProvider.addSegment(_tableNameWithType, segmentName);
+    _updateLogStorageProvider.addSegment(_tableNameWithType, segmentName);
     super.addSegment(segmentName, tableConfig, indexLoadingConfig);
   }
 

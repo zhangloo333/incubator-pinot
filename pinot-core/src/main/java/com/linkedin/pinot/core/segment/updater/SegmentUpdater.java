@@ -22,8 +22,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.Uninterruptibles;
 import org.apache.pinot.common.utils.LLCSegmentName;
 import com.linkedin.pinot.core.data.manager.UpsertSegmentDataManager;
-import com.linkedin.pinot.core.segment.virtualcolumn.StorageProvider.UpdateLogEntry;
-import com.linkedin.pinot.core.segment.virtualcolumn.StorageProvider.UpsertVirtualColumnStorageProvider;
+import com.linkedin.pinot.opal.common.StorageProvider.UpdateLogEntry;
+import com.linkedin.pinot.opal.common.StorageProvider.UpdateLogStorageProvider;
 import com.linkedin.pinot.opal.common.messages.LogCoordinatorMessage;
 import com.linkedin.pinot.opal.distributed.keyCoordinator.common.DistributedCommonUtils;
 import com.linkedin.pinot.opal.distributed.keyCoordinator.serverUpdater.SegmentUpdaterProvider;
@@ -64,7 +64,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
   private final SegmentUpdateQueueConsumer _consumer;
   private final Map<String, Map<String, Set<UpsertSegmentDataManager>>> _tableSegmentMap = new ConcurrentHashMap<>();
   private final Map<String, Map<Integer, Long>> _tablePartitionCreationTime = new ConcurrentHashMap<>();
-  private final UpsertVirtualColumnStorageProvider _upsertVirtualColumnStorageProvider;
+  private final UpdateLogStorageProvider _updateLogStorageProvider;
 
   private volatile boolean isStarted = true;
 
@@ -74,7 +74,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
         SegmentUpdaterConfig.SEGMENT_UDPATE_SLEEP_MS_DEFAULT);
     _consumer = provider.getConsumer();
     _ingestionExecutorService = Executors.newFixedThreadPool(1);
-    _upsertVirtualColumnStorageProvider = UpsertVirtualColumnStorageProvider.getInstance();
+    _updateLogStorageProvider = UpdateLogStorageProvider.getInstance();
     _instance = this;
   }
 
@@ -167,7 +167,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
         segmentDataManagers.size());
 
     // update storage
-    _upsertVirtualColumnStorageProvider.addDataToFile(table, segment, messages);
+    _updateLogStorageProvider.addDataToFile(table, segment, messages);
     try {
       for (UpsertSegmentDataManager dataManager: segmentDataManagers) {
         dataManager.updateVirtualColumn(messages);
@@ -226,7 +226,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
       if (segmentManagerMap.containsKey(segmentName)) {
         LOGGER.warn("trying to remove segment storage with {} segment data manager", segmentManagerMap.get(segmentName).size());
         try {
-          _upsertVirtualColumnStorageProvider.removeSegment(tableName, segmentName);
+          _updateLogStorageProvider.removeSegment(tableName, segmentName);
         } catch (IOException e) {
           throw new RuntimeException(String.format("failed to delete table %s segment %s", tableName, segmentName), e);
         }

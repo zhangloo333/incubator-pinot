@@ -40,6 +40,13 @@ import org.apache.pinot.core.realtime.stream.TransientConsumerException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
+
 
 /**
  * Provides the kafka connection after ensuring that we're connected to the appropriate broker for consumption.
@@ -410,9 +417,9 @@ public class KafkaConnectionHandler {
       case REPLICA_NOT_AVAILABLE:
       case STALE_CONTROLLER_EPOCH:
       case NETWORK_EXCEPTION:
-      case GROUP_LOAD_IN_PROGRESS:
-      case GROUP_COORDINATOR_NOT_AVAILABLE:
-      case NOT_COORDINATOR_FOR_GROUP:
+//      case COORDINATOR_LOAD_IN_PROGRESS:
+//      case COORDINATOR_NOT_AVAILABLE:
+//      case NOT_COORDINATOR:
       case NOT_ENOUGH_REPLICAS:
       case NOT_ENOUGH_REPLICAS_AFTER_APPEND:
       case REBALANCE_IN_PROGRESS:

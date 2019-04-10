@@ -54,9 +54,6 @@ public class DistributedCommonUtils {
     if (!kafkaProducerConfig.containsKey(ProducerConfig.LINGER_MS_CONFIG)) {
       kafkaProducerConfig.put(ProducerConfig.LINGER_MS_CONFIG, CommonConfig.KAFKA_CONFIG.PRODUCER_LINGER_MS);
     }
-    if (!kafkaProducerConfig.containsKey(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG)) {
-      kafkaProducerConfig.put(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, true);
-    }
     if (!kafkaProducerConfig.containsKey(ProducerConfig.MAX_BLOCK_MS_CONFIG)) {
       kafkaProducerConfig.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, CommonConfig.KAFKA_CONFIG.PRODUCER_MAX_BLOCK_TIME_MS);
     }

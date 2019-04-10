@@ -23,7 +23,7 @@ import com.linkedin.pinot.core.data.manager.UpsertSegmentDataManager;
 import com.linkedin.pinot.core.indexsegment.UpsertSegment;
 import com.linkedin.pinot.core.indexsegment.mutable.MutableUpsertSegmentImpl;
 import com.linkedin.pinot.core.segment.updater.SegmentUpdater;
-import com.linkedin.pinot.core.segment.virtualcolumn.StorageProvider.UpdateLogEntry;
+import com.linkedin.pinot.opal.common.StorageProvider.UpdateLogEntry;
 import com.linkedin.pinot.opal.common.RpcQueue.ProduceTask;
 import com.linkedin.pinot.opal.common.messages.KeyCoordinatorMessageContext;
 import com.linkedin.pinot.opal.common.messages.KeyCoordinatorQueueMsg;
@@ -113,7 +113,7 @@ public class UpsertLLRealtimeSegmentDataManager extends LLRealtimeSegmentDataMan
     final long timestampMillis = getTimestampFromRow(row);
     ProduceTask<Integer, KeyCoordinatorQueueMsg> task = new ProduceTask<>(_streamPartitionId, new KeyCoordinatorQueueMsg(_tableNameWithType,
         primaryKeyBytes, new KeyCoordinatorMessageContext(_segmentNameStr, timestampMillis, offset)));
-    _keyCoordinatorQueueProducer.produceSync(task);
+    _keyCoordinatorQueueProducer.produce(task);
   }
 
   private byte[] getPrimaryKeyBytesFromRow(GenericRow row) {

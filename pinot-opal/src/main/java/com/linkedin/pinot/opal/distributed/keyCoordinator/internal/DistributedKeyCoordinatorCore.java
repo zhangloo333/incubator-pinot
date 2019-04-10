@@ -24,6 +24,8 @@ import com.google.common.util.concurrent.Uninterruptibles;
 import com.linkedin.pinot.opal.common.RpcQueue.KafkaQueueConsumer;
 import com.linkedin.pinot.opal.common.RpcQueue.KafkaQueueProducer;
 import com.linkedin.pinot.opal.common.RpcQueue.ProduceTask;
+import com.linkedin.pinot.opal.common.StorageProvider.UpdateLogEntry;
+import com.linkedin.pinot.opal.common.StorageProvider.UpdateLogStorageProvider;
 import com.linkedin.pinot.opal.common.keyValueStore.ByteArrayWrapper;
 import com.linkedin.pinot.opal.common.keyValueStore.KeyValueStoreDB;
 import com.linkedin.pinot.opal.common.keyValueStore.KeyValueStoreTable;
@@ -65,21 +67,21 @@ public class DistributedKeyCoordinatorCore {
   private static final Logger LOGGER = LoggerFactory.getLogger(DistributedKeyCoordinatorCore.class);
   private static final long TERMINATION_WAIT_MS = 10000;
 
-  private KeyCoordinatorConf _conf;
-  private KafkaQueueProducer<Integer, LogCoordinatorMessage> _outputKafkaProducer;
-  private KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> _inputKafkaConsumer;
-  private MessageResolveStrategy _messageResolveStrategy;
-  private KeyValueStoreDB<ByteArrayWrapper, KeyCoordinatorMessageContext> _keyValueStoreDB;
-  private ExecutorService _messageProcessThread;
-  private ExecutorService _consumerThread;
-  private BlockingQueue<ConsumerRecord<Integer, KeyCoordinatorQueueMsg>> _consumerRecordBlockingQueue;
-  private PartitionIdMapper _partitionIdMapper;
-  private volatile State _state = State.SHUTDOWN;
+  protected KeyCoordinatorConf _conf;
+  protected KafkaQueueProducer<Integer, LogCoordinatorMessage> _outputKafkaProducer;
+  protected KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> _inputKafkaConsumer;
+  protected MessageResolveStrategy _messageResolveStrategy;
+  protected KeyValueStoreDB<ByteArrayWrapper, KeyCoordinatorMessageContext> _keyValueStoreDB;
+  protected ExecutorService _messageProcessThread;
+  protected ExecutorService _consumerThread;
+  protected BlockingQueue<ConsumerRecord<Integer, KeyCoordinatorQueueMsg>> _consumerRecordBlockingQueue;
+  protected PartitionIdMapper _partitionIdMapper;
+  protected UpdateLogStorageProvider _storageProvider;
+  protected int _fetchMsgDelayMs;
+  protected int _fetchMsgMaxDelayMs;
+  protected int _fetchMsgMaxCount;
 
-  private int fetchMsgDelayMs;
-  private int fetchMsgMaxDelayMs;
-  private int fetchMsgMaxCount;
-
+  protected volatile State _state = State.SHUTDOWN;
 
   public DistributedKeyCoordinatorCore() {}
 
@@ -87,7 +89,8 @@ public class DistributedKeyCoordinatorCore {
                    KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> keyCoordinatorConsumer,
                    MessageResolveStrategy messageResolveStrategy) {
     init(conf, keyCoordinatorProducer, keyCoordinatorConsumer, messageResolveStrategy,
-        getKeyValueStore(conf.subset(KeyCoordinatorConf.KEY_COORDINATOR_KV_STORE)), Executors.newSingleThreadExecutor());
+        getKeyValueStore(conf.subset(KeyCoordinatorConf.KEY_COORDINATOR_KV_STORE)), Executors.newSingleThreadExecutor(),
+        Executors.newSingleThreadExecutor(), UpdateLogStorageProvider.getInstance());
   }
 
   @VisibleForTesting
@@ -95,7 +98,7 @@ public class DistributedKeyCoordinatorCore {
                    KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> keyCoordinatorConsumer,
                    MessageResolveStrategy messageResolveStrategy,
                    KeyValueStoreDB<ByteArrayWrapper, KeyCoordinatorMessageContext> keyValueStoreDB,
-                   ExecutorService coreThread) {
+                   ExecutorService coreThread, ExecutorService consumerThread, UpdateLogStorageProvider storageProvider) {
     CommonUtils.printConfiguration(conf, "distributed key coordinator core");
     Preconditions.checkState(_state == State.SHUTDOWN, "can only init if it is not running yet");
     _conf = conf;
@@ -106,17 +109,19 @@ public class DistributedKeyCoordinatorCore {
     _messageProcessThread = coreThread;
     _partitionIdMapper = new PartitionIdMapper();
 
-    _consumerThread = Executors.newSingleThreadExecutor();
+    _consumerThread = consumerThread;
     _consumerRecordBlockingQueue = new ArrayBlockingQueue<>(_conf.getConsumerBlockingQueueSize());
 
-    fetchMsgDelayMs = conf.getInt(KeyCoordinatorConf.FETCH_MSG_DELAY_MS,
+    _storageProvider = storageProvider;
+
+    _fetchMsgDelayMs = conf.getInt(KeyCoordinatorConf.FETCH_MSG_DELAY_MS,
         KeyCoordinatorConf.FETCH_MSG_DELAY_MS_DEFAULT);
-    fetchMsgMaxDelayMs = conf.getInt(KeyCoordinatorConf.FETCH_MSG_MAX_DELAY_MS,
+    _fetchMsgMaxDelayMs = conf.getInt(KeyCoordinatorConf.FETCH_MSG_MAX_DELAY_MS,
         KeyCoordinatorConf.FETCH_MSG_MAX_DELAY_MS_DEFAULT);
-    fetchMsgMaxCount = conf.getInt(KeyCoordinatorConf.FETCH_MSG_MAX_BATCH_SIZE,
+    _fetchMsgMaxCount = conf.getInt(KeyCoordinatorConf.FETCH_MSG_MAX_BATCH_SIZE,
         KeyCoordinatorConf.FETCH_MSG_MAX_BATCH_SIZE_DEFAULT);
-    LOGGER.info("starting with fetch delay: {} max delay: {}, fetch max count: {}", fetchMsgDelayMs, fetchMsgMaxDelayMs,
-        fetchMsgMaxCount);
+    LOGGER.info("starting with fetch delay: {} max delay: {}, fetch max count: {}", _fetchMsgDelayMs, _fetchMsgMaxDelayMs,
+        _fetchMsgMaxCount);
 
     _state = State.INIT;
   }
@@ -132,7 +137,7 @@ public class DistributedKeyCoordinatorCore {
   private void consumerIngestLoop() {
     while (_state == State.RUNNING) {
       try {
-        ConsumerRecords<Integer, KeyCoordinatorQueueMsg> records = _inputKafkaConsumer.getConsumerRecords(fetchMsgMaxDelayMs,
+        ConsumerRecords<Integer, KeyCoordinatorQueueMsg> records = _inputKafkaConsumer.getConsumerRecords(_fetchMsgMaxDelayMs,
             TimeUnit.MILLISECONDS);
         records.forEach(c -> {
           try {
@@ -150,14 +155,14 @@ public class DistributedKeyCoordinatorCore {
 
   private void messageProcessLoop() {
     try {
-      long deadline = System.currentTimeMillis() + fetchMsgMaxDelayMs;
+      long deadline = System.currentTimeMillis() + _fetchMsgMaxDelayMs;
       while (_state == State.RUNNING) {
         LOGGER.info("starting new loop");
         long start = System.currentTimeMillis();
         // process message when we got max message count or reach max delay ms
         MessageAndOffset<KeyCoordinatorQueueMsg> messageAndOffset = getMessagesFromQueue(_consumerRecordBlockingQueue, deadline);
         List<KeyCoordinatorQueueMsg> messages = messageAndOffset.getMessages();
-        deadline = System.currentTimeMillis() + fetchMsgMaxDelayMs;
+        deadline = System.currentTimeMillis() + _fetchMsgMaxDelayMs;
 
         if (messages.size() > 0) {
           LOGGER.info("fetch {} messages in {} ms", messages.size(), System.currentTimeMillis() - start);
@@ -180,11 +185,11 @@ public class DistributedKeyCoordinatorCore {
 
   private MessageAndOffset<KeyCoordinatorQueueMsg> getMessagesFromQueue(
       BlockingQueue<ConsumerRecord<Integer, KeyCoordinatorQueueMsg>> queue, long deadline) {
-    List<ConsumerRecord<Integer, KeyCoordinatorQueueMsg>> buffer = new ArrayList<>(fetchMsgMaxCount * 2);
-    while(System.currentTimeMillis() < deadline && buffer.size() < fetchMsgMaxCount) {
-      queue.drainTo(buffer, fetchMsgMaxCount - buffer.size());
-      if (buffer.size() < fetchMsgMaxCount) {
-        Uninterruptibles.sleepUninterruptibly(fetchMsgDelayMs, TimeUnit.MILLISECONDS);
+    List<ConsumerRecord<Integer, KeyCoordinatorQueueMsg>> buffer = new ArrayList<>(_fetchMsgMaxCount * 2);
+    while(System.currentTimeMillis() < deadline && buffer.size() < _fetchMsgMaxCount) {
+      queue.drainTo(buffer, _fetchMsgMaxCount - buffer.size());
+      if (buffer.size() < _fetchMsgMaxCount) {
+        Uninterruptibles.sleepUninterruptibly(_fetchMsgDelayMs, TimeUnit.MILLISECONDS);
       }
     }
     OffsetInfo offsetInfo = new OffsetInfo();
@@ -228,7 +233,6 @@ public class DistributedKeyCoordinatorCore {
   private void processMessagesForTable(String tableName, List<KeyCoordinatorQueueMsg> msgList) {
     try {
       long start = System.currentTimeMillis();
-      int deleteTaskCount = 0;
       if (msgList == null || msgList.size() == 0) {
         LOGGER.warn("trying to process topic message with empty list {}", tableName);
         return;
@@ -247,7 +251,6 @@ public class DistributedKeyCoordinatorCore {
         KeyCoordinatorMessageContext currentContext = msg.getContext();
         ByteArrayWrapper key = new ByteArrayWrapper(msg.getKey());
         if (primaryKeyToValueMap.containsKey(key)) {
-          deleteTaskCount++;
           // key conflicts, should resolve which one to delete
           KeyCoordinatorMessageContext oldContext = primaryKeyToValueMap.get(key);
           if (!oldContext.equals(currentContext)) {
@@ -273,15 +276,12 @@ public class DistributedKeyCoordinatorCore {
             currentContext.getKafkaOffset(), LogEventType.INSERT));
       }
       LOGGER.info("processed all messages in {} ms", System.currentTimeMillis() - start);
-      LOGGER.info("sending {} tasks including {} deletion to log coordinator queue", tasks.size(), deleteTaskCount);
-      long startTime = System.currentTimeMillis();
       List<ProduceTask<Integer, LogCoordinatorMessage>> failedTasks = sendMessagesToLogCoordinator(tasks, 10, TimeUnit.SECONDS);
-      LOGGER.info("send to producer take {} ms and {} failed", System.currentTimeMillis() - startTime, failedTasks.size());
-
-      start = System.currentTimeMillis();
-      // update kv store
-      table.multiPut(primaryKeyToValueMap);
-      LOGGER.info("updated {} message to key value store in {} ms", primaryKeyToValueMap.size(), System.currentTimeMillis() - start);
+      if (failedTasks.size() > 0) {
+        LOGGER.error("send to producer failed: {}", failedTasks.size());
+      }
+      storeMessageToLocal(tableName, tasks);
+      storeMessageToKVStore(table, primaryKeyToValueMap);
     } catch (IOException e) {
       throw new RuntimeException("failed to interact with rocksdb", e);
     } catch (RuntimeException e) {
@@ -299,7 +299,7 @@ public class DistributedKeyCoordinatorCore {
 
   private List<ProduceTask<Integer, LogCoordinatorMessage>> sendMessagesToLogCoordinator(
       List<ProduceTask<Integer, LogCoordinatorMessage>> tasks, long timeout, TimeUnit timeUnit) {
-
+    long startTime = System.currentTimeMillis();
     // send all and wait for result, batch for better perf
     CountDownLatch countDownLatch = new CountDownLatch(tasks.size());
     tasks.forEach(t -> t.setCountDownLatch(countDownLatch));
@@ -314,6 +314,8 @@ public class DistributedKeyCoordinatorCore {
       }
     } catch (InterruptedException e) {
       throw new RuntimeException("encountered run time exception while waiting for the loop to finish");
+    } finally {
+      LOGGER.info("send to producer take {} ms", System.currentTimeMillis() - startTime);
     }
   }
 
@@ -321,6 +323,30 @@ public class DistributedKeyCoordinatorCore {
     RocksDBKeyValueStoreDB keyValueStore = new RocksDBKeyValueStoreDB();
     keyValueStore.init(conf);
     return keyValueStore;
+  }
+
+  private void storeMessageToLocal(String tableName, List<ProduceTask<Integer, LogCoordinatorMessage>> tasks) throws IOException {
+    long start = System.currentTimeMillis();
+    Map<String, List<UpdateLogEntry>> segmentUpdateLogs = new HashMap<>();
+    for (ProduceTask<Integer, LogCoordinatorMessage> task: tasks) {
+      String segmentName = task.getValue().getSegmentName();
+      UpdateLogEntry entry = new UpdateLogEntry(task.getValue());
+      segmentUpdateLogs.computeIfAbsent(segmentName, s -> new ArrayList<>()).add(entry);
+    }
+    for (Map.Entry<String, List<UpdateLogEntry>> segmentEntry: segmentUpdateLogs.entrySet()) {
+      _storageProvider.addSegment(tableName, segmentEntry.getKey());
+      _storageProvider.addDataToFile(tableName, segmentEntry.getKey(), segmentEntry.getValue());
+    }
+    LOGGER.info("stored all data to files in {} ms", System.currentTimeMillis() - start);
+  }
+
+  private void storeMessageToKVStore(KeyValueStoreTable<ByteArrayWrapper, KeyCoordinatorMessageContext> table,
+                                     Map<ByteArrayWrapper, KeyCoordinatorMessageContext> primaryKeyToValueMap)
+      throws IOException {
+    long start = System.currentTimeMillis();
+      // update kv store
+    table.multiPut(primaryKeyToValueMap);
+    LOGGER.info("updated {} message to key value store in {} ms", primaryKeyToValueMap.size(), System.currentTimeMillis() - start);
   }
 
   private static class MessageAndOffset<K> {

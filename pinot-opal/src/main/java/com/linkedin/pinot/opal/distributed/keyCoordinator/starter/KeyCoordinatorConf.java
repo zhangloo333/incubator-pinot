@@ -18,15 +18,14 @@
  */
 package com.linkedin.pinot.opal.distributed.keyCoordinator.starter;
 
+import com.linkedin.pinot.opal.common.Config.CommonConfig;
+import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.PropertiesConfiguration;
 
 import java.io.File;
 
 public class KeyCoordinatorConf extends PropertiesConfiguration {
-
-  private static final String CONFIG_STORE_FILE_PATH = "opal.distributed.keycoordinator.configstore.path";
-  private static final String CONFIG_STORE_FILE_PATH_DEFAULT = "./config.store";
 
   public static final String FETCH_MSG_DELAY_MS = "kc.queue.fetch.delay.ms";
   public static final int FETCH_MSG_DELAY_MS_DEFAULT = 100;
@@ -50,6 +49,9 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
   public static final int PORT_DEFAULT = 8092;
   public static final String HOST_NAME = "hostname";
 
+  // storage provider config
+  public static final String STORAGE_PROVIDER_CONFIG = "updatelog.storage";
+
   // kafka prefix
   public static final String KAFKA_TOPIC_PREFIX = "pinot_upsert_";
   public static final String KAFKA_CLIENT_ID_PREFIX = "pinot_upsert_client_";
@@ -63,14 +65,23 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
     super();
   }
 
-  public String getConfigStorePathFile() {
-    if (containsKey(CONFIG_STORE_FILE_PATH)) {
-      return (String) getProperty(CONFIG_STORE_FILE_PATH);
-    }
-    return CONFIG_STORE_FILE_PATH_DEFAULT;
-  }
-
   public int getConsumerBlockingQueueSize() {
     return getInt(CONSUMER_BLOCKING_QUEUE_SIZE, CONSUMER_BLOCKING_QUEUE_SIZE_DEFAULT);
+  }
+
+  public Configuration getProducerConf() {
+    return this.subset(CommonConfig.KAFKA_CONFIG.PRODUCER_CONFIG_KEY);
+  }
+
+  public Configuration getConsumerConf() {
+    return this.subset(CommonConfig.KAFKA_CONFIG.CONSUMER_CONFIG_KEY);
+  }
+
+  public Configuration getServerConf() {
+    return this.subset(SERVER_CONFIG);
+  }
+
+  public Configuration getStorageProviderConf() {
+    return this.subset(STORAGE_PROVIDER_CONFIG);
   }
 }

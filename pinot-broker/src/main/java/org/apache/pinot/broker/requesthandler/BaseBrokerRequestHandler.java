@@ -61,6 +61,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.pinot.common.utils.CommonConstants.Broker.CONFIG_OF_BROKER_ID;
+import static org.apache.pinot.common.utils.CommonConstants.Broker.CONFIG_OF_BROKER_LWM_REWRITE_ENABLE;
+import static org.apache.pinot.common.utils.CommonConstants.Broker.CONFIG_OF_BROKER_LWM_REWRITE_ENABLE_DEFAULT;
 import static org.apache.pinot.common.utils.CommonConstants.Broker.CONFIG_OF_BROKER_QUERY_LOG_LENGTH;
 import static org.apache.pinot.common.utils.CommonConstants.Broker.CONFIG_OF_BROKER_QUERY_LOG_MAX_RATE_PER_SECOND;
 import static org.apache.pinot.common.utils.CommonConstants.Broker.CONFIG_OF_BROKER_QUERY_RESPONSE_LIMIT;
@@ -70,6 +72,7 @@ import static org.apache.pinot.common.utils.CommonConstants.Broker.DEFAULT_BROKE
 import static org.apache.pinot.common.utils.CommonConstants.Broker.DEFAULT_BROKER_QUERY_RESPONSE_LIMIT;
 import static org.apache.pinot.common.utils.CommonConstants.Broker.DEFAULT_BROKER_TIMEOUT_MS;
 import static org.apache.pinot.common.utils.CommonConstants.Broker.Request.DEBUG_OPTIONS;
+import static org.apache.pinot.common.utils.CommonConstants.Broker.Request.DISABLE_REWRITE;
 import static org.apache.pinot.common.utils.CommonConstants.Broker.Request.PQL;
 import static org.apache.pinot.common.utils.CommonConstants.Broker.Request.TRACE;
 
@@ -95,6 +98,7 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
   protected final long _brokerTimeoutMs;
   protected final int _queryResponseLimit;
   protected final int _queryLogLength;
+  protected final boolean _enableQueryRewrite;
 
   private final RateLimiter _queryLogRateLimiter;
   private final RateLimiter _numDroppedLogRateLimiter;
@@ -117,6 +121,8 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
     _queryLogLength = config.getInt(CONFIG_OF_BROKER_QUERY_LOG_LENGTH, DEFAULT_BROKER_QUERY_LOG_LENGTH);
     _queryLogRateLimiter = RateLimiter.create(
         config.getDouble(CONFIG_OF_BROKER_QUERY_LOG_MAX_RATE_PER_SECOND, DEFAULT_BROKER_QUERY_LOG_MAX_RATE_PER_SECOND));
+    _enableQueryRewrite = config.getBoolean(CONFIG_OF_BROKER_LWM_REWRITE_ENABLE,
+        CONFIG_OF_BROKER_LWM_REWRITE_ENABLE_DEFAULT);
 
     _numDroppedLog = new AtomicInteger(0);
     _numDroppedLogRateLimiter = RateLimiter.create(1.0);
@@ -267,8 +273,10 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
       requestStatistics.setFanoutType(RequestStatistics.FanoutType.REALTIME);
     }
 
-    // Augment the realtime request with LowWaterMark constraints.
-    addLowWaterMarkToQuery(realtimeBrokerRequest, rawTableName);
+    if (shouldEnableLowWaterMarkRewrite(request)) {
+      // Augment the realtime request with LowWaterMark constraints.
+      addLowWaterMarkToQuery(realtimeBrokerRequest, rawTableName);
+    }
 
     // Calculate routing table for the query
     long routingStartTimeNs = System.nanoTime();
@@ -353,6 +361,22 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
     }
     return brokerResponse;
   }
+
+  private boolean shouldEnableLowWaterMarkRewrite(JsonNode request) {
+    if (_enableQueryRewrite) {
+      try {
+        if (request.has(DISABLE_REWRITE)) {
+          return !request.get(DISABLE_REWRITE).asBoolean();
+        } else {
+          return true;
+        }
+      } catch (Exception ex) {
+        LOGGER.warn("cannot parse the disable rewrite option: [{}] to boolean from request json", DISABLE_REWRITE, ex);
+      }
+    }
+    return false;
+  }
+
   /**
    * Helper function to decide whether to force the log
    *

@@ -22,6 +22,7 @@ import com.google.common.base.Preconditions;
 import com.linkedin.pinot.opal.common.Config.CommonConfig;
 import com.linkedin.pinot.opal.common.RpcQueue.KafkaQueueConsumer;
 import com.linkedin.pinot.opal.common.RpcQueue.KafkaQueueProducer;
+import com.linkedin.pinot.opal.common.StorageProvider.UpdateLogStorageProvider;
 import com.linkedin.pinot.opal.common.messages.KeyCoordinatorQueueMsg;
 import com.linkedin.pinot.opal.common.updateStrategy.MessageResolveStrategy;
 import com.linkedin.pinot.opal.common.updateStrategy.MessageTimeResolveStrategy;
@@ -55,8 +56,9 @@ public class KeyCoordinatorStarter {
     _keyCoordinatorConf = conf;
     _hostName = conf.getString(KeyCoordinatorConf.HOST_NAME);
     Preconditions.checkState(StringUtils.isNotEmpty(_hostName), "expect host name in configuration");
-    _consumer = getConsumer(_keyCoordinatorConf.subset(CommonConfig.KAFKA_CONFIG.CONSUMER_CONFIG_KEY));
-    _producer = getProducer(_keyCoordinatorConf.subset(CommonConfig.KAFKA_CONFIG.PRODUCER_CONFIG_KEY));
+    _consumer = getConsumer(_keyCoordinatorConf.getConsumerConf());
+    _producer = getProducer(_keyCoordinatorConf.getProducerConf());
+    UpdateLogStorageProvider.init(_keyCoordinatorConf.getStorageProviderConf());
     _messageResolveStrategy = new MessageTimeResolveStrategy();
     _keyCoordinatorCore = new DistributedKeyCoordinatorCore();
     _application = new KeyCoordinatorApiApplication(this);
@@ -78,7 +80,7 @@ public class KeyCoordinatorStarter {
     LOGGER.info("finished init key coordinator instance, starting loop");
     _keyCoordinatorCore.start();
     LOGGER.info("starting web service");
-    Configuration serverConfig = _keyCoordinatorConf.subset(KeyCoordinatorConf.SERVER_CONFIG);
+    Configuration serverConfig = _keyCoordinatorConf.getServerConf();
     _application.start(serverConfig.getInt(KeyCoordinatorConf.PORT, KeyCoordinatorConf.PORT_DEFAULT));
   }
 

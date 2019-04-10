@@ -30,7 +30,7 @@ import org.apache.pinot.server.conf.ServerConf;
 import org.apache.pinot.transport.netty.NettyServer;
 import org.apache.pinot.transport.netty.NettyTCPServer;
 import com.linkedin.pinot.core.segment.updater.SegmentUpdater;
-import com.linkedin.pinot.core.segment.virtualcolumn.StorageProvider.UpsertVirtualColumnStorageProvider;
+import com.linkedin.pinot.opal.common.StorageProvider.UpdateLogStorageProvider;
 import com.linkedin.pinot.opal.distributed.keyCoordinator.serverIngestion.KeyCoordinatorProvider;
 import com.linkedin.pinot.opal.distributed.keyCoordinator.serverUpdater.SegmentUpdaterProvider;
 import com.yammer.metrics.core.MetricsRegistry;
@@ -141,6 +141,6 @@ public class ServerBuilder {
   }
 
   public void initVirtualColumnStorageProvider() {
-    UpsertVirtualColumnStorageProvider.init(_serverConf.getUpsertSegmentStorageProviderConfig());
+    UpdateLogStorageProvider.init(_serverConf.getUpsertSegmentStorageProviderConfig());
   }
 }

@@ -163,9 +163,10 @@ public class HelixBrokerStarter {
 
     // start lwm service
     _lwmService = new PollingBasedLowWaterMarkService(_participantHelixManager.getHelixDataAccessor(), _clusterName,
-      _brokerConf.getInt(CommonConstants.Broker.CONFIG_OF_BROKER_POLLING_SERVER_LWMS_INTERVAL_MS,
-          5 * 1000)
-        );
+        _brokerConf.getInt(CommonConstants.Broker.CONFIG_OF_BROKER_POLLING_SERVER_LWMS_INTERVAL_MS, 5 * 1000),
+        _brokerConf.getInt(CommonConstants.Broker.CONFIG_OF_BROKER_POLLING_SERVER_LWMS_SERVER_PORT,
+            CommonConstants.Server.DEFAULT_ADMIN_API_PORT)
+    );
 
     // Connect the spectator Helix manager
     LOGGER.info("Connecting spectator Helix manager");

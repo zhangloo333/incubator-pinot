@@ -36,18 +36,46 @@
     <dependency>
       <groupId>org.apache.pinot</groupId>
       <artifactId>pinot-core</artifactId>
+      <!-- TODO: fix this -->
+      <exclusions>
+        <exclusion>
+          <groupId>com.linkedin.pinot</groupId>
+          <artifactId>pinot-opal</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.pinot</groupId>
       <artifactId>pinot-server</artifactId>
+      <!-- TODO: fix this -->
+      <exclusions>
+        <exclusion>
+          <groupId>com.linkedin.pinot</groupId>
+          <artifactId>pinot-opal</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.pinot</groupId>
       <artifactId>pinot-controller</artifactId>
+      <!-- TODO: fix this -->
+      <exclusions>
+        <exclusion>
+          <groupId>com.linkedin.pinot</groupId>
+          <artifactId>pinot-opal</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.pinot</groupId>
       <artifactId>pinot-broker</artifactId>
+      <!-- TODO: fix this -->
+      <exclusions>
+        <exclusion>
+          <groupId>com.linkedin.pinot</groupId>
+          <artifactId>pinot-opal</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <!-- TODO: figure out a way to avoid explicitly setting the kafka module dependency, and instead inject it, such that any kafka stream implementation can use this -->
     <dependency>
@@ -72,6 +100,13 @@
       <artifactId>pinot-controller</artifactId>
       <version>${project.version}</version>
       <type>test-jar</type>
+      <!-- TODO: fix this -->
+      <exclusions>
+        <exclusion>
+          <groupId>com.linkedin.pinot</groupId>
+          <artifactId>pinot-opal</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.pinot</groupId>
@@ -84,6 +119,13 @@
       <artifactId>pinot-common</artifactId>
       <version>${project.version}</version>
       <type>test-jar</type>
+      <!-- TODO: fix this -->
+      <exclusions>
+        <exclusion>
+          <groupId>com.linkedin.pinot</groupId>
+          <artifactId>pinot-opal</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.commons</groupId>

@@ -51,6 +51,11 @@ import scala.collection.JavaConversions;
 import scala.collection.Seq;
 import scala.collection.immutable.List;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
 
 /**
  * Tests for the KafkaPartitionLevelConsumer.
@@ -190,16 +195,20 @@ public class KafkaPartitionLevelConsumerTest {
                       emptyScalaList, Errors.NONE.code());
             }
 
-            Seq<PartitionMetadata> partitionsMetadata = List.fromArray(partitionMetadataArray);
+            Seq<PartitionMetadata> partitionsMetadata = fromArray(partitionMetadataArray);
             topicMetadataArray[i] = new TopicMetadata(topic, partitionsMetadata, Errors.NONE.code());
           }
         }
 
-        Seq<BrokerEndPoint> brokers = List.fromArray(brokerArray);
-        Seq<TopicMetadata> topicsMetadata = List.fromArray(topicMetadataArray);
+        Seq<BrokerEndPoint> brokers = fromArray(brokerArray);
+        Seq<TopicMetadata> topicsMetadata = fromArray(topicMetadataArray);
 
         return new TopicMetadataResponse(new kafka.api.TopicMetadataResponse(brokers, topicsMetadata, -1));
       }
+    }
+
+    private <K> Seq<K> fromArray(K[] array) {
+      return JavaConversions.asScalaBuffer(Arrays.asList(array)).toSeq();
     }
 
     @Override

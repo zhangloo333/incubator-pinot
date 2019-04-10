@@ -18,7 +18,7 @@
  */
 package com.linkedin.pinot.core.data.manager;
 
-import com.linkedin.pinot.core.segment.virtualcolumn.StorageProvider.UpdateLogEntry;
+import com.linkedin.pinot.opal.common.StorageProvider.UpdateLogEntry;
 
 import java.util.List;
 

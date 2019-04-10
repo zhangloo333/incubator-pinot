@@ -32,7 +32,14 @@ public class MessageTimeResolveStrategy implements MessageResolveStrategy {
       LLCSegmentName messageSegmentName1 = new LLCSegmentName(message1.getSegmentName());
       LLCSegmentName messageSegmentName2 = new LLCSegmentName(message2.getSegmentName());
       // if a message in the later segment, it should delete the same message belong to the earlier segment
-      return messageSegmentName1.getSequenceNumber() < messageSegmentName2.getSequenceNumber();
+      if (messageSegmentName1.getSequenceNumber() < messageSegmentName2.getSequenceNumber()) {
+        return true;
+      } else if (messageSegmentName1.getSequenceNumber() > messageSegmentName2.getSequenceNumber()) {
+        return false;
+      } else {
+        // if both message in the same segment, the later message should delete the first message
+        return message1.getKafkaOffset() < message2.getKafkaOffset();
+      }
     }
   }
 }

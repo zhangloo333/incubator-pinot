@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package com.linkedin.pinot.core.segment.virtualcolumn.StorageProvider;
+package com.linkedin.pinot.opal.common.StorageProvider;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -38,13 +38,13 @@ import java.util.List;
  * provide the storage abstraction of storing upsert update event logs to a local disk so we can reload it
  * during server start. This provided the abstraction layer for individual table/segment storage
  */
-public class SegmentVirtualColumnStorageProvider {
-  private static final Logger LOGGER = LoggerFactory.getLogger(SegmentVirtualColumnStorageProvider.class);
+public class SegmentUpdateLogStorageProvider {
+  private static final Logger LOGGER = LoggerFactory.getLogger(SegmentUpdateLogStorageProvider.class);
 
   private final File _file;
   private final FileChannel _channel;
 
-  public SegmentVirtualColumnStorageProvider(File file)
+  public SegmentUpdateLogStorageProvider(File file)
       throws IOException {
     Preconditions.checkState(file != null && file.exists(), "storage file for this virtual column provider does not exist");
     _file = file;
@@ -134,8 +134,8 @@ public class SegmentVirtualColumnStorageProvider {
    * @param storagePath
    * @return
    */
-  public static SegmentVirtualColumnStorageProvider getProviderForMutableSegment(String table, String segment,
-                                                                                 String storagePath) throws IOException {
+  public static SegmentUpdateLogStorageProvider getProviderForMutableSegment(String table, String segment,
+                                                                             String storagePath) throws IOException {
     File file = new File(storagePath);
     if (!file.exists()) {
       boolean createResult = file.createNewFile();
@@ -143,7 +143,7 @@ public class SegmentVirtualColumnStorageProvider {
         throw new RuntimeException("failed to create file for virtual column storage at path " + storagePath);
       }
     }
-    return new SegmentVirtualColumnStorageProvider(file);
+    return new SegmentUpdateLogStorageProvider(file);
   }
 
   /**
@@ -153,8 +153,8 @@ public class SegmentVirtualColumnStorageProvider {
    * @param storagePath
    * @return
    */
-  public static SegmentVirtualColumnStorageProvider getProviderForImmutableSegment(String table, String segment,
-                                                                                   String storagePath)
+  public static SegmentUpdateLogStorageProvider getProviderForImmutableSegment(String table, String segment,
+                                                                               String storagePath)
       throws IOException {
     File file;
     if (Files.exists(Paths.get(storagePath))) {
@@ -163,7 +163,7 @@ public class SegmentVirtualColumnStorageProvider {
       file = downloadFileFromRemote(table, segment, storagePath);
       Preconditions.checkState(file.exists(), "download from remote didn't create the file");
     }
-    return new SegmentVirtualColumnStorageProvider(file);
+    return new SegmentUpdateLogStorageProvider(file);
   }
 
   // try to download the update log from remote storage

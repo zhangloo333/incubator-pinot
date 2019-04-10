@@ -21,12 +21,12 @@ package com.linkedin.pinot.core.data.manager.offline;
 import com.linkedin.pinot.core.data.manager.UpsertSegmentDataManager;
 import com.linkedin.pinot.core.indexsegment.UpsertSegment;
 import com.linkedin.pinot.core.segment.updater.SegmentUpdater;
-import com.linkedin.pinot.core.segment.virtualcolumn.StorageProvider.UpdateLogEntry;
 import org.apache.pinot.common.config.TableNameBuilder;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.LLCSegmentName;
 import org.apache.pinot.core.data.manager.offline.ImmutableSegmentDataManager;
 import org.apache.pinot.core.indexsegment.immutable.ImmutableSegment;
+import com.linkedin.pinot.opal.common.StorageProvider.UpdateLogEntry;
 
 import java.io.IOException;
 import java.util.List;

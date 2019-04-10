@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package com.linkedin.pinot.core.segment.virtualcolumn.StorageProvider;
+package com.linkedin.pinot.opal.common.StorageProvider;
 
 import com.linkedin.pinot.opal.common.messages.LogCoordinatorMessage;
 import com.linkedin.pinot.opal.common.messages.LogEventType;

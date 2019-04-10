@@ -23,8 +23,8 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
 import com.linkedin.pinot.core.indexsegment.UpsertSegment;
 import com.linkedin.pinot.core.segment.updater.UpsertWaterMarkManager;
-import com.linkedin.pinot.core.segment.virtualcolumn.StorageProvider.UpdateLogEntry;
-import com.linkedin.pinot.core.segment.virtualcolumn.StorageProvider.UpsertVirtualColumnStorageProvider;
+import com.linkedin.pinot.opal.common.StorageProvider.UpdateLogEntry;
+import com.linkedin.pinot.opal.common.StorageProvider.UpdateLogStorageProvider;
 import com.linkedin.pinot.core.segment.virtualcolumn.mutable.VirtualColumnLongValueReaderWriter;
 import org.apache.pinot.common.config.TableNameBuilder;
 import org.apache.pinot.common.data.Schema;
@@ -135,7 +135,7 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
    */
   @Override
   public void initVirtualColumn() throws IOException {
-    List<UpdateLogEntry> updateLogEntries = UpsertVirtualColumnStorageProvider.getInstance().getAllMessages(_tableNameWithType, _segmentName);
+    List<UpdateLogEntry> updateLogEntries = UpdateLogStorageProvider.getInstance().getAllMessages(_tableNameWithType, _segmentName);
     LOGGER.info("got {} update log entries for current segment {}", updateLogEntries.size(), _segmentName);
     Multimap<Long, UpdateLogEntry> updateLogEntryMap = ArrayListMultimap.create();
     for (UpdateLogEntry logEntry: updateLogEntries) {

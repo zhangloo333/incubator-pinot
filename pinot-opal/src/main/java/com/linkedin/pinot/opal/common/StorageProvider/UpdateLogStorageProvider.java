@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package com.linkedin.pinot.core.segment.virtualcolumn.StorageProvider;
+package com.linkedin.pinot.opal.common.StorageProvider;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -31,36 +31,36 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class UpsertVirtualColumnStorageProvider {
-  private static final Logger LOGGER = LoggerFactory.getLogger(UpsertVirtualColumnStorageProvider.class);
+public class UpdateLogStorageProvider {
+  private static final Logger LOGGER = LoggerFactory.getLogger(UpdateLogStorageProvider.class);
 
   private final Configuration _conf;
   private final File _virtualColumnStorageDir;
-  private final Map<String, Map<String, SegmentVirtualColumnStorageProvider>> _virtualColumnStorage = new ConcurrentHashMap<>();
+  private final Map<String, Map<String, SegmentUpdateLogStorageProvider>> _virtualColumnStorage = new ConcurrentHashMap<>();
 
-  private static final String BASE_PATH = "basePath";
+  public static final String BASE_PATH_CONF_KEY = "basePath";
 
-  private static volatile UpsertVirtualColumnStorageProvider _instance = null;
+  private static volatile UpdateLogStorageProvider _instance = null;
 
   public static synchronized void init(Configuration conf) {
     LOGGER.info("initializing virtual column storage");
     if (_instance == null) {
-      _instance = new UpsertVirtualColumnStorageProvider(conf);
+      _instance = new UpdateLogStorageProvider(conf);
     } else {
       throw new RuntimeException("validFrom storage has already been inited");
     }
   }
 
-  public static UpsertVirtualColumnStorageProvider getInstance() {
+  public static UpdateLogStorageProvider getInstance() {
     if (_instance == null) {
       throw new RuntimeException("validfrom storage has not been inited");
     }
     return _instance;
   }
 
-  private UpsertVirtualColumnStorageProvider(Configuration conf) {
+  private UpdateLogStorageProvider(Configuration conf) {
     _conf = conf;
-    final String basePath = conf.getString(BASE_PATH);
+    final String basePath = conf.getString(BASE_PATH_CONF_KEY);
     LOGGER.info("use base path {} for virtual column storage", basePath);
     if (StringUtils.isEmpty(basePath)) {
       throw new IllegalStateException("base path doesn't exists in config");
@@ -69,31 +69,32 @@ public class UpsertVirtualColumnStorageProvider {
   }
 
   public synchronized void addSegment(String tableName, String segmentName) throws IOException {
-    LOGGER.info("adding virtual column for table {} segment {}", tableName, segmentName);
     final File tableDir = new File(_virtualColumnStorageDir, tableName);
     if (!_virtualColumnStorage.containsKey(tableName)) {
+      LOGGER.info("adding virtual column for table {}", tableName);
       if (!tableDir.exists()) {
         boolean result = tableDir.mkdir();
         Preconditions.checkState(result, "creating table path failed " + tableDir);
       }
       Preconditions.checkState(tableDir.isDirectory(), "table path is not directory " + tableDir);
     }
-    Map<String, SegmentVirtualColumnStorageProvider> segmentMap = _virtualColumnStorage.computeIfAbsent(tableName, t -> new ConcurrentHashMap<>());
+    Map<String, SegmentUpdateLogStorageProvider> segmentMap = _virtualColumnStorage.computeIfAbsent(tableName, t -> new ConcurrentHashMap<>());
     if (!segmentMap.containsKey(segmentName)) {
+      LOGGER.info("adding virtual column for table {} segment {}", tableName, segmentName);
       final File segmentUpdateFile = new File(tableDir, segmentName);
       if (!segmentUpdateFile.exists()) {
         boolean result = segmentUpdateFile.createNewFile();
         Preconditions.checkState(result, "creating segment path failed " + tableDir);
       }
       Preconditions.checkState(segmentUpdateFile.isFile(), "expect segment log location as file");
-      segmentMap.put(segmentName, new SegmentVirtualColumnStorageProvider(segmentUpdateFile));
+      segmentMap.put(segmentName, new SegmentUpdateLogStorageProvider(segmentUpdateFile));
     }
   }
 
   public List<UpdateLogEntry> getAllMessages(String tableName, String segmentName) throws IOException {
     LOGGER.info("loading all message for table {} segment {}", tableName, segmentName);
     if (_virtualColumnStorage.containsKey(tableName)) {
-      SegmentVirtualColumnStorageProvider provider = _virtualColumnStorage.get(tableName).get(segmentName);
+      SegmentUpdateLogStorageProvider provider = _virtualColumnStorage.get(tableName).get(segmentName);
       if (provider != null) {
         return provider.readAllMessagesFromFile();
       } else {
@@ -107,9 +108,9 @@ public class UpsertVirtualColumnStorageProvider {
   }
   public void addDataToFile(String tableName, String segmentName, List<UpdateLogEntry> messages) throws IOException {
     if (_virtualColumnStorage.containsKey(tableName)) {
-      Map<String, SegmentVirtualColumnStorageProvider> segmentProviderMap =  _virtualColumnStorage.get(tableName);
+      Map<String, SegmentUpdateLogStorageProvider> segmentProviderMap =  _virtualColumnStorage.get(tableName);
       if (!segmentProviderMap.containsKey(segmentName)) {
-        // TODO fix this part as we are adding all segment meta data
+        // TODO fix this part as we are adding all segment metadata
         // need to work on new design to prevent writing too much data
         addSegment(tableName, segmentName);
       }
@@ -121,7 +122,7 @@ public class UpsertVirtualColumnStorageProvider {
 
   public synchronized void removeSegment(String tableName, String segmentName) throws IOException {
     if (_virtualColumnStorage.containsKey(tableName)) {
-      SegmentVirtualColumnStorageProvider provider = _virtualColumnStorage.get(tableName).remove(segmentName);
+      SegmentUpdateLogStorageProvider provider = _virtualColumnStorage.get(tableName).remove(segmentName);
       if (provider != null ) {
         LOGGER.info("deleting table {} segment {}", tableName, segmentName);
         provider.destroy();

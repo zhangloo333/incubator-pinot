@@ -39,23 +39,23 @@ import javax.ws.rs.core.Response;
 @Path("/")
 public class LowWaterMarksResource {
 
-    @Inject
-    ServerInstance serverInstance;
+  @Inject
+  ServerInstance serverInstance;
 
-    @GET
-    @Produces(MediaType.APPLICATION_JSON)
-    @Path("/lwms")
-    @ApiOperation(value = "Show the lwms of tables ", notes = "Returns the lwms of all upsert enable tables in this server")
-    @ApiResponses(value = {
-            @ApiResponse(code = 200, message = "Success"),
-            @ApiResponse(code = 500, message = "Internal server error"),
-    })
-    public String getLowWaterMarks() {
-        InstanceDataManager instanceDataManager = serverInstance.getInstanceDataManager();
+  @GET
+  @Produces(MediaType.APPLICATION_JSON)
+  @Path("/lwms")
+  @ApiOperation(value = "Show the lwms of tables ", notes = "Returns the lwms of all upsert enable tables in this server")
+  @ApiResponses(value = {
+      @ApiResponse(code = 200, message = "Success"),
+      @ApiResponse(code = 500, message = "Internal server error"),
+  })
+  public String getLowWaterMarks() {
+    InstanceDataManager instanceDataManager = serverInstance.getInstanceDataManager();
 
-        if (instanceDataManager == null) {
-            throw new WebApplicationException("Invalid server initialization", Response.Status.INTERNAL_SERVER_ERROR);
-        }
-        return ResourceUtils.convertToJsonString(new TableLowWaterMarksInfo(instanceDataManager.getLowWaterMarks()));
+    if (instanceDataManager == null) {
+      throw new WebApplicationException("Invalid server initialization", Response.Status.INTERNAL_SERVER_ERROR);
     }
+    return ResourceUtils.convertToJsonString(new TableLowWaterMarksInfo(instanceDataManager.getLowWaterMarks()));
+  }
 }

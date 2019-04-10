@@ -161,10 +161,14 @@ public class CommonConstants {
     public static final double DEFAULT_BROKER_MIN_RESOURCE_PERCENT_FOR_START = 100.0;
 
     public static final String CONFIG_OF_BROKER_POLLING_SERVER_LWMS_INTERVAL_MS = "pinot.broker.query.polling.server.lwms.interval.ms";
+    public static final String CONFIG_OF_BROKER_POLLING_SERVER_LWMS_SERVER_PORT = "pinot.broker.query.polling.server.lwms.port";
+    public static final String CONFIG_OF_BROKER_LWM_REWRITE_ENABLE = "pinot.broker.query.lwm.rewrite";
+    public static final boolean CONFIG_OF_BROKER_LWM_REWRITE_ENABLE_DEFAULT = true;
     public static class Request {
       public static final String PQL = "pql";
       public static final String TRACE = "trace";
       public static final String DEBUG_OPTIONS = "debugOptions";
+      public static final String DISABLE_REWRITE = "disableRewrite";
 
       public static class QueryOptionKey {
         public static final String PRESERVE_TYPE = "preserveType";

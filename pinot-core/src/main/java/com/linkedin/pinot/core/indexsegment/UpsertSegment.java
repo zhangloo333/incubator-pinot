@@ -18,7 +18,7 @@
  */
 package com.linkedin.pinot.core.indexsegment;
 
-import com.linkedin.pinot.core.segment.virtualcolumn.StorageProvider.UpdateLogEntry;
+import com.linkedin.pinot.opal.common.StorageProvider.UpdateLogEntry;
 
 import java.io.IOException;
 import java.util.List;

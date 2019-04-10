@@ -21,8 +21,8 @@ package com.linkedin.pinot.core.indexsegment.mutable;
 import com.google.common.base.Preconditions;
 import com.linkedin.pinot.core.indexsegment.UpsertSegment;
 import com.linkedin.pinot.core.segment.updater.UpsertWaterMarkManager;
-import com.linkedin.pinot.core.segment.virtualcolumn.StorageProvider.UpdateLogEntry;
-import com.linkedin.pinot.core.segment.virtualcolumn.StorageProvider.UpsertVirtualColumnStorageProvider;
+import com.linkedin.pinot.opal.common.StorageProvider.UpdateLogEntry;
+import com.linkedin.pinot.opal.common.StorageProvider.UpdateLogStorageProvider;
 import com.linkedin.pinot.core.segment.virtualcolumn.mutable.VirtualColumnLongValueReaderWriter;
 import com.linkedin.pinot.opal.common.messages.LogEventType;
 import org.apache.pinot.core.data.GenericRow;
@@ -111,7 +111,7 @@ public class MutableUpsertSegmentImpl extends MutableSegmentImpl implements Upse
   public void initVirtualColumn() throws IOException {
     //TODO add logic for init virtual column
     Preconditions.checkState(_numDocsIndexed == 0, "should init virtual column before ingestion");
-    List<UpdateLogEntry> updateLogEntries = UpsertVirtualColumnStorageProvider.getInstance().getAllMessages(_tableName, _segmentName);
+    List<UpdateLogEntry> updateLogEntries = UpdateLogStorageProvider.getInstance().getAllMessages(_tableName, _segmentName);
     LOGGER.info("got {} update log entries for current segment {}", updateLogEntries.size(), _segmentName);
     updateLogEntries.forEach(this::putEntryToUnmatchMap);
   }
