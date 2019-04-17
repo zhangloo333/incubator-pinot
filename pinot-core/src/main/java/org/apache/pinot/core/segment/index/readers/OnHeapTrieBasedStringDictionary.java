@@ -18,62 +18,65 @@
  */
 package org.apache.pinot.core.segment.index.readers;
 
-import java.util.Arrays;
-import org.apache.commons.collections4.trie.PatriciaTrie;
+import com.hankcs.algorithm.AhoCorasickDoubleArrayTrie;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.pinot.core.segment.memory.PinotDataBuffer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 public class OnHeapTrieBasedStringDictionary extends OnHeapTrieBasedDictionary {
+  private static final Logger LOGGER = LoggerFactory.getLogger(OnHeapTrieBasedStringDictionary.class);
   private final byte _paddingByte;
   private final String[] _unpaddedStrings;
   private final String[] _paddedStrings;
-  private final PatriciaTrie<Integer> _paddedStringToIdTrie;
-  private final PatriciaTrie<Integer> _unpaddedStringToIdTrie;
+  private final AhoCorasickDoubleArrayTrie<Integer> _unpaddedAcdat;
+  private final AhoCorasickDoubleArrayTrie<Integer> _paddedAcdat;
 
   public OnHeapTrieBasedStringDictionary(PinotDataBuffer dataBuffer, int length, int numBytesPerValue,
-      byte paddingByte) {
+      byte paddingByte) throws IOException {
     super(dataBuffer, length, numBytesPerValue, paddingByte);
 
     _paddingByte = paddingByte;
     byte[] buffer = new byte[numBytesPerValue];
     _unpaddedStrings = new String[length];
-    _unpaddedStringToIdTrie = new PatriciaTrie<>();
+    Map<String, Integer> unPaddedStringToIdMap = new HashMap<>(length);
 
+    _unpaddedAcdat = new AhoCorasickDoubleArrayTrie<>();
     for (int i = 0; i < length; i++) {
       _unpaddedStrings[i] = getUnpaddedString(i, buffer);
-      _unpaddedStringToIdTrie.put(_unpaddedStrings[i], i);
+      unPaddedStringToIdMap.put(_unpaddedStrings[i], i);
     }
+    _unpaddedAcdat.build(unPaddedStringToIdMap);
 
     if (_paddingByte == 0) {
       _paddedStrings = null;
-      _paddedStringToIdTrie = null;
+      _paddedAcdat = null;
     } else {
       _paddedStrings = new String[length];
-      _paddedStringToIdTrie = new PatriciaTrie<>();
-
+      _paddedAcdat = new AhoCorasickDoubleArrayTrie<>();
+      Map<String, Integer> paddedStringToIdMap = new HashMap<>(length);
       for (int i = 0; i < length; i++) {
         _paddedStrings[i] = getPaddedString(i, buffer);
-        _paddedStringToIdTrie.put(_paddedStrings[i], i);
+        paddedStringToIdMap.put(_paddedStrings[i], i);
       }
+      _paddedAcdat.build(paddedStringToIdMap);
     }
   }
 
   @Override
   public int indexOf(Object rawValue) {
-    PatriciaTrie<Integer> stringToIdTrie = (_paddingByte == 0) ? _unpaddedStringToIdTrie : _paddedStringToIdTrie;
-    Integer index = stringToIdTrie.get(rawValue);
+    AhoCorasickDoubleArrayTrie<Integer> trie = (_paddingByte == 0) ? _unpaddedAcdat : _paddedAcdat;
+    Integer index = trie.get((String) rawValue);
     return (index != null) ? index : -1;
   }
 
   @Override
   public int insertionIndexOf(Object rawValue) {
-    if (_paddingByte == 0) {
-      Integer id = _unpaddedStringToIdTrie.get(rawValue);
-      return (id != null) ? id : Arrays.binarySearch(_unpaddedStrings, rawValue);
-    } else {
-      String paddedValue = padString((String) rawValue);
-      return Arrays.binarySearch(_paddedStrings, paddedValue);
-    }
+    return indexOf(rawValue);
+
   }
 
   @Override

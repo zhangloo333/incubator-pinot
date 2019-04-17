@@ -173,8 +173,8 @@
       <artifactId>jopt-simple</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.apache.commons</groupId>
-      <artifactId>commons-collections4</artifactId>
+      <groupId>com.hankcs</groupId>
+      <artifactId>aho-corasick-double-array-trie</artifactId>
     </dependency>
 
     <!-- Kafka -->
