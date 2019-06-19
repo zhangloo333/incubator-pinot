@@ -547,14 +547,16 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
               _state = State.DISCARDED;
               break;
             case KEEP:
-              _state = State.RETAINING;
+              // Temporary solution. We want to force non-winner servers to always download.
+              _state = State.DISCARDED;
+              /*_state = State.RETAINING;
               success = buildSegmentAndReplace();
               if (success) {
                 _state = State.RETAINED;
               } else {
                 // Could not build segment for some reason. We can only download it.
                 _state = State.ERROR;
-              }
+              }*/
               break;
             case COMMIT:
               _state = State.COMMITTING;
@@ -911,7 +913,11 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
         case CATCHING_UP:
         case HOLDING:
         case INITIAL_CONSUMING:
-          // Allow to catch up upto final offset, and then replace.
+          // Temporary solution. We want to force non-winner servers to always download.
+          segmentLogger.info("State {}. Downloading to replace", _state.toString());
+          downloadSegmentAndReplace(llcMetadata);
+
+          /*// Allow to catch up upto final offset, and then replace.
           if (_currentOffset > endOffset) {
             // We moved ahead of the offset that is committed in ZK.
             segmentLogger.warn("Current offset {} ahead of the offset in zk {}. Downloading to replace", _currentOffset,
@@ -932,7 +938,7 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
               segmentLogger.info("Could not catch up to offset (current = {}). Downloading to replace", _currentOffset);
               downloadSegmentAndReplace(llcMetadata);
             }
-          }
+          }*/
           break;
         default:
           segmentLogger.info("Downloading to replace segment while in state {}", _state.toString());
