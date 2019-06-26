@@ -324,7 +324,7 @@ public class HybridClusterIntegrationTestCommandLineRunner {
             responseFileReader.mark(4096);
             _countStarResult = JsonUtils.stringToJsonNode(responseFileReader.readLine()).get("totalDocs").asLong();
             responseFileReader.reset();
-            waitForAllDocsLoaded(600_000L);
+            waitForAllDocsLoaded(1200_000L);
 
             // Run queries in multiple threads
             ExecutorService executorService =

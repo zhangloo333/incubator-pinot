@@ -74,7 +74,7 @@ public class RealtimeClusterIntegrationTest extends BaseClusterIntegrationTestSe
     setUpTable(avroFiles.get(0));
 
     // Wait for all documents loaded
-    waitForAllDocsLoaded(600_000L);
+    waitForAllDocsLoaded(1200_000L);
   }
 
   protected void setUpTable(File avroFile)

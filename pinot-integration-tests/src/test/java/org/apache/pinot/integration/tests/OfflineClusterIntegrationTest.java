@@ -133,7 +133,7 @@ public class OfflineClusterIntegrationTest extends BaseClusterIntegrationTestSet
     registerCallbackHandlers();
 
     // Wait for all documents loaded
-    waitForAllDocsLoaded(600_000L);
+    waitForAllDocsLoaded(1200_000L);
   }
 
   private void registerCallbackHandlers() {

@@ -113,9 +113,9 @@ public class MetadataAndDictionaryAggregationPlanClusterIntegrationTest extends 
     loadDataIntoH2(avroFiles);
 
     // Wait for all documents loaded
-    waitForAllDocsLoaded(600_000L);
+    waitForAllDocsLoaded(1200_000L);
     _currentTable = STAR_TREE_TABLE_NAME;
-    waitForAllDocsLoaded(600_000L);
+    waitForAllDocsLoaded(1200_000L);
   }
 
   private void loadDataIntoH2(List<File> avroFiles)
