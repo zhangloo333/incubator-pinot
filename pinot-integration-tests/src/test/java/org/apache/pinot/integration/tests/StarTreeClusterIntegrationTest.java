@@ -101,9 +101,9 @@ public class StarTreeClusterIntegrationTest extends BaseClusterIntegrationTest {
 
     // Wait for all documents loaded
     _currentTable = DEFAULT_TABLE_NAME;
-    waitForAllDocsLoaded(1200_000L);
+    waitForAllDocsLoaded(600_000L);
     _currentTable = STAR_TREE_TABLE_NAME;
-    waitForAllDocsLoaded(1200_000L);
+    waitForAllDocsLoaded(600_000L);
   }
 
   protected void setUpSegmentsAndQueryGenerator()

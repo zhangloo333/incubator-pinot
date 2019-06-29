@@ -99,7 +99,7 @@ public class HadoopSegmentBuildPushOfflineClusterIntegrationTest extends BaseClu
     generateAndPushSegmentsFromHadoop();
 
     // Wait for all documents loaded
-    waitForAllDocsLoaded(1200_000L);
+    waitForAllDocsLoaded(600_000L);
   }
 
   @AfterClass

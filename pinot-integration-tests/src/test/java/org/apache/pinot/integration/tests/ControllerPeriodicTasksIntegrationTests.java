@@ -193,7 +193,7 @@ public class ControllerPeriodicTasksIntegrationTests extends BaseClusterIntegrat
     executor.shutdown();
     executor.awaitTermination(10, TimeUnit.MINUTES);
     uploadSegments(_tarDir);
-    waitForAllDocsLoaded(1200_000L);
+    waitForAllDocsLoaded(600_000L);
   }
 
   /**
