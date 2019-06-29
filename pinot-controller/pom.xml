@@ -176,6 +176,11 @@
       <groupId>com.jcabi</groupId>
       <artifactId>jcabi-log</artifactId>
     </dependency>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <scope>test</scope>
+    </dependency>
     <!-- test -->
     <dependency>
       <groupId>org.apache.hadoop</groupId>
