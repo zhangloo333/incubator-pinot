@@ -18,6 +18,7 @@
  */
 package org.apache.pinot.common.utils;
 
+import com.google.common.util.concurrent.Uninterruptibles;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -161,6 +162,8 @@ public class ZkStarter {
           }
         }
       }.start();
+      // Give the server some time to start before trying to connect to it.
+      Uninterruptibles.sleepUninterruptibly(500, TimeUnit.MILLISECONDS);
 
       // Wait until the ZK server is started
       ZkClient client = new ZkClient("localhost:" + port, 10000);
