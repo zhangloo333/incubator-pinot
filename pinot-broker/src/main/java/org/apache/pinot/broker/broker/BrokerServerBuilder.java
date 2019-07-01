@@ -19,7 +19,7 @@
 package org.apache.pinot.broker.broker;
 
 import com.google.common.base.Preconditions;
-import com.linkedin.pinot.broker.upsert.LowWaterMarkService;
+import org.apache.pinot.broker.upsert.LowWaterMarkService;
 import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.commons.configuration.Configuration;
 import org.apache.pinot.broker.queryquota.QueryQuotaManager;

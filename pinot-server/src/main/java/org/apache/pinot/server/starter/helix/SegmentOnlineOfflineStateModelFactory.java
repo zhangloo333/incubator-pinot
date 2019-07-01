@@ -19,7 +19,6 @@
 package org.apache.pinot.server.starter.helix;
 
 import com.google.common.base.Preconditions;
-import com.linkedin.pinot.server.starter.helix.SegmentDeletionHandler;
 import org.apache.commons.io.FileUtils;
 import org.apache.helix.NotificationContext;
 import org.apache.helix.ZNRecord;

@@ -64,7 +64,7 @@
       <artifactId>pinot-common</artifactId>
     </dependency>
     <dependency>
-      <groupId>com.linkedin.pinot</groupId>
+      <groupId>org.apache.pinot</groupId>
       <artifactId>pinot-opal</artifactId>
     </dependency>
     <dependency>

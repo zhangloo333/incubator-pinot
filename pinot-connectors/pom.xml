@@ -51,7 +51,7 @@
       <!-- TODO: fix dependency -->
       <exclusions>
         <exclusion>
-          <groupId>com.linkedin.pinot</groupId>
+          <groupId>org.apache.pinot</groupId>
           <artifactId>pinot-opal</artifactId>
         </exclusion>
       </exclusions>

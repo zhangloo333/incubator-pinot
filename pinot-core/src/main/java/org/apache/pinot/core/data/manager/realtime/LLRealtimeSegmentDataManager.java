@@ -21,7 +21,6 @@ package org.apache.pinot.core.data.manager.realtime;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.Uninterruptibles;
-import com.linkedin.pinot.core.data.manager.realtime.UpsertLLRealtimeSegmentDataManager;
 import com.yammer.metrics.core.Meter;
 import org.apache.commons.io.FileUtils;
 import org.apache.pinot.common.Utils;

@@ -22,15 +22,15 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <parent>
     <artifactId>pinot</artifactId>
-    <groupId>com.linkedin.pinot</groupId>
-    <version>0.1.078-SNAPSHOT</version>
+    <groupId>org.apache.pinot</groupId>
+    <version>0.2.2.5-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
   <artifactId>pinot-opal</artifactId>
-  <name>pinot-opal</name>
+  <name>Pinot Opal</name>
   <url>http://maven.apache.org</url>
   <properties>
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <pinot.root>${basedir}/..</pinot.root>
   </properties>
 
   <dependencies>
@@ -49,7 +49,6 @@
     <dependency>
       <groupId>org.apache.pinot</groupId>
       <artifactId>pinot-common</artifactId>
-      <version>0.2.2.5-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>commons-configuration</groupId>

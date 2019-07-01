@@ -24,8 +24,7 @@ import java.util.Map;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 
-import com.linkedin.pinot.broker.requesthandler.LowWaterMarkQueryWriter;
-import com.linkedin.pinot.broker.upsert.LowWaterMarkService;
+import org.apache.pinot.broker.upsert.LowWaterMarkService;
 import org.apache.commons.configuration.Configuration;
 import org.apache.pinot.broker.api.RequestStatistics;
 import org.apache.pinot.broker.broker.AccessControlFactory;

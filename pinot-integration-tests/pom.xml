@@ -124,7 +124,7 @@
       <!-- TODO: fix this -->
       <exclusions>
         <exclusion>
-          <groupId>com.linkedin.pinot</groupId>
+          <groupId>org.apache.pinot</groupId>
           <artifactId>pinot-opal</artifactId>
         </exclusion>
       </exclusions>
@@ -151,7 +151,7 @@
       <!-- TODO: fix this -->
       <exclusions>
         <exclusion>
-          <groupId>com.linkedin.pinot</groupId>
+          <groupId>org.apache.pinot</groupId>
           <artifactId>pinot-opal</artifactId>
         </exclusion>
       </exclusions>
@@ -162,7 +162,7 @@
       <!-- TODO: fix this -->
       <exclusions>
         <exclusion>
-          <groupId>com.linkedin.pinot</groupId>
+          <groupId>org.apache.pinot</groupId>
           <artifactId>pinot-opal</artifactId>
         </exclusion>
       </exclusions>
@@ -175,7 +175,7 @@
       <!-- TODO: fix this -->
       <exclusions>
         <exclusion>
-          <groupId>com.linkedin.pinot</groupId>
+          <groupId>org.apache.pinot</groupId>
           <artifactId>pinot-opal</artifactId>
         </exclusion>
       </exclusions>
@@ -194,7 +194,7 @@
       <!-- TODO: fix this -->
       <exclusions>
         <exclusion>
-          <groupId>com.linkedin.pinot</groupId>
+          <groupId>org.apache.pinot</groupId>
           <artifactId>pinot-opal</artifactId>
         </exclusion>
       </exclusions>
@@ -207,7 +207,7 @@
       <!-- TODO: fix this -->
       <exclusions>
         <exclusion>
-          <groupId>com.linkedin.pinot</groupId>
+          <groupId>org.apache.pinot</groupId>
           <artifactId>pinot-opal</artifactId>
         </exclusion>
       </exclusions>
@@ -218,7 +218,7 @@
       <!-- TODO: fix this -->
       <exclusions>
         <exclusion>
-          <groupId>com.linkedin.pinot</groupId>
+          <groupId>org.apache.pinot</groupId>
           <artifactId>pinot-opal</artifactId>
         </exclusion>
       </exclusions>

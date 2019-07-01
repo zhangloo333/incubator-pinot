@@ -19,7 +19,7 @@
 package org.apache.pinot.server.starter.helix;
 
 import com.google.common.base.Preconditions;
-import com.linkedin.pinot.core.segment.updater.UpsertWaterMarkManager;
+import org.apache.pinot.core.segment.updater.UpsertWaterMarkManager;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;

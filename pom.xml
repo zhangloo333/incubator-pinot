@@ -284,10 +284,9 @@
         <version>${project.version}</version>
       </dependency>
       <dependency>
-        <groupId>com.linkedin.pinot</groupId>
+        <groupId>org.apache.pinot</groupId>
         <artifactId>pinot-opal</artifactId>
-<!--        <version>${project.version}</version>-->
-        <version>0.1.078-SNAPSHOT</version>
+        <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>nl.jqno.equalsverifier</groupId>

@@ -45,10 +45,10 @@ public class ImmutableSegmentImpl implements ImmutableSegment {
   private static final Logger LOGGER = LoggerFactory.getLogger(ImmutableSegmentImpl.class);
 
   //TODO change them back to protect
-  public final SegmentDirectory _segmentDirectory;
-  public final SegmentMetadataImpl _segmentMetadata;
-  public final Map<String, ColumnIndexContainer> _indexContainerMap;
-  public final StarTreeIndexContainer _starTreeIndexContainer;
+  protected final SegmentDirectory _segmentDirectory;
+  protected final SegmentMetadataImpl _segmentMetadata;
+  protected final Map<String, ColumnIndexContainer> _indexContainerMap;
+  protected final StarTreeIndexContainer _starTreeIndexContainer;
 
   public ImmutableSegmentImpl(SegmentDirectory segmentDirectory, SegmentMetadataImpl segmentMetadata,
       Map<String, ColumnIndexContainer> columnIndexContainerMap,

@@ -19,7 +19,6 @@
 package org.apache.pinot.core.indexsegment.immutable;
 
 import com.google.common.base.Preconditions;
-import com.linkedin.pinot.core.indexsegment.immutable.ImmutableUpsertSegmentImpl;
 import org.apache.pinot.common.data.FieldSpec;
 import org.apache.pinot.common.data.Schema;
 import org.apache.pinot.common.segment.ReadMode;

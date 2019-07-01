@@ -22,10 +22,10 @@ import java.util.concurrent.atomic.LongAccumulator;
 import javax.annotation.Nonnull;
 
 import com.google.common.collect.ImmutableList;
-import com.linkedin.pinot.core.segment.updater.SegmentUpdater;
-import com.linkedin.pinot.opal.distributed.keyCoordinator.serverIngestion.KeyCoordinatorProvider;
-import com.linkedin.pinot.opal.distributed.keyCoordinator.serverUpdater.SegmentUpdaterProvider;
-import com.linkedin.pinot.server.starter.helix.SegmentDeletionHandler;
+import org.apache.pinot.core.segment.updater.SegmentUpdater;
+import org.apache.pinot.opal.distributed.keyCoordinator.serverIngestion.KeyCoordinatorProvider;
+import org.apache.pinot.opal.distributed.keyCoordinator.serverUpdater.SegmentUpdaterProvider;
+import org.apache.pinot.server.starter.helix.SegmentDeletionHandler;
 import org.apache.commons.configuration.Configuration;
 import org.apache.helix.ZNRecord;
 import org.apache.helix.store.zk.ZkHelixPropertyStore;

@@ -18,7 +18,7 @@
  */
 package org.apache.pinot.broker.requesthandler;
 
-import com.linkedin.pinot.broker.upsert.LowWaterMarkService;
+import org.apache.pinot.broker.upsert.LowWaterMarkService;
 import com.yammer.metrics.core.MetricsRegistry;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;

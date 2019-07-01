@@ -19,8 +19,8 @@
 package org.apache.pinot.broker.broker.helix;
 
 import com.google.common.collect.ImmutableList;
-import com.linkedin.pinot.broker.upsert.LowWaterMarkService;
-import com.linkedin.pinot.broker.upsert.PollingBasedLowWaterMarkService;
+import org.apache.pinot.broker.upsert.LowWaterMarkService;
+import org.apache.pinot.broker.upsert.PollingBasedLowWaterMarkService;
 import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.commons.configuration.BaseConfiguration;
 import org.apache.commons.configuration.Configuration;

@@ -18,7 +18,7 @@
  */
 package org.apache.pinot.core.data.manager.offline;
 
-import com.linkedin.pinot.core.data.manager.realtime.UpsertRealtimeTableDataManager;
+import org.apache.pinot.core.data.manager.realtime.UpsertRealtimeTableDataManager;
 import org.apache.helix.ZNRecord;
 import org.apache.helix.store.zk.ZkHelixPropertyStore;
 import org.apache.pinot.common.metrics.ServerMetrics;
