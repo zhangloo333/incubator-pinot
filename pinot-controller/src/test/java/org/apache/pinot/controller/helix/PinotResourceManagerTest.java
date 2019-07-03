@@ -41,6 +41,7 @@ public class PinotResourceManagerTest extends ControllerTest {
 
   private ZkStarter.ZookeeperInstance _zookeeperInstance;
   private ZkClient _zkClient;
+  private FakeHelixClients _fakeHelixClients;
 
   @BeforeClass
   public void setUp()
@@ -49,10 +50,11 @@ public class PinotResourceManagerTest extends ControllerTest {
     _zkClient = new ZkClient(ZkStarter.DEFAULT_ZK_STR);
 
     startController();
+    _fakeHelixClients = new FakeHelixClients();
 
-    ControllerRequestBuilderUtil
+    _fakeHelixClients
         .addFakeDataInstancesToAutoJoinHelixCluster(getHelixClusterName(), ZkStarter.DEFAULT_ZK_STR, 1, true);
-    ControllerRequestBuilderUtil
+    _fakeHelixClients
         .addFakeBrokerInstancesToAutoJoinHelixCluster(getHelixClusterName(), ZkStarter.DEFAULT_ZK_STR, 1, true);
     Assert.assertEquals(_helixAdmin.getInstancesInClusterWithTag(getHelixClusterName(), "DefaultTenant_BROKER").size(), 1);
     Assert
@@ -151,6 +153,7 @@ public class PinotResourceManagerTest extends ControllerTest {
 
   @AfterClass
   public void tearDown() {
+    _fakeHelixClients.shutDown();
     _helixResourceManager.stop();
     _zkClient.close();
     ZkStarter.stopLocalZkServer(_zookeeperInstance);

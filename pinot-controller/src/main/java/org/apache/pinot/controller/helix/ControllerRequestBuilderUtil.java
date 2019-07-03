@@ -19,20 +19,8 @@
 package org.apache.pinot.controller.helix;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import java.util.HashMap;
-import java.util.Map;
-import org.apache.helix.HelixManager;
-import org.apache.helix.HelixManagerFactory;
-import org.apache.helix.InstanceType;
-import org.apache.helix.model.HelixConfigScope;
-import org.apache.helix.model.builder.HelixConfigScopeBuilder;
-import org.apache.helix.participant.StateMachineEngine;
-import org.apache.helix.participant.statemachine.StateModelFactory;
-import org.apache.pinot.common.config.TableNameBuilder;
-import org.apache.pinot.common.config.TagNameUtils;
 import org.apache.pinot.common.config.Tenant;
 import org.apache.pinot.common.config.Tenant.TenantBuilder;
-import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.JsonUtils;
 import org.apache.pinot.common.utils.TenantRole;
 
@@ -41,99 +29,6 @@ import static org.apache.pinot.common.utils.CommonConstants.Helix.UNTAGGED_SERVE
 
 
 public class ControllerRequestBuilderUtil {
-  private ControllerRequestBuilderUtil() {
-  }
-
-  public static void addFakeBrokerInstancesToAutoJoinHelixCluster(String helixClusterName, String zkServer,
-      int numInstances)
-      throws Exception {
-    addFakeBrokerInstancesToAutoJoinHelixCluster(helixClusterName, zkServer, numInstances, false);
-  }
-
-  public static void addFakeBrokerInstancesToAutoJoinHelixCluster(String helixClusterName, String zkServer,
-      int numInstances, boolean isSingleTenant)
-      throws Exception {
-    for (int i = 0; i < numInstances; ++i) {
-      final String brokerId = "Broker_localhost_" + i;
-      final HelixManager helixZkManager =
-          HelixManagerFactory.getZKHelixManager(helixClusterName, brokerId, InstanceType.PARTICIPANT, zkServer);
-      final StateMachineEngine stateMachineEngine = helixZkManager.getStateMachineEngine();
-      final StateModelFactory<?> stateModelFactory = new EmptyBrokerOnlineOfflineStateModelFactory();
-      stateMachineEngine
-          .registerStateModelFactory(EmptyBrokerOnlineOfflineStateModelFactory.getStateModelDef(), stateModelFactory);
-      helixZkManager.connect();
-      if (isSingleTenant) {
-        helixZkManager.getClusterManagmentTool().addInstanceTag(helixClusterName, brokerId,
-            TagNameUtils.getBrokerTagForTenant(TagNameUtils.DEFAULT_TENANT_NAME));
-      } else {
-        helixZkManager.getClusterManagmentTool().addInstanceTag(helixClusterName, brokerId, UNTAGGED_BROKER_INSTANCE);
-      }
-    }
-  }
-
-  public static void addFakeDataInstancesToAutoJoinHelixCluster(String helixClusterName, String zkServer,
-      int numInstances)
-      throws Exception {
-    addFakeDataInstancesToAutoJoinHelixCluster(helixClusterName, zkServer, numInstances, false,
-        CommonConstants.Server.DEFAULT_ADMIN_API_PORT);
-  }
-
-  public static void addFakeDataInstancesToAutoJoinHelixCluster(String helixClusterName, String zkServer,
-      int numInstances, boolean isSingleTenant)
-      throws Exception {
-    addFakeDataInstancesToAutoJoinHelixCluster(helixClusterName, zkServer, numInstances, isSingleTenant,
-        CommonConstants.Server.DEFAULT_ADMIN_API_PORT);
-  }
-
-  public static void addFakeDataInstancesToAutoJoinHelixCluster(String helixClusterName, String zkServer,
-      int numInstances, boolean isSingleTenant, int adminPort)
-      throws Exception {
-
-    for (int i = 0; i < numInstances; ++i) {
-      final String instanceId = "Server_localhost_" + i;
-      addFakeDataInstanceToAutoJoinHelixCluster(helixClusterName, zkServer, instanceId, isSingleTenant, adminPort + i);
-    }
-  }
-
-  public static void addFakeDataInstanceToAutoJoinHelixCluster(String helixClusterName, String zkServer,
-      String instanceId)
-      throws Exception {
-    addFakeDataInstanceToAutoJoinHelixCluster(helixClusterName, zkServer, instanceId, false,
-        CommonConstants.Server.DEFAULT_ADMIN_API_PORT);
-  }
-
-  public static void addFakeDataInstanceToAutoJoinHelixCluster(String helixClusterName, String zkServer,
-      String instanceId, boolean isSingleTenant)
-      throws Exception {
-    addFakeDataInstanceToAutoJoinHelixCluster(helixClusterName, zkServer, instanceId, isSingleTenant,
-        CommonConstants.Server.DEFAULT_ADMIN_API_PORT);
-  }
-
-  public static void addFakeDataInstanceToAutoJoinHelixCluster(String helixClusterName, String zkServer,
-      String instanceId, boolean isSingleTenant, int adminPort)
-      throws Exception {
-    final HelixManager helixZkManager =
-        HelixManagerFactory.getZKHelixManager(helixClusterName, instanceId, InstanceType.PARTICIPANT, zkServer);
-    final StateMachineEngine stateMachineEngine = helixZkManager.getStateMachineEngine();
-    final StateModelFactory<?> stateModelFactory = new EmptySegmentOnlineOfflineStateModelFactory();
-    stateMachineEngine
-        .registerStateModelFactory(EmptySegmentOnlineOfflineStateModelFactory.getStateModelDef(), stateModelFactory);
-    helixZkManager.connect();
-    if (isSingleTenant) {
-      helixZkManager.getClusterManagmentTool().addInstanceTag(helixClusterName, instanceId,
-          TableNameBuilder.OFFLINE.tableNameWithType(TagNameUtils.DEFAULT_TENANT_NAME));
-      helixZkManager.getClusterManagmentTool().addInstanceTag(helixClusterName, instanceId,
-          TableNameBuilder.REALTIME.tableNameWithType(TagNameUtils.DEFAULT_TENANT_NAME));
-    } else {
-      helixZkManager.getClusterManagmentTool().addInstanceTag(helixClusterName, instanceId, UNTAGGED_SERVER_INSTANCE);
-    }
-    HelixConfigScope scope =
-        new HelixConfigScopeBuilder(HelixConfigScope.ConfigScopeProperty.PARTICIPANT, helixClusterName)
-            .forParticipant(instanceId).build();
-    Map<String, String> props = new HashMap<>();
-    props.put(CommonConstants.Helix.Instance.ADMIN_PORT_KEY, String.valueOf(adminPort));
-    helixZkManager.getClusterManagmentTool().setConfig(scope, props);
-  }
 
   public static String buildBrokerTenantCreateRequestJSON(String tenantName, int numberOfInstances)
       throws JsonProcessingException {

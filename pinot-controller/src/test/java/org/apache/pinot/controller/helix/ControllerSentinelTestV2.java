@@ -32,20 +32,23 @@ import org.testng.annotations.Test;
 
 public class ControllerSentinelTestV2 extends ControllerTest {
   private final String _helixClusterName = getHelixClusterName();
+  private FakeHelixClients _fakeHelixClients;
 
   @BeforeClass
   public void setup()
       throws Exception {
     startZk();
     startController();
-    ControllerRequestBuilderUtil
+    _fakeHelixClients = new FakeHelixClients();
+    _fakeHelixClients
         .addFakeBrokerInstancesToAutoJoinHelixCluster(_helixClusterName, ZkStarter.DEFAULT_ZK_STR, 20, true);
-    ControllerRequestBuilderUtil
+    _fakeHelixClients
         .addFakeDataInstancesToAutoJoinHelixCluster(_helixClusterName, ZkStarter.DEFAULT_ZK_STR, 20, true);
   }
 
   @AfterClass
   public void tearDown() {
+    _fakeHelixClients.shutDown();
     stopController();
     stopZk();
   }

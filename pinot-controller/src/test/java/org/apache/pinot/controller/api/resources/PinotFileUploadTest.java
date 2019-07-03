@@ -26,8 +26,8 @@ import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.pinot.common.config.TableConfig;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.ZkStarter;
-import org.apache.pinot.controller.helix.ControllerRequestBuilderUtil;
 import org.apache.pinot.controller.helix.ControllerTest;
+import org.apache.pinot.controller.helix.FakeHelixClients;
 import org.testng.Assert;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
@@ -40,6 +40,7 @@ import org.testng.annotations.Test;
  */
 public class PinotFileUploadTest extends ControllerTest {
   private static final String TABLE_NAME = "testTable";
+  private FakeHelixClients _fakeHelixClients;
 
   @Test
   public void testUploadBogusData()
@@ -59,9 +60,10 @@ public class PinotFileUploadTest extends ControllerTest {
       throws Exception {
     startZk();
     startController();
-    ControllerRequestBuilderUtil
+    _fakeHelixClients = new FakeHelixClients();
+    _fakeHelixClients
         .addFakeBrokerInstancesToAutoJoinHelixCluster(getHelixClusterName(), ZkStarter.DEFAULT_ZK_STR, 5, true);
-    ControllerRequestBuilderUtil
+    _fakeHelixClients
         .addFakeDataInstancesToAutoJoinHelixCluster(getHelixClusterName(), ZkStarter.DEFAULT_ZK_STR, 5, true);
 
     Assert.assertEquals(_helixAdmin.getInstancesInClusterWithTag(getHelixClusterName(), "DefaultTenant_BROKER").size(),
@@ -76,6 +78,7 @@ public class PinotFileUploadTest extends ControllerTest {
   @AfterClass
   public void tearDown()
       throws Exception {
+    _fakeHelixClients.shutDown();
     stopController();
     stopZk();
   }

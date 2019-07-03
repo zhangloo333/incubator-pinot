@@ -33,8 +33,8 @@ import org.apache.pinot.common.partition.ReplicaGroupPartitionAssignmentGenerato
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.ZkStarter;
 import org.apache.pinot.controller.ControllerConf;
-import org.apache.pinot.controller.helix.ControllerRequestBuilderUtil;
 import org.apache.pinot.controller.helix.ControllerTest;
+import org.apache.pinot.controller.helix.FakeHelixClients;
 import org.apache.pinot.controller.utils.ReplicaGroupTestUtils;
 import org.testng.Assert;
 import org.testng.annotations.AfterClass;
@@ -55,6 +55,8 @@ public class ReplicaGroupRebalanceStrategyTest extends ControllerTest {
 
   private final TableConfig.Builder _offlineBuilder = new TableConfig.Builder(CommonConstants.Helix.TableType.OFFLINE);
 
+  private FakeHelixClients _fakeHelixClients;
+
   @BeforeClass
   public void setUp()
       throws Exception {
@@ -63,10 +65,11 @@ public class ReplicaGroupRebalanceStrategyTest extends ControllerTest {
       ControllerConf config = getDefaultControllerConfiguration();
       config.setTableMinReplicas(MIN_NUM_REPLICAS);
       startController(config);
-      ControllerRequestBuilderUtil
+      _fakeHelixClients = new FakeHelixClients();
+      _fakeHelixClients
           .addFakeBrokerInstancesToAutoJoinHelixCluster(getHelixClusterName(), ZkStarter.DEFAULT_ZK_STR,
               NUM_BROKER_INSTANCES, true);
-      ControllerRequestBuilderUtil
+      _fakeHelixClients
           .addFakeDataInstancesToAutoJoinHelixCluster(getHelixClusterName(), ZkStarter.DEFAULT_ZK_STR,
               NUM_SERVER_INSTANCES, true);
 
@@ -78,7 +81,7 @@ public class ReplicaGroupRebalanceStrategyTest extends ControllerTest {
       // Join 4 more servers as untagged
       String[] instanceNames = {"Server_localhost_a", "Server_localhost_b", "Server_localhost_c", "Server_localhost_d"};
       for (String instanceName : instanceNames) {
-        ControllerRequestBuilderUtil
+        _fakeHelixClients
             .addFakeDataInstanceToAutoJoinHelixCluster(getHelixClusterName(), ZkStarter.DEFAULT_ZK_STR, instanceName,
                 true);
         _helixAdmin.removeInstanceTag(getHelixClusterName(), instanceName, OFFLINE_TENENT_NAME);
@@ -90,6 +93,7 @@ public class ReplicaGroupRebalanceStrategyTest extends ControllerTest {
 
   @AfterClass
   public void tearDown() {
+    _fakeHelixClients.shutDown();
     stopController();
     stopZk();
   }

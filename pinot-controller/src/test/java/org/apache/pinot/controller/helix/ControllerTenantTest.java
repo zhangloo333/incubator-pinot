@@ -43,16 +43,18 @@ public class ControllerTenantTest extends ControllerTest {
   private static final int NUM_SERVERS_PER_TAG = NUM_OFFLINE_SERVERS_PER_TAG + NUM_REALTIME_SERVERS_PER_TAG;
 
   private final String _helixClusterName = getHelixClusterName();
+  private FakeHelixClients _fakeHelixClients;
 
   @BeforeClass
   public void setUp()
       throws Exception {
     startZk();
     startController();
+    _fakeHelixClients = new FakeHelixClients();
     ZKMetadataProvider.setClusterTenantIsolationEnabled(_propertyStore, false);
-    ControllerRequestBuilderUtil
+    _fakeHelixClients
         .addFakeBrokerInstancesToAutoJoinHelixCluster(_helixClusterName, ZkStarter.DEFAULT_ZK_STR, NUM_INSTANCES);
-    ControllerRequestBuilderUtil
+    _fakeHelixClients
         .addFakeDataInstancesToAutoJoinHelixCluster(_helixClusterName, ZkStarter.DEFAULT_ZK_STR, NUM_INSTANCES);
   }
 
@@ -185,6 +187,7 @@ public class ControllerTenantTest extends ControllerTest {
 
   @AfterClass
   public void tearDown() {
+    _fakeHelixClients.shutDown();
     stopController();
     stopZk();
   }

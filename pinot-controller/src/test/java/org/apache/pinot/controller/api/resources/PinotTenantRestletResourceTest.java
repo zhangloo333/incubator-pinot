@@ -24,8 +24,8 @@ import org.apache.pinot.common.config.TableConfig;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.JsonUtils;
 import org.apache.pinot.common.utils.ZkStarter;
-import org.apache.pinot.controller.helix.ControllerRequestBuilderUtil;
 import org.apache.pinot.controller.helix.ControllerTest;
+import org.apache.pinot.controller.helix.FakeHelixClients;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
@@ -41,11 +41,13 @@ public class PinotTenantRestletResourceTest extends ControllerTest {
   private final TableConfig.Builder _offlineBuilder = new TableConfig.Builder(CommonConstants.Helix.TableType.OFFLINE);
   private static final int NUM_BROKER_INSTANCES = 2;
   private static final int NUM_SERVER_INSTANCES = 6;
+  private FakeHelixClients _fakeHelixClients;
 
   @BeforeClass
   public void setUp() {
     startZk();
     startController();
+    _fakeHelixClients = new FakeHelixClients();
   }
 
   @Test
@@ -81,10 +83,10 @@ public class PinotTenantRestletResourceTest extends ControllerTest {
     // Add a table to the server
     String createTableUrl = _controllerRequestURLBuilder.forTableCreate();
 
-    ControllerRequestBuilderUtil
+    _fakeHelixClients
         .addFakeBrokerInstancesToAutoJoinHelixCluster(getHelixClusterName(), ZkStarter.DEFAULT_ZK_STR,
             NUM_BROKER_INSTANCES, true);
-    ControllerRequestBuilderUtil
+    _fakeHelixClients
         .addFakeDataInstancesToAutoJoinHelixCluster(getHelixClusterName(), ZkStarter.DEFAULT_ZK_STR,
             NUM_SERVER_INSTANCES, true);
 
@@ -105,6 +107,7 @@ public class PinotTenantRestletResourceTest extends ControllerTest {
 
   @AfterClass
   public void tearDown() {
+    _fakeHelixClients.shutDown();
     stopController();
     stopZk();
   }

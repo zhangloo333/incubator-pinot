@@ -44,8 +44,8 @@ import org.apache.pinot.common.data.Schema;
 import org.apache.pinot.common.metadata.segment.OfflineSegmentZKMetadata;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.ZkStarter;
-import org.apache.pinot.controller.helix.ControllerRequestBuilderUtil;
 import org.apache.pinot.controller.helix.ControllerTest;
+import org.apache.pinot.controller.helix.FakeHelixClients;
 import org.apache.pinot.controller.utils.SegmentMetadataMockUtils;
 import org.testng.Assert;
 import org.testng.annotations.AfterTest;
@@ -64,6 +64,7 @@ public class HelixBrokerStarterTest extends ControllerTest {
   private ZkClient _zkClient;
   private HelixBrokerStarter _helixBrokerStarter;
   private ZkStarter.ZookeeperInstance _zookeeperInstance;
+  private FakeHelixClients _fakeHelixClients;
 
   @BeforeTest
   public void setUp()
@@ -78,9 +79,9 @@ public class HelixBrokerStarterTest extends ControllerTest {
     _helixBrokerStarter = new HelixBrokerStarter(_brokerConf, getHelixClusterName(), ZkStarter.DEFAULT_ZK_STR);
     _helixBrokerStarter.start();
 
-    ControllerRequestBuilderUtil
+    _fakeHelixClients
         .addFakeBrokerInstancesToAutoJoinHelixCluster(getHelixClusterName(), ZkStarter.DEFAULT_ZK_STR, 5, true);
-    ControllerRequestBuilderUtil
+    _fakeHelixClients
         .addFakeDataInstancesToAutoJoinHelixCluster(getHelixClusterName(), ZkStarter.DEFAULT_ZK_STR, 1, true);
 
     while (_helixAdmin.getInstancesInClusterWithTag(getHelixClusterName(), "DefaultTenant_OFFLINE").size() == 0
@@ -131,6 +132,7 @@ public class HelixBrokerStarterTest extends ControllerTest {
 
   @AfterTest
   public void tearDown() {
+    _fakeHelixClients.shutDown();
     _helixResourceManager.stop();
     _zkClient.close();
     ZkStarter.stopLocalZkServer(_zookeeperInstance);

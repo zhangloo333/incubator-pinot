@@ -36,13 +36,11 @@ import org.apache.pinot.common.partition.ReplicaGroupPartitionAssignment;
 import org.apache.pinot.common.partition.ReplicaGroupPartitionAssignmentGenerator;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.ZkStarter;
-import org.apache.pinot.controller.helix.ControllerRequestBuilderUtil;
 import org.apache.pinot.controller.helix.ControllerTest;
+import org.apache.pinot.controller.helix.FakeHelixClients;
 import org.apache.pinot.controller.utils.ReplicaGroupTestUtils;
 import org.apache.pinot.controller.utils.SegmentMetadataMockUtils;
 import org.apache.pinot.core.realtime.impl.fakestream.FakeStreamConfigUtils;
-import org.apache.pinot.core.realtime.stream.StreamConfig;
-import org.apache.pinot.core.realtime.stream.StreamConfigProperties;
 import org.testng.Assert;
 import org.testng.annotations.AfterTest;
 import org.testng.annotations.BeforeTest;
@@ -65,6 +63,7 @@ public class SegmentAssignmentStrategyTest extends ControllerTest {
   private final int _numBrokerInstance = 1;
   private ZkStarter.ZookeeperInstance _zookeeperInstance;
   private ReplicaGroupPartitionAssignmentGenerator _partitionAssignmentGenerator;
+  private FakeHelixClients _fakeHelixClients;
 
   @BeforeTest
   public void setup()
@@ -81,9 +80,10 @@ public class SegmentAssignmentStrategyTest extends ControllerTest {
     _partitionAssignmentGenerator =
         new ReplicaGroupPartitionAssignmentGenerator(helixZkManager.getHelixPropertyStore());
 
-    ControllerRequestBuilderUtil
+    _fakeHelixClients = new FakeHelixClients();
+    _fakeHelixClients
         .addFakeDataInstancesToAutoJoinHelixCluster(getHelixClusterName(), ZK_SERVER, _numServerInstance, true);
-    ControllerRequestBuilderUtil
+    _fakeHelixClients
         .addFakeBrokerInstancesToAutoJoinHelixCluster(getHelixClusterName(), ZK_SERVER, _numBrokerInstance, true);
     Thread.sleep(100);
     Assert.assertEquals(_helixAdmin.getInstancesInClusterWithTag(getHelixClusterName(), "DefaultTenant_OFFLINE").size(),
@@ -97,6 +97,7 @@ public class SegmentAssignmentStrategyTest extends ControllerTest {
 
   @AfterTest
   public void tearDown() {
+    _fakeHelixClients.shutDown();
     _helixResourceManager.stop();
     _zkClient.close();
     ZkStarter.stopLocalZkServer(_zookeeperInstance);

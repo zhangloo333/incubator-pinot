@@ -26,8 +26,8 @@ import org.apache.pinot.common.segment.SegmentMetadata;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.JsonUtils;
 import org.apache.pinot.common.utils.ZkStarter;
-import org.apache.pinot.controller.helix.ControllerRequestBuilderUtil;
 import org.apache.pinot.controller.helix.ControllerTest;
+import org.apache.pinot.controller.helix.FakeHelixClients;
 import org.apache.pinot.controller.utils.SegmentMetadataMockUtils;
 import org.testng.Assert;
 import org.testng.annotations.AfterClass;
@@ -38,6 +38,7 @@ import org.testng.annotations.Test;
 public class PinotSegmentRestletResourceTest extends ControllerTest {
   private final static String ZK_SERVER = ZkStarter.DEFAULT_ZK_STR;
   private final static String TABLE_NAME = "testTable";
+  private FakeHelixClients _fakeHelixClients;
 
   @BeforeClass
   public void setUp()
@@ -45,8 +46,9 @@ public class PinotSegmentRestletResourceTest extends ControllerTest {
     startZk();
     startController();
 
-    ControllerRequestBuilderUtil.addFakeDataInstancesToAutoJoinHelixCluster(getHelixClusterName(), ZK_SERVER, 1, true);
-    ControllerRequestBuilderUtil
+    _fakeHelixClients = new FakeHelixClients();
+    _fakeHelixClients.addFakeDataInstancesToAutoJoinHelixCluster(getHelixClusterName(), ZK_SERVER, 1, true);
+    _fakeHelixClients
         .addFakeBrokerInstancesToAutoJoinHelixCluster(getHelixClusterName(), ZK_SERVER, 1, true);
 
     while (_helixAdmin.getInstancesInClusterWithTag(getHelixClusterName(), "DefaultTenant_OFFLINE").size() == 0) {
@@ -62,6 +64,7 @@ public class PinotSegmentRestletResourceTest extends ControllerTest {
   @AfterClass
   public void tearDown()
       throws Exception {
+    _fakeHelixClients.shutDown();
     stopController();
     stopZk();
   }

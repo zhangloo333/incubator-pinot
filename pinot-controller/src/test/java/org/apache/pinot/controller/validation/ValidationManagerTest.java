@@ -35,8 +35,8 @@ import org.apache.pinot.common.utils.HLCSegmentName;
 import org.apache.pinot.common.utils.LLCSegmentName;
 import org.apache.pinot.common.utils.ZkStarter;
 import org.apache.pinot.common.utils.helix.HelixHelper;
-import org.apache.pinot.controller.helix.ControllerRequestBuilderUtil;
 import org.apache.pinot.controller.helix.ControllerTest;
+import org.apache.pinot.controller.helix.FakeHelixClients;
 import org.apache.pinot.controller.utils.SegmentMetadataMockUtils;
 import org.joda.time.DateTime;
 import org.joda.time.Duration;
@@ -64,6 +64,7 @@ public class ValidationManagerTest extends ControllerTest {
   private ZkStarter.ZookeeperInstance _zookeeperInstance;
   private TableConfig _offlineTableConfig;
   private HelixManager _helixManager;
+  private FakeHelixClients _fakeHelixClients;
 
   @BeforeClass
   public void setUp()
@@ -73,9 +74,10 @@ public class ValidationManagerTest extends ControllerTest {
     Thread.sleep(1000);
 
     startController();
+    _fakeHelixClients = new FakeHelixClients();
 
-    ControllerRequestBuilderUtil.addFakeDataInstancesToAutoJoinHelixCluster(getHelixClusterName(), ZK_STR, 2, true);
-    ControllerRequestBuilderUtil.addFakeBrokerInstancesToAutoJoinHelixCluster(getHelixClusterName(), ZK_STR, 2, true);
+    _fakeHelixClients.addFakeDataInstancesToAutoJoinHelixCluster(getHelixClusterName(), ZK_STR, 2, true);
+    _fakeHelixClients.addFakeBrokerInstancesToAutoJoinHelixCluster(getHelixClusterName(), ZK_STR, 2, true);
 
     _offlineTableConfig =
         new TableConfig.Builder(CommonConstants.Helix.TableType.OFFLINE).setTableName(TEST_TABLE_NAME).setNumReplicas(2)
@@ -188,6 +190,7 @@ public class ValidationManagerTest extends ControllerTest {
 
   @AfterClass
   public void shutDown() {
+    _fakeHelixClients.shutDown();
     _helixResourceManager.stop();
     _zkClient.close();
     ZkStarter.stopLocalZkServer(_zookeeperInstance);

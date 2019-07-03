@@ -27,8 +27,8 @@ import org.apache.pinot.common.config.TableNameBuilder;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.JsonUtils;
 import org.apache.pinot.common.utils.ZkStarter;
-import org.apache.pinot.controller.helix.ControllerRequestBuilderUtil;
 import org.apache.pinot.controller.helix.ControllerTest;
+import org.apache.pinot.controller.helix.FakeHelixClients;
 import org.apache.pinot.controller.utils.SegmentMetadataMockUtils;
 import org.apache.pinot.core.realtime.impl.fakestream.FakeStreamConfigUtils;
 import org.apache.pinot.core.realtime.stream.StreamConfig;
@@ -45,17 +45,19 @@ public class TableViewsTest extends ControllerTest {
   private static final String HYBRID_TABLE_NAME = "hybridTable";
   private static final int NUM_BROKER_INSTANCES = 3;
   private static final int NUM_SERVER_INSTANCES = 4;
+  private FakeHelixClients _fakeHelixClients;
 
   @BeforeClass
   public void setUp()
       throws Exception {
     startZk();
     startController();
+    _fakeHelixClients = new FakeHelixClients();
 
-    ControllerRequestBuilderUtil
+    _fakeHelixClients
         .addFakeBrokerInstancesToAutoJoinHelixCluster(getHelixClusterName(), ZkStarter.DEFAULT_ZK_STR,
             NUM_BROKER_INSTANCES, true);
-    ControllerRequestBuilderUtil
+    _fakeHelixClients
         .addFakeDataInstancesToAutoJoinHelixCluster(getHelixClusterName(), ZkStarter.DEFAULT_ZK_STR,
             NUM_SERVER_INSTANCES, true);
 
@@ -177,6 +179,7 @@ public class TableViewsTest extends ControllerTest {
 
   @AfterClass
   public void tearDown() {
+    _fakeHelixClients.shutDown();
     stopController();
     stopZk();
   }

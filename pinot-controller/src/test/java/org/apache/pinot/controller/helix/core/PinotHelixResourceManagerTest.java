@@ -53,8 +53,8 @@ import org.apache.pinot.common.utils.CommonConstants.Helix.TableType;
 import org.apache.pinot.common.utils.TenantRole;
 import org.apache.pinot.common.utils.ZkStarter;
 import org.apache.pinot.controller.ControllerConf;
-import org.apache.pinot.controller.helix.ControllerRequestBuilderUtil;
 import org.apache.pinot.controller.helix.ControllerTest;
+import org.apache.pinot.controller.helix.FakeHelixClients;
 import org.apache.pinot.util.TestUtils;
 import org.testng.Assert;
 import org.testng.annotations.AfterClass;
@@ -80,6 +80,7 @@ public class PinotHelixResourceManagerTest extends ControllerTest {
   private static final long TIMEOUT_IN_MS = 10_000L;
 
   private final String _helixClusterName = getHelixClusterName();
+  private FakeHelixClients _fakeHelixClients;
 
   @BeforeClass
   public void setUp() throws Exception {
@@ -87,10 +88,11 @@ public class PinotHelixResourceManagerTest extends ControllerTest {
     ControllerConf config = getDefaultControllerConfiguration();
     config.setTenantIsolationEnabled(false);
     startController(config);
+    _fakeHelixClients = new FakeHelixClients();
 
-    ControllerRequestBuilderUtil.addFakeBrokerInstancesToAutoJoinHelixCluster(_helixClusterName,
+    _fakeHelixClients.addFakeBrokerInstancesToAutoJoinHelixCluster(_helixClusterName,
         ZkStarter.DEFAULT_ZK_STR, NUM_INSTANCES, false);
-    ControllerRequestBuilderUtil.addFakeDataInstancesToAutoJoinHelixCluster(_helixClusterName, ZkStarter.DEFAULT_ZK_STR,
+    _fakeHelixClients.addFakeDataInstancesToAutoJoinHelixCluster(_helixClusterName, ZkStarter.DEFAULT_ZK_STR,
         NUM_INSTANCES, false, BASE_SERVER_ADMIN_PORT);
 
     // Create server tenant on all Servers
@@ -576,6 +578,7 @@ public class PinotHelixResourceManagerTest extends ControllerTest {
 
   @AfterClass
   public void tearDown() {
+    _fakeHelixClients.shutDown();
     stopController();
     stopZk();
   }

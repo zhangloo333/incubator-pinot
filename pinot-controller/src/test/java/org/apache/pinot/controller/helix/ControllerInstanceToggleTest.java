@@ -41,15 +41,17 @@ public class ControllerInstanceToggleTest extends ControllerTest {
   private static final int NUM_INSTANCES = 3;
 
   private final String _helixClusterName = getHelixClusterName();
+  private FakeHelixClients _fakeHelixClients;
 
   @BeforeClass
   public void setup()
       throws Exception {
     startZk();
     startController();
-    ControllerRequestBuilderUtil
+    _fakeHelixClients = new FakeHelixClients();
+    _fakeHelixClients
         .addFakeBrokerInstancesToAutoJoinHelixCluster(_helixClusterName, ZkStarter.DEFAULT_ZK_STR, NUM_INSTANCES, true);
-    ControllerRequestBuilderUtil
+    _fakeHelixClients
         .addFakeDataInstancesToAutoJoinHelixCluster(_helixClusterName, ZkStarter.DEFAULT_ZK_STR, NUM_INSTANCES, true);
   }
 
@@ -124,6 +126,7 @@ public class ControllerInstanceToggleTest extends ControllerTest {
 
   @AfterClass
   public void tearDown() {
+    _fakeHelixClients.shutDown();
     stopController();
     stopZk();
   }
