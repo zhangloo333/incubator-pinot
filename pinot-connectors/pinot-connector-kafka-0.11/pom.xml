@@ -1,4 +1,4 @@
-<?xml version="1.0"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <!--
 
     Licensed to the Apache Software Foundation (ASF) under one
@@ -20,50 +20,46 @@
 
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-  <modelVersion>4.0.0</modelVersion>
   <parent>
-    <artifactId>pinot</artifactId>
+    <artifactId>pinot-connectors</artifactId>
     <groupId>org.apache.pinot</groupId>
     <version>0.2.2.5-SNAPSHOT</version>
+    <relativePath>..</relativePath>
   </parent>
-
-  <artifactId>pinot-connectors</artifactId>
-  <packaging>pom</packaging>
-  <name>Pinot Connectors</name>
+  <modelVersion>4.0.0</modelVersion>
+  <artifactId>pinot-connector-kafka-0.11</artifactId>
+  <name>Pinot Connector Kafka 0.11</name>
+  <url>https://pinot.apache.org/</url>
   <properties>
-    <pinot.root>${basedir}/..</pinot.root>
+    <pinot.root>${basedir}/../..</pinot.root>
+    <kafka.lib.version>0.11.0.3</kafka.lib.version>
   </properties>
 
-  <modules>
-    <module>pinot-connector-kafka-0.9</module>
-    <module>pinot-connector-kafka-0.11</module>
-  </modules>
-
   <dependencies>
+
+    <!-- Kafka  -->
     <dependency>
-      <groupId>org.apache.pinot</groupId>
-      <artifactId>pinot-common</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.pinot</groupId>
-      <artifactId>pinot-core</artifactId>
-      <scope>provided</scope>
-      <!-- TODO: fix dependency -->
+      <groupId>org.apache.kafka</groupId>
+      <artifactId>kafka_2.11</artifactId>
+      <version>${kafka.lib.version}</version>
       <exclusions>
         <exclusion>
-          <groupId>org.apache.pinot</groupId>
-          <artifactId>pinot-opal</artifactId>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-log4j12</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>net.sf.jopt-simple</groupId>
+          <artifactId>jopt-simple</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.scala-lang</groupId>
+          <artifactId>scala-library</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.zookeeper</groupId>
+          <artifactId>zookeeper</artifactId>
         </exclusion>
       </exclusions>
     </dependency>
-
-    <!-- test -->
-    <dependency>
-      <groupId>org.testng</groupId>
-      <artifactId>testng</artifactId>
-      <scope>test</scope>
-    </dependency>
   </dependencies>
-
 </project>

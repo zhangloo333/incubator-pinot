@@ -19,8 +19,6 @@
 package org.apache.pinot.broker.broker.helix;
 
 import com.google.common.collect.ImmutableList;
-import org.apache.pinot.broker.upsert.LowWaterMarkService;
-import org.apache.pinot.broker.upsert.PollingBasedLowWaterMarkService;
 import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.commons.configuration.BaseConfiguration;
 import org.apache.commons.configuration.Configuration;
@@ -44,6 +42,8 @@ import org.apache.pinot.broker.queryquota.HelixExternalViewBasedQueryQuotaManage
 import org.apache.pinot.broker.requesthandler.BrokerRequestHandler;
 import org.apache.pinot.broker.requesthandler.ConnectionPoolBrokerRequestHandler;
 import org.apache.pinot.broker.routing.HelixExternalViewBasedRouting;
+import org.apache.pinot.broker.upsert.LowWaterMarkService;
+import org.apache.pinot.broker.upsert.PollingBasedLowWaterMarkService;
 import org.apache.pinot.common.Utils;
 import org.apache.pinot.common.config.TagNameUtils;
 import org.apache.pinot.common.metadata.ZKMetadataProvider;
@@ -161,13 +161,6 @@ public class HelixBrokerStarter {
     LOGGER.info("Starting Pinot broker");
     Utils.logVersions();
 
-    // start lwm service
-    _lwmService = new PollingBasedLowWaterMarkService(_participantHelixManager.getHelixDataAccessor(), _clusterName,
-        _brokerConf.getInt(CommonConstants.Broker.CONFIG_OF_BROKER_POLLING_SERVER_LWMS_INTERVAL_MS, 5 * 1000),
-        _brokerConf.getInt(CommonConstants.Broker.CONFIG_OF_BROKER_POLLING_SERVER_LWMS_SERVER_PORT,
-            CommonConstants.Server.DEFAULT_ADMIN_API_PORT)
-    );
-
     // Connect the spectator Helix manager
     LOGGER.info("Connecting spectator Helix manager");
     _spectatorHelixManager =
@@ -176,6 +169,13 @@ public class HelixBrokerStarter {
     _helixAdmin = _spectatorHelixManager.getClusterManagmentTool();
     _propertyStore = _spectatorHelixManager.getHelixPropertyStore();
     _helixDataAccessor = _spectatorHelixManager.getHelixDataAccessor();
+
+    // start lwm service
+    _lwmService = new PollingBasedLowWaterMarkService(_spectatorHelixManager.getHelixDataAccessor(), _clusterName,
+        _brokerConf.getInt(CommonConstants.Broker.CONFIG_OF_BROKER_POLLING_SERVER_LWMS_INTERVAL_MS, 5 * 1000),
+        _brokerConf.getInt(CommonConstants.Broker.CONFIG_OF_BROKER_POLLING_SERVER_LWMS_SERVER_PORT,
+            CommonConstants.Server.DEFAULT_ADMIN_API_PORT)
+    );
 
 
     // Set up the broker server builder

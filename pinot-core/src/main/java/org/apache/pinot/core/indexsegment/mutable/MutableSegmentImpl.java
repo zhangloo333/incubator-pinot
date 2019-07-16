@@ -208,6 +208,9 @@ public class MutableSegmentImpl implements MutableSegment {
         VirtualColumnContext virtualColumnContext = new VirtualColumnContext(NetUtil.getHostnameOrAddress(),
             config.getTableName(), _segmentName, column, _capacity, true);
         final VirtualColumnProvider provider = VirtualColumnProviderFactory.buildProvider(fieldSpec.getVirtualColumnProvider());
+        if (provider == null) {
+          throw new RuntimeException(String.format("failed to create virtual segment provider for field %s", fieldSpec.getName()));
+        }
         DataFileReader reader = provider.buildReader(virtualColumnContext);
         Dictionary dictionary = provider.buildDictionary(virtualColumnContext);
         _virtualColumnProviderMap.put(column, provider);

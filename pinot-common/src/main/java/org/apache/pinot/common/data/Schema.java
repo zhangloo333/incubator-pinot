@@ -67,7 +67,9 @@ public final class Schema {
   private static final Logger LOGGER = LoggerFactory.getLogger(Schema.class);
 
   private static final String UPSERT_TABLE_CONFIG = "upsert";
+  @JsonIgnore
   private DimensionFieldSpec _primaryKeyFieldSpec = null;
+  @JsonIgnore
   private DimensionFieldSpec _offsetKeyFieldSpec = null;
 
   @ConfigKey("schemaName")
@@ -133,7 +135,6 @@ public final class Schema {
     _schemaName = schemaName;
   }
 
-
   public String getPrimaryKey() {
     return _primaryKey;
   }
@@ -173,9 +174,6 @@ public final class Schema {
           _primaryKeyFieldSpec = dimensionFieldSpec;
         }
       }
-    }
-    if (_primaryKeyFieldSpec == null) {
-      throw new RuntimeException("no dimension matches primary key name");
     }
     return _primaryKeyFieldSpec;
   }
@@ -509,7 +507,7 @@ public final class Schema {
       }
       jsonObject.set("dateTimeFieldSpecs", jsonArray);
     }
-    jsonObject.put("updateSchematic", _updateSemantic);
+    jsonObject.put("updateSemantic", _updateSemantic);
     if (UPSERT_TABLE_CONFIG.equalsIgnoreCase(_updateSemantic)) {
       jsonObject.put("primaryKey", _primaryKey);
       jsonObject.put("offsetKey", _offsetKey);
