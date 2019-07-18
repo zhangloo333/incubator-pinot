@@ -87,9 +87,11 @@ public class ImmutableSegmentLoader {
   /**
    * to load upsert related segment
    */
-  public static ImmutableUpsertSegmentImpl loadUpsertSegment(@Nonnull File indexDir, @Nonnull IndexLoadingConfig indexLoadingConfig)
+  public static ImmutableUpsertSegmentImpl loadUpsertSegment(@Nonnull File indexDir,
+                                                             @Nonnull IndexLoadingConfig indexLoadingConfig,
+                                                             Schema schema)
       throws Exception {
-    ImmutableSegmentImpl segment = loadHelper(indexDir, indexLoadingConfig, null);
+    ImmutableSegmentImpl segment = loadHelper(indexDir, indexLoadingConfig, schema);
     return ImmutableUpsertSegmentImpl.copyOf(segment);
   }
 
@@ -124,7 +126,7 @@ public class ImmutableSegmentLoader {
     }
 
     // Load the metadata again since converter and pre-processor may have changed it
-    SegmentMetadataImpl segmentMetadata = new SegmentMetadataImpl(indexDir);
+    SegmentMetadataImpl segmentMetadata = new SegmentMetadataImpl(indexDir, schema);
 
     // Load the segment
     ReadMode readMode = indexLoadingConfig.getReadMode();

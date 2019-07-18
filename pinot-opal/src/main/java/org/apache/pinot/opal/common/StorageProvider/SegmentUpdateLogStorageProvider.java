@@ -78,16 +78,13 @@ public class SegmentUpdateLogStorageProvider {
   }
 
   public synchronized void addData(List<UpdateLogEntry> messages) throws IOException {
-
     final ByteBuffer buffer = ByteBuffer.allocate(messages.size() * UpdateLogEntry.SIZE);
-    int messageCount = 0;
     for (UpdateLogEntry message: messages) {
       message.addEntryToBuffer(buffer);
-      messageCount++;
     }
     buffer.flip();
     // writing out to file
-    LOGGER.info("writing out {} messages to file {}", messageCount, _file.getAbsolutePath());
+//    LOGGER.info("writing out {} messages to file {}", messageCount, _file.getAbsolutePath());
     _channel.write(buffer);
     _channel.force(true);
   }

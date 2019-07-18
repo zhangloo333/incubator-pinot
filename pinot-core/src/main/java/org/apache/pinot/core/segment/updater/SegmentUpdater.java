@@ -138,7 +138,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
                   segmentManagersMap.computeIfAbsent(segmentNameStr, sn -> new ConcurrentSet<>()), segmentDataMap.get(segmentNameStr));
             }
           } else {
-            LOGGER.warn("got messages for table {} not in this server", tableName);
+//            LOGGER.warn("got messages for table {} not in this server", tableName);
           }
         }
         if (eventCount == 0) {

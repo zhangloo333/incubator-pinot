@@ -18,14 +18,7 @@
  */
 package org.apache.pinot.server.starter;
 
-import java.util.concurrent.atomic.LongAccumulator;
-import javax.annotation.Nonnull;
-
 import com.google.common.collect.ImmutableList;
-import org.apache.pinot.core.segment.updater.SegmentUpdater;
-import org.apache.pinot.opal.distributed.keyCoordinator.serverIngestion.KeyCoordinatorProvider;
-import org.apache.pinot.opal.distributed.keyCoordinator.serverUpdater.SegmentUpdaterProvider;
-import org.apache.pinot.server.starter.helix.SegmentDeletionHandler;
 import org.apache.commons.configuration.Configuration;
 import org.apache.helix.ZNRecord;
 import org.apache.helix.store.zk.ZkHelixPropertyStore;
@@ -34,12 +27,19 @@ import org.apache.pinot.core.data.manager.InstanceDataManager;
 import org.apache.pinot.core.query.executor.QueryExecutor;
 import org.apache.pinot.core.query.scheduler.QueryScheduler;
 import org.apache.pinot.core.query.scheduler.QuerySchedulerFactory;
+import org.apache.pinot.core.segment.updater.SegmentUpdater;
+import org.apache.pinot.opal.distributed.keyCoordinator.serverIngestion.KeyCoordinatorProvider;
+import org.apache.pinot.opal.distributed.keyCoordinator.serverUpdater.SegmentUpdaterProvider;
 import org.apache.pinot.server.conf.ServerConf;
 import org.apache.pinot.server.request.ScheduledRequestHandler;
+import org.apache.pinot.server.starter.helix.SegmentDeletionHandler;
 import org.apache.pinot.transport.netty.NettyServer;
 import org.apache.pinot.transport.netty.NettyServer.RequestHandlerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nonnull;
+import java.util.concurrent.atomic.LongAccumulator;
 
 
 /**

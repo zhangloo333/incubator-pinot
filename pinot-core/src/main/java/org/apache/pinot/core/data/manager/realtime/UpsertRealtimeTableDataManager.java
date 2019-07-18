@@ -74,9 +74,9 @@ public class UpsertRealtimeTableDataManager extends RealtimeTableDataManager {
   }
 
   @Override
-  protected ImmutableSegment loadImmutableSegment(File indexDir, IndexLoadingConfig indexLoadingConfig) {
+  protected ImmutableSegment loadImmutableSegment(File indexDir, IndexLoadingConfig indexLoadingConfig, Schema schema) {
     try {
-      return ImmutableSegmentLoader.loadUpsertSegment(indexDir, indexLoadingConfig);
+      return ImmutableSegmentLoader.loadUpsertSegment(indexDir, indexLoadingConfig, schema);
     } catch (Exception e) {
       throw new RuntimeException("failed to load immutable segment", e);
     }

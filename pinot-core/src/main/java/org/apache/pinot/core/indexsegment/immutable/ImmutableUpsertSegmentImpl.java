@@ -18,17 +18,13 @@
  */
 package org.apache.pinot.core.indexsegment.immutable;
 
-import com.google.common.base.Preconditions;
+import com.clearspring.analytics.util.Preconditions;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
-import org.apache.pinot.core.indexsegment.UpsertSegment;
-import org.apache.pinot.core.segment.updater.UpsertWaterMarkManager;
-import org.apache.pinot.opal.common.StorageProvider.UpdateLogEntry;
-import org.apache.pinot.opal.common.StorageProvider.UpdateLogStorageProvider;
-import org.apache.pinot.core.segment.virtualcolumn.mutable.VirtualColumnLongValueReaderWriter;
 import org.apache.pinot.common.config.TableNameBuilder;
 import org.apache.pinot.common.data.Schema;
 import org.apache.pinot.common.utils.CommonConstants;
+import org.apache.pinot.core.indexsegment.UpsertSegment;
 import org.apache.pinot.core.io.reader.BaseSingleColumnSingleValueReader;
 import org.apache.pinot.core.io.reader.DataFileReader;
 import org.apache.pinot.core.segment.index.SegmentMetadataImpl;
@@ -37,7 +33,11 @@ import org.apache.pinot.core.segment.index.readers.BitmapInvertedIndexReader;
 import org.apache.pinot.core.segment.index.readers.Dictionary;
 import org.apache.pinot.core.segment.index.readers.InvertedIndexReader;
 import org.apache.pinot.core.segment.store.SegmentDirectory;
+import org.apache.pinot.core.segment.updater.UpsertWaterMarkManager;
+import org.apache.pinot.core.segment.virtualcolumn.mutable.VirtualColumnLongValueReaderWriter;
 import org.apache.pinot.core.startree.v2.store.StarTreeIndexContainer;
+import org.apache.pinot.opal.common.StorageProvider.UpdateLogEntry;
+import org.apache.pinot.opal.common.StorageProvider.UpdateLogStorageProvider;
 import org.roaringbitmap.IntIterator;
 import org.roaringbitmap.buffer.ImmutableRoaringBitmap;
 import org.slf4j.Logger;
