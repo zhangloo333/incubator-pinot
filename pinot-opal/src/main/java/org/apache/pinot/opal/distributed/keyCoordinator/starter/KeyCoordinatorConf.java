@@ -57,6 +57,11 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
   public static final String KAFKA_CLIENT_ID_PREFIX = "pinot_upsert_client_";
   public static final String KAFKA_CONSUMER_GROUP_ID_PREFIX = "pinot_upsert_kc_consumerGroup_";
 
+  // helix related config
+  public static final String HELIX_CLUSTER_NAME = "helix.cluster.name";
+  public static final String ZK_STR = "zk.str";
+  public static final String KC_CLUSTER_NAME = "kc.cluster.name";
+
   public KeyCoordinatorConf(File file) throws ConfigurationException {
     super(file);
   }
@@ -83,5 +88,21 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
 
   public Configuration getStorageProviderConf() {
     return this.subset(STORAGE_PROVIDER_CONFIG);
+  }
+
+  public int getPort() {
+    return this.subset(SERVER_CONFIG).getInt(KeyCoordinatorConf.PORT, KeyCoordinatorConf.PORT_DEFAULT);
+  }
+
+  public String getHelixClusterName() {
+    return this.getString(HELIX_CLUSTER_NAME);
+  }
+
+  public String getKeyCoordinatorClusterName() {
+    return this.getString(KC_CLUSTER_NAME);
+  }
+
+  public String getZkStr() {
+    return this.getString(ZK_STR);
   }
 }

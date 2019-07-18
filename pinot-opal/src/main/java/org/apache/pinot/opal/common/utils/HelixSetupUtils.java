@@ -18,18 +18,19 @@
  */
 package org.apache.pinot.opal.common.utils;
 
+import org.apache.helix.HelixAdmin;
 import org.apache.helix.HelixManager;
 import org.apache.helix.controller.HelixControllerMain;
+import org.apache.helix.manager.zk.ZKHelixAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class HelixSetupUtils {
   private static final Logger LOGGER = LoggerFactory.getLogger(HelixSetupUtils.class);
 
-  public static synchronized HelixManager setup(String helixClusterName, String zkPath, String instanceId,
-                                                boolean isUpdateStateModel) {
+  public static synchronized HelixManager setup(String helixClusterName, String zkPath, String instanceId) {
     try {
-      createHelixClusterIfNeeded(helixClusterName, zkPath, isUpdateStateModel);
+      createHelixClusterIfNeeded(helixClusterName, zkPath);
     } catch (final Exception ex) {
       LOGGER.error("failed to set up helix for opal components", ex);
       return null;
@@ -44,8 +45,13 @@ public class HelixSetupUtils {
 
   }
 
-  public static void createHelixClusterIfNeeded(String helixClusterName, String zkPath, Boolean isUpdateStateModel) {
-    //TODO implement this logic
+  public static void createHelixClusterIfNeeded(String helixClusterName, String zkPath) {
+    final HelixAdmin admin = new ZKHelixAdmin(zkPath);
+    if (admin.getClusters().contains(helixClusterName)) {
+      LOGGER.info("cluster {} already exists", helixClusterName);
+      return;
+    }
+    admin.addCluster(helixClusterName);
   }
 
   private static HelixManager startHelixControllerInStandadloneMode(String helixClusterName, String zkUrl,

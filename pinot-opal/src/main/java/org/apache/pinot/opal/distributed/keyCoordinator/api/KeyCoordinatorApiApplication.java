@@ -20,12 +20,14 @@ package org.apache.pinot.opal.distributed.keyCoordinator.api;
 
 import com.google.common.base.Preconditions;
 import io.swagger.jaxrs.config.BeanConfig;
+import org.apache.pinot.opal.distributed.keyCoordinator.helix.KeyCoordinatorClusterHelixManager;
 import org.apache.pinot.opal.distributed.keyCoordinator.starter.KeyCoordinatorStarter;
 import org.glassfish.grizzly.http.server.CLStaticHttpHandler;
 import org.glassfish.grizzly.http.server.HttpHandler;
 import org.glassfish.grizzly.http.server.HttpServer;
 import org.glassfish.jersey.grizzly2.httpserver.GrizzlyHttpServerFactory;
 import org.glassfish.jersey.internal.inject.AbstractBinder;
+import org.glassfish.jersey.jackson.JacksonFeature;
 import org.glassfish.jersey.server.ResourceConfig;
 
 import java.net.URI;
@@ -40,10 +42,12 @@ public class KeyCoordinatorApiApplication extends ResourceConfig {
 
   public KeyCoordinatorApiApplication(KeyCoordinatorStarter keyCoordinatorStarter) {
     packages(RESOURCE_PACKAGE);
+    register(JacksonFeature.class);
     register(new AbstractBinder() {
       @Override
       protected void configure() {
         bind(keyCoordinatorStarter).to(KeyCoordinatorStarter.class);
+        bind(keyCoordinatorStarter.getKeyCoordinatorClusterHelixManager()).to(KeyCoordinatorClusterHelixManager.class);
       }
     });
     registerClasses(io.swagger.jaxrs.listing.ApiListingResource.class);

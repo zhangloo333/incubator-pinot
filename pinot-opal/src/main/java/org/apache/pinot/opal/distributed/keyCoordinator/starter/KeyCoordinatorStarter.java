@@ -19,6 +19,7 @@
 package org.apache.pinot.opal.distributed.keyCoordinator.starter;
 
 import com.google.common.base.Preconditions;
+import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.opal.common.Config.CommonConfig;
 import org.apache.pinot.opal.common.RpcQueue.KafkaQueueConsumer;
 import org.apache.pinot.opal.common.RpcQueue.KafkaQueueProducer;
@@ -28,6 +29,7 @@ import org.apache.pinot.opal.common.updateStrategy.MessageResolveStrategy;
 import org.apache.pinot.opal.common.updateStrategy.MessageTimeResolveStrategy;
 import org.apache.pinot.opal.common.messages.LogCoordinatorMessage;
 import org.apache.pinot.opal.common.utils.State;
+import org.apache.pinot.opal.distributed.keyCoordinator.helix.KeyCoordinatorClusterHelixManager;
 import org.apache.pinot.opal.distributed.keyCoordinator.internal.DistributedKeyCoordinatorCore;
 import org.apache.pinot.opal.distributed.keyCoordinator.api.KeyCoordinatorApiApplication;
 import org.apache.pinot.opal.distributed.keyCoordinator.internal.KeyCoordinatorQueueConsumer;
@@ -51,10 +53,20 @@ public class KeyCoordinatorStarter {
   private DistributedKeyCoordinatorCore _keyCoordinatorCore;
   private KeyCoordinatorApiApplication _application;
   private String _hostName;
+  private int _port;
+  private String _instanceId;
+  private KeyCoordinatorClusterHelixManager _keyCoordinatorClusterHelixManager;
 
   public KeyCoordinatorStarter(KeyCoordinatorConf conf) {
     _keyCoordinatorConf = conf;
     _hostName = conf.getString(KeyCoordinatorConf.HOST_NAME);
+    _port = conf.getPort();
+    _instanceId = CommonConstants.Helix.PREFIX_OF_KEY_COORDINATOR_INSTANCE + _hostName + "_" + _port;
+    _keyCoordinatorClusterHelixManager = new KeyCoordinatorClusterHelixManager(
+        _keyCoordinatorConf.getZkStr(),
+        _keyCoordinatorConf.getKeyCoordinatorClusterName(),
+        _instanceId
+    );
     Preconditions.checkState(StringUtils.isNotEmpty(_hostName), "expect host name in configuration");
     _consumer = getConsumer(_keyCoordinatorConf.getConsumerConf());
     _producer = getProducer(_keyCoordinatorConf.getProducerConf());
@@ -74,14 +86,17 @@ public class KeyCoordinatorStarter {
     return new LogCoordinatorQueueProducer(producerConfig);
   }
 
+  public KeyCoordinatorClusterHelixManager getKeyCoordinatorClusterHelixManager() {
+    return _keyCoordinatorClusterHelixManager;
+  }
+
   public void start() {
     LOGGER.info("starting key coordinator instance");
     _keyCoordinatorCore.init(_keyCoordinatorConf, _producer, _consumer, _messageResolveStrategy);
     LOGGER.info("finished init key coordinator instance, starting loop");
     _keyCoordinatorCore.start();
     LOGGER.info("starting web service");
-    Configuration serverConfig = _keyCoordinatorConf.getServerConf();
-    _application.start(serverConfig.getInt(KeyCoordinatorConf.PORT, KeyCoordinatorConf.PORT_DEFAULT));
+    _application.start(_port);
   }
 
   public void shutdown() {
