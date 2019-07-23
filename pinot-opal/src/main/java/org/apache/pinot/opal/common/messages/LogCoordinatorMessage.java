@@ -19,11 +19,8 @@
 package org.apache.pinot.opal.common.messages;
 
 import org.apache.commons.lang.SerializationUtils;
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
 
 import java.io.Serializable;
-import java.util.Map;
 
 /**
  * this message contains the following 4 attributes:
@@ -67,37 +64,5 @@ public class LogCoordinatorMessage implements Serializable {
     this._value = newValue;
     this._updateEventType = updateEventType;
     this._kafkaOffset = kafkaOffset;
-  }
-
-  public static class LogCoordinatorMessageSerializer implements Serializer<LogCoordinatorMessage> {
-    @Override
-    public void configure(Map map, boolean b) {
-    }
-
-    @Override
-    public byte[] serialize(String s, LogCoordinatorMessage o) {
-      return SerializationUtils.serialize(o);
-    }
-
-    @Override
-    public void close() {
-    }
-  }
-
-  public static class LogCoordinatorMessageDeserializer implements Deserializer<LogCoordinatorMessage> {
-
-    @Override
-    public void configure(Map<String, ?> map, boolean b) {
-
-    }
-
-    @Override
-    public LogCoordinatorMessage deserialize(String s, byte[] bytes) {
-      return (LogCoordinatorMessage) SerializationUtils.deserialize(bytes);
-    }
-
-    @Override
-    public void close() {
-    }
   }
 }

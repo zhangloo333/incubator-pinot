@@ -21,13 +21,10 @@ package org.apache.pinot.opal.common.RpcQueue;
 import org.apache.commons.lang.StringUtils;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
 public abstract class KafkaQueueProducer<K, V> implements QueueProducer<K, V>{
-  private static final Logger LOGGER = LoggerFactory.getLogger(KafkaQueueProducer.class);
 
   protected abstract KafkaProducer<K, V> getKafkaNativeProducer();
 
@@ -35,17 +32,8 @@ public abstract class KafkaQueueProducer<K, V> implements QueueProducer<K, V>{
 
   @Override
   public void produce(ProduceTask<K, V> produceTask) {
-    getKafkaNativeProducer().send(new ProducerRecord<>(getTopic(produceTask), produceTask.getKey(), produceTask.getValue()),
-        produceTask::markComplete);
-  }
-
-  public void produceSync(ProduceTask<K, V> produceTask) {
-    try {
-      getKafkaNativeProducer().send(new ProducerRecord<>(getTopic(produceTask), produceTask.getKey(), produceTask.getValue()),
-          produceTask::markComplete).get();
-    } catch (Exception e) {
-      LOGGER.error("failed to send message", e);
-    }
+    getKafkaNativeProducer().send(new ProducerRecord<>(getTopic(produceTask), produceTask.getKey(),
+        produceTask.getValue()), produceTask::markComplete);
   }
 
   public String getTopic(ProduceTask<K, V> produceTask) {
@@ -62,6 +50,7 @@ public abstract class KafkaQueueProducer<K, V> implements QueueProducer<K, V>{
     }
   }
 
+  @Override
   public void flush() {
     getKafkaNativeProducer().flush();
   }

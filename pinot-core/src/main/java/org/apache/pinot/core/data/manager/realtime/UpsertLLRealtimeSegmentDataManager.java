@@ -19,16 +19,6 @@
 package org.apache.pinot.core.data.manager.realtime;
 
 import com.google.common.base.Preconditions;
-import org.apache.pinot.core.data.manager.UpsertSegmentDataManager;
-import org.apache.pinot.core.indexsegment.UpsertSegment;
-import org.apache.pinot.core.indexsegment.mutable.MutableUpsertSegmentImpl;
-import org.apache.pinot.core.segment.updater.SegmentUpdater;
-import org.apache.pinot.opal.common.StorageProvider.UpdateLogEntry;
-import org.apache.pinot.opal.common.RpcQueue.ProduceTask;
-import org.apache.pinot.opal.common.messages.KeyCoordinatorMessageContext;
-import org.apache.pinot.opal.common.messages.KeyCoordinatorQueueMsg;
-import org.apache.pinot.opal.distributed.keyCoordinator.serverIngestion.KeyCoordinatorProvider;
-import org.apache.pinot.opal.distributed.keyCoordinator.serverIngestion.KeyCoordinatorQueueProducer;
 import org.apache.pinot.common.config.TableConfig;
 import org.apache.pinot.common.data.DimensionFieldSpec;
 import org.apache.pinot.common.data.Schema;
@@ -37,9 +27,18 @@ import org.apache.pinot.common.metadata.instance.InstanceZKMetadata;
 import org.apache.pinot.common.metadata.segment.RealtimeSegmentZKMetadata;
 import org.apache.pinot.common.metrics.ServerMetrics;
 import org.apache.pinot.core.data.GenericRow;
+import org.apache.pinot.core.data.manager.UpsertSegmentDataManager;
+import org.apache.pinot.core.indexsegment.UpsertSegment;
 import org.apache.pinot.core.indexsegment.mutable.MutableSegmentImpl;
+import org.apache.pinot.core.indexsegment.mutable.MutableUpsertSegmentImpl;
 import org.apache.pinot.core.realtime.impl.RealtimeSegmentConfig;
 import org.apache.pinot.core.segment.index.loader.IndexLoadingConfig;
+import org.apache.pinot.core.segment.updater.SegmentUpdater;
+import org.apache.pinot.opal.common.RpcQueue.ProduceTask;
+import org.apache.pinot.opal.common.RpcQueue.QueueProducer;
+import org.apache.pinot.opal.common.StorageProvider.UpdateLogEntry;
+import org.apache.pinot.opal.common.messages.KeyCoordinatorQueueMsg;
+import org.apache.pinot.opal.distributed.keyCoordinator.serverIngestion.KeyCoordinatorProvider;
 
 import java.io.IOException;
 import java.util.List;
@@ -49,7 +48,7 @@ import java.util.List;
  */
 public class UpsertLLRealtimeSegmentDataManager extends LLRealtimeSegmentDataManager implements UpsertSegmentDataManager {
 
-  private final KeyCoordinatorQueueProducer _keyCoordinatorQueueProducer;
+  private final QueueProducer _keyCoordinatorQueueProducer;
 
   public UpsertLLRealtimeSegmentDataManager(RealtimeSegmentZKMetadata segmentZKMetadata, TableConfig tableConfig, InstanceZKMetadata instanceZKMetadata, RealtimeTableDataManager realtimeTableDataManager, String resourceDataDir, IndexLoadingConfig indexLoadingConfig, Schema schema, ServerMetrics serverMetrics) throws Exception {
     super(segmentZKMetadata, tableConfig, instanceZKMetadata, realtimeTableDataManager, resourceDataDir, indexLoadingConfig, schema, serverMetrics);
@@ -109,8 +108,8 @@ public class UpsertLLRealtimeSegmentDataManager extends LLRealtimeSegmentDataMan
   private void emitEventToKeyCoordinator(GenericRow row, long offset) {
     final byte[] primaryKeyBytes = getPrimaryKeyBytesFromRow(row);
     final long timestampMillis = getTimestampFromRow(row);
-    ProduceTask<Integer, KeyCoordinatorQueueMsg> task = new ProduceTask<>(_streamPartitionId, new KeyCoordinatorQueueMsg(_tableNameWithType,
-        primaryKeyBytes, new KeyCoordinatorMessageContext(_segmentNameStr, timestampMillis, offset)));
+    ProduceTask<Integer, KeyCoordinatorQueueMsg> task = new ProduceTask<>(_streamPartitionId,
+        new KeyCoordinatorQueueMsg(primaryKeyBytes, _segmentNameStr, timestampMillis, offset));
     _keyCoordinatorQueueProducer.produce(task);
   }
 

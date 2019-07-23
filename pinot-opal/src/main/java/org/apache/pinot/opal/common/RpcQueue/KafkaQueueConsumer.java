@@ -19,30 +19,24 @@
 package org.apache.pinot.opal.common.RpcQueue;
 
 import com.google.common.base.Preconditions;
-import org.apache.pinot.opal.distributed.keyCoordinator.common.OffsetInfo;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.pinot.opal.distributed.keyCoordinator.common.OffsetInfo;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public abstract class KafkaQueueConsumer<K, V> implements QueueConsumer<K, V> {
 
-  private KafkaConsumer<K, V> _consumer;
-
-  public void init(Properties consumerProperties) {
-    getLogger().info("starting to init consumer");
-    _consumer = new KafkaConsumer<>(consumerProperties);
-  }
+  protected abstract KafkaConsumer<K, V> getConsumer();
 
   public synchronized void subscribe(Map<String, List<Integer>> topicPartitionMap) {
     Preconditions.checkState(topicPartitionMap.size() > 0, "topic partition map should not be empty");
@@ -59,28 +53,28 @@ public abstract class KafkaQueueConsumer<K, V> implements QueueConsumer<K, V> {
         subscribePartitions.add(new TopicPartition(topic, partition));
       }
     }
-    _consumer.assign(subscribePartitions);
+    getConsumer().assign(subscribePartitions);
   }
 
   public synchronized void subscribe(String topic) {
     getLogger().info("subscribing to kafka topic {}", topic);
-    List<PartitionInfo> partitionInfos = _consumer.partitionsFor(topic);
+    List<PartitionInfo> partitionInfos = getConsumer().partitionsFor(topic);
     Preconditions.checkState(partitionInfos != null && partitionInfos.size() > 0,
         "topic doesn't have any partitions");
-    List<TopicPartition> subscribedTopicPartitions = new ArrayList<>(_consumer.assignment());
+    List<TopicPartition> subscribedTopicPartitions = new ArrayList<>(getConsumer().assignment());
     partitionInfos.forEach(pi -> subscribedTopicPartitions.add(new TopicPartition(topic, pi.partition())));
     getLogger().info("total subscribed topic partitions count: {}", partitionInfos.size());
-    _consumer.assign(subscribedTopicPartitions);
+    getConsumer().assign(subscribedTopicPartitions);
   }
 
   public synchronized void unsubscribe(String topic) {
     getLogger().info("subscribing to kafka topic {}", topic);
-    List<TopicPartition> resultTopicPartitions = _consumer.assignment()
+    List<TopicPartition> resultTopicPartitions = getConsumer().assignment()
         .stream()
         .filter(tp -> !tp.topic().equals(topic))
         .collect(Collectors.toList());
     getLogger().info("total subscribed topic partitions count: {}", resultTopicPartitions.size());
-    _consumer.assign(resultTopicPartitions);
+    getConsumer().assign(resultTopicPartitions);
   }
 
   public abstract Logger getLogger();
@@ -96,12 +90,12 @@ public abstract class KafkaQueueConsumer<K, V> implements QueueConsumer<K, V> {
   }
 
   public synchronized ConsumerRecords<K, V> getConsumerRecords(long timeout, TimeUnit timeUnit) {
-    return _consumer.poll(timeUnit.toMillis(timeout));
+    return getConsumer().poll(timeUnit.toMillis(timeout));
   }
 
   @Override
   public synchronized void ackOffset() {
-    _consumer.commitSync();
+    getConsumer().commitSync();
   }
 
   public synchronized void ackOffset(OffsetInfo offsetInfo) {
@@ -110,10 +104,10 @@ public abstract class KafkaQueueConsumer<K, V> implements QueueConsumer<K, V> {
       getLogger().info("topic {} partition {} offset {}", entry.getKey().topic(), entry.getKey().partition(),
           entry.getValue().offset());
     }
-      _consumer.commitSync(offsetInfo.getOffsetMap());
+    getConsumer().commitSync(offsetInfo.getOffsetMap());
   }
 
   public void close() {
-    _consumer.close();
+    getConsumer().close();
   }
 }

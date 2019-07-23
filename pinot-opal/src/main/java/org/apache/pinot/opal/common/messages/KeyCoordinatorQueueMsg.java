@@ -18,9 +18,7 @@
  */
 package org.apache.pinot.opal.common.messages;
 
-import org.apache.commons.lang.SerializationUtils;
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
+import org.apache.pinot.common.utils.LLCSegmentName;
 
 import java.io.Serializable;
 import java.util.Map;
@@ -30,52 +28,42 @@ import java.util.Map;
  * it contains the following field: table name, primary key and other metadata (in the _context field)
  */
 public class KeyCoordinatorQueueMsg implements Serializable {
-  private final String _pinotTable;
   private final byte[] _key;
-  private final KeyCoordinatorMessageContext _context;
+  private final String _segmentName;
+  private final long _kafkaOffset;
+  private final long _timestamp;
 
-  public KeyCoordinatorQueueMsg(String pinotTable, byte[] key, KeyCoordinatorMessageContext context) {
-    this._pinotTable = pinotTable;
+  public KeyCoordinatorQueueMsg(byte[] key, String segmentName, long timestamp, long kafkaOffset) {
     this._key = key;
-    this._context = context;
+    this._segmentName = segmentName;
+    this._timestamp = timestamp;
+    this._kafkaOffset = kafkaOffset;
   }
 
   public byte[] getKey() {
     return _key;
   }
 
+  public String getSegmentName() {
+    return _segmentName;
+  }
+
+  public long getTimestamp() {
+    return _timestamp;
+  }
+
+  public long getKafkaOffset() {
+    return _kafkaOffset;
+  }
+
   public KeyCoordinatorMessageContext getContext() {
-    return _context;
+    return new KeyCoordinatorMessageContext(_segmentName, _timestamp, _kafkaOffset);
   }
 
-  public String getPinotTable() {
-    return _pinotTable;
-  }
-
-  public static class KeyCoordinatorQueueMsgSerializer implements Serializer<KeyCoordinatorQueueMsg> {
-    @Override
-    public void configure(Map map, boolean b) { }
-
-    @Override
-    public byte[] serialize(String s, KeyCoordinatorQueueMsg o) {
-      return SerializationUtils.serialize(o);
-    }
-
-    @Override
-    public void close() { }
-  }
-
-  public static class KeyCoordinatorQueueMsgDeserializer implements Deserializer<KeyCoordinatorQueueMsg> {
-
-    @Override
-    public void configure(Map<String, ?> map, boolean b) { }
-
-    @Override
-    public KeyCoordinatorQueueMsg deserialize(String s, byte[] bytes) {
-      return (KeyCoordinatorQueueMsg) SerializationUtils.deserialize(bytes);
-    }
-
-    @Override
-    public void close() { }
+  /**
+   * get table name without type info
+   */
+  public String getPinotTableName() {
+    return new LLCSegmentName(_segmentName).getTableName();
   }
 }

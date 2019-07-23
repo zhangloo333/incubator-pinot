@@ -19,9 +19,10 @@
 package org.apache.pinot.opal.distributed.keyCoordinator.serverIngestion;
 
 import com.google.common.base.Preconditions;
-import org.apache.pinot.opal.common.Config.CommonConfig;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang.StringUtils;
+import org.apache.pinot.opal.common.Config.CommonConfig;
+import org.apache.pinot.opal.common.RpcQueue.QueueProducer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,6 +38,7 @@ public class KeyCoordinatorProvider {
   public KeyCoordinatorProvider(Configuration conf, String hostname) {
     Preconditions.checkState(StringUtils.isNotEmpty(hostname), "host name should not be empty");
     _conf = conf;
+    // TODO: make this injectable
     _producer = new KeyCoordinatorQueueProducer(conf.subset(CommonConfig.KAFKA_CONFIG.PRODUCER_CONFIG_KEY), hostname);
     synchronized (KeyCoordinatorProvider.class) {
       if (_instance == null) {
@@ -44,7 +46,6 @@ public class KeyCoordinatorProvider {
       } else {
         throw new RuntimeException("cannot re-initialize key coordinator provide when there is already one instance");
       }
-
     }
   }
 
@@ -54,10 +55,9 @@ public class KeyCoordinatorProvider {
     } else {
       throw new RuntimeException("cannot get instance of key coordinator provider without initializing one before");
     }
-
   }
 
-  public KeyCoordinatorQueueProducer getProducer() {
+  public QueueProducer getProducer() {
     return _producer;
   }
 

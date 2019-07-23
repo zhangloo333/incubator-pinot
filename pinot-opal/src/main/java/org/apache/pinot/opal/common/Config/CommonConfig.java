@@ -21,18 +21,21 @@ package org.apache.pinot.opal.common.Config;
 public class CommonConfig {
 
   public static class KAFKA_CONFIG {
-    public static String KAFKA_CONFIG_KEY = "kafka.conf";
-    public static String TOPIC_KEY = "topic";
-    public static String HOSTNAME_KEY = "hostname";
+    public static final String KAFKA_CONFIG_KEY = "kafka.conf";
+    public static final String TOPIC_KEY = "topic";
+    public static final String HOSTNAME_KEY = "hostname";
 
-    public static int PRODUCER_LINGER_MS = 50;
-    public static String COMPRESS_TYPE = "snappy";
-    public static int PRODUCER_RETRIES = 3;
-    public static int PRODUCER_MAX_BLOCK_TIME_MS = 60000;
+    public static final int PRODUCER_LINGER_MS = 50;
+    public static final String COMPRESS_TYPE = "snappy";
+    public static final int PRODUCER_RETRIES = 3;
+    public static final int PRODUCER_MAX_BLOCK_TIME_MS = 60000;
 
-    public static String PRODUCER_CONFIG_KEY = "producer";
-    public static String CONSUMER_CONFIG_KEY = "consumer";
-    public static String CONSUMER_GROUP_PREFIX_KEY = "group.prefix";
+    public static final String PRODUCER_CONFIG_KEY = "producer";
+    public static final String CONSUMER_CONFIG_KEY = "consumer";
+    public static final String CONSUMER_GROUP_PREFIX_KEY = "group.prefix";
+  }
 
+  public static class ENCODER_CONFIG {
+    public static final String ENCODER_CONFIG_KEY = "encoder";
   }
 }

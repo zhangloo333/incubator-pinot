@@ -26,5 +26,7 @@ public interface QueueProducer<K, V> {
 
   void batchProduce(List<ProduceTask<K, V>> tasks);
 
+  void flush();
+
   void close();
 }

@@ -20,6 +20,8 @@ package org.apache.pinot.core.segment.updater;
 
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.Uninterruptibles;
+import org.apache.pinot.common.config.TableNameBuilder;
+import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.LLCSegmentName;
 import org.apache.pinot.core.data.manager.UpsertSegmentDataManager;
 import org.apache.pinot.opal.common.StorageProvider.UpdateLogEntry;
@@ -128,7 +130,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
         });
 
         for (Map.Entry<String, Map<String, List<UpdateLogEntry>>> entry: tableSegmentToUpdateLogs.entrySet()) {
-          String tableName = entry.getKey();
+          String tableName = TableNameBuilder.ensureTableNameWithType(entry.getKey(), CommonConstants.Helix.TableType.REALTIME);
           if (_tableSegmentMap.containsKey(tableName)) {
             final Map<String, Set<UpsertSegmentDataManager>> segmentManagersMap = _tableSegmentMap.get(tableName);
             final Map<String, List<UpdateLogEntry>> segmentDataMap = entry.getValue();

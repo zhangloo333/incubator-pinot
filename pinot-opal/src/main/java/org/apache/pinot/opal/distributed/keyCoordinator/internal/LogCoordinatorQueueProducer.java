@@ -18,6 +18,10 @@
  */
 package org.apache.pinot.opal.distributed.keyCoordinator.internal;
 
+import org.apache.commons.configuration.Configuration;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.pinot.opal.common.Config.CommonConfig;
 import org.apache.pinot.opal.common.RpcQueue.KafkaQueueProducer;
 import org.apache.pinot.opal.common.messages.LogCoordinatorMessage;
@@ -25,10 +29,6 @@ import org.apache.pinot.opal.common.utils.CommonUtils;
 import org.apache.pinot.opal.distributed.keyCoordinator.common.DistributedCommonUtils;
 import org.apache.pinot.opal.distributed.keyCoordinator.common.IntPartitioner;
 import org.apache.pinot.opal.distributed.keyCoordinator.serverIngestion.KeyCoordinatorQueueProducer;
-import org.apache.commons.configuration.Configuration;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,7 +48,6 @@ public class LogCoordinatorQueueProducer extends KafkaQueueProducer<Integer, Log
     _topic = conf.getString(CommonConfig.KAFKA_CONFIG.TOPIC_KEY);
 
     kafkaProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class.getName());
-    kafkaProducerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, LogCoordinatorMessage.LogCoordinatorMessageSerializer.class.getName());
     kafkaProducerConfig.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, IntPartitioner.class.getName());
     DistributedCommonUtils.setKakfaLosslessProducerConfig(kafkaProducerConfig, hostName);
 

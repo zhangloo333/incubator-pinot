@@ -223,7 +223,7 @@ public class DistributedKeyCoordinatorCore {
   private void processMessages(List<KeyCoordinatorQueueMsg> messages) {
     Map<String, List<KeyCoordinatorQueueMsg>> topicMsgMap = new HashMap<>();
     for (KeyCoordinatorQueueMsg msg: messages) {
-      topicMsgMap.computeIfAbsent(msg.getPinotTable(), t -> new ArrayList<>()).add(msg);
+      topicMsgMap.computeIfAbsent(msg.getPinotTableName(), t -> new ArrayList<>()).add(msg);
     }
     for (Map.Entry<String, List<KeyCoordinatorQueueMsg>> entry: topicMsgMap.entrySet()) {
       processMessagesForTable(entry.getKey(), entry.getValue());

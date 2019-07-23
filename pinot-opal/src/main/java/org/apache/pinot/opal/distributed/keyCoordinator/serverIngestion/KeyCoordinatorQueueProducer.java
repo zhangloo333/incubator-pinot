@@ -18,16 +18,16 @@
  */
 package org.apache.pinot.opal.distributed.keyCoordinator.serverIngestion;
 
+import org.apache.commons.configuration.Configuration;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.pinot.opal.common.Config.CommonConfig;
 import org.apache.pinot.opal.common.RpcQueue.KafkaQueueProducer;
 import org.apache.pinot.opal.common.messages.KeyCoordinatorQueueMsg;
 import org.apache.pinot.opal.common.utils.CommonUtils;
 import org.apache.pinot.opal.distributed.keyCoordinator.common.DistributedCommonUtils;
 import org.apache.pinot.opal.distributed.keyCoordinator.common.IntPartitioner;
-import org.apache.commons.configuration.Configuration;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,13 +43,11 @@ public class KeyCoordinatorQueueProducer extends KafkaQueueProducer<Integer, Key
 
   public KeyCoordinatorQueueProducer(Configuration conf, String hostname) {
     _conf = conf;
-
     _topic = _conf.getString(CommonConfig.KAFKA_CONFIG.TOPIC_KEY);
     final Properties kafkaProducerConfig = CommonUtils.getPropertiesFromConf(
         conf.subset(CommonConfig.KAFKA_CONFIG.KAFKA_CONFIG_KEY));
 
     kafkaProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class.getName());
-    kafkaProducerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KeyCoordinatorQueueMsg.KeyCoordinatorQueueMsgSerializer.class.getName());
     kafkaProducerConfig.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, IntPartitioner.class.getName());
     DistributedCommonUtils.setKakfaLosslessProducerConfig(kafkaProducerConfig, hostname);
 
