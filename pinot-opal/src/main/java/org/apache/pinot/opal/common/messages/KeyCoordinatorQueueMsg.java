@@ -21,7 +21,7 @@ package org.apache.pinot.opal.common.messages;
 import org.apache.pinot.common.utils.LLCSegmentName;
 
 import java.io.Serializable;
-import java.util.Map;
+import java.nio.charset.StandardCharsets;
 
 /**
  * class used for the message pass from pint ingestor and the key coordinator
@@ -54,6 +54,14 @@ public class KeyCoordinatorQueueMsg implements Serializable {
 
   public long getKafkaOffset() {
     return _kafkaOffset;
+  }
+
+  @Override
+  public String toString() {
+    return "key: " + new String(_key, StandardCharsets.UTF_8)
+        + " segment: " + _segmentName
+        + " timestamp: " + _timestamp
+        + " kafkaOffset: " + _kafkaOffset;
   }
 
   public KeyCoordinatorMessageContext getContext() {

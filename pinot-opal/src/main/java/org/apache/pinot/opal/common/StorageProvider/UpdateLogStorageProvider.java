@@ -80,7 +80,7 @@ public class UpdateLogStorageProvider {
     }
     Map<String, SegmentUpdateLogStorageProvider> segmentMap = _virtualColumnStorage.computeIfAbsent(tableName, t -> new ConcurrentHashMap<>());
     if (!segmentMap.containsKey(segmentName)) {
-      LOGGER.info("adding virtual column for table {} segment {}", tableName, segmentName);
+//      LOGGER.info("adding virtual column for table {} segment {}", tableName, segmentName);
       final File segmentUpdateFile = new File(tableDir, segmentName);
       if (!segmentUpdateFile.exists()) {
         boolean result = segmentUpdateFile.createNewFile();

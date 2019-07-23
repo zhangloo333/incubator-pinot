@@ -165,8 +165,8 @@ public class SegmentUpdater implements SegmentDeletionListener {
    */
   private void updateVirtualColumn(String table, String segment, Set<UpsertSegmentDataManager> segmentDataManagers,
                                    List<UpdateLogEntry> messages) throws IOException {
-    LOGGER.info("updating segment {} with {} results for {} data managers", segment, messages.size(),
-        segmentDataManagers.size());
+//    LOGGER.info("updating segment {} with {} results for {} data managers", segment, messages.size(),
+//        segmentDataManagers.size());
 
     // update storage
     _updateLogStorageProvider.addDataToFile(table, segment, messages);

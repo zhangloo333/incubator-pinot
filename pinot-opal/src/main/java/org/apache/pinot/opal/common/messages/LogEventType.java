@@ -44,8 +44,9 @@ public enum LogEventType {
     return this._uuid;
   }
 
-  public static LogEventType getEventType(int uuid) {
-    Preconditions.checkState(UUID_MAP.containsKey(uuid));
-    return UUID_MAP.get(uuid);
+  public static LogEventType getEventType(long uuid) {
+    int uuidInt = Math.toIntExact(uuid);
+    Preconditions.checkState(UUID_MAP.containsKey(uuidInt));
+    return UUID_MAP.get(uuidInt);
   }
 }

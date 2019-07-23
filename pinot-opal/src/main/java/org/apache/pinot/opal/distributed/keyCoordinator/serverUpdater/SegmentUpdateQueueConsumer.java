@@ -52,8 +52,8 @@ public class SegmentUpdateQueueConsumer extends KafkaQueueConsumer<String, LogCo
     kafkaProperties.put(ConsumerConfig.CLIENT_ID_CONFIG, DistributedCommonUtils.getClientId(hostName));
     kafkaProperties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
     _topic = conf.getString(SegmentUpdaterQueueConfig.TOPIC_CONFIG_KEY);
-    this.subscribe(_topic);
     _consumer = new KafkaConsumer<>(kafkaProperties);
+    this.subscribe(_topic);
   }
 
   @Override
