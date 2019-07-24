@@ -39,7 +39,6 @@ import org.apache.pinot.common.utils.TarGzCompressionUtils;
 import org.apache.pinot.core.data.manager.BaseTableDataManager;
 import org.apache.pinot.core.data.manager.SegmentDataManager;
 import org.apache.pinot.core.indexsegment.immutable.ImmutableSegment;
-import org.apache.pinot.core.indexsegment.immutable.ImmutableSegmentLoader;
 import org.apache.pinot.core.realtime.impl.RealtimeSegmentStatsHistory;
 import org.apache.pinot.core.segment.index.loader.IndexLoadingConfig;
 import org.apache.pinot.core.segment.index.loader.LoaderUtils;
@@ -60,7 +59,7 @@ import static org.apache.pinot.core.segment.virtualcolumn.VirtualColumnProviderF
 
 
 @ThreadSafe
-public class RealtimeTableDataManager extends BaseTableDataManager {
+public abstract class RealtimeTableDataManager extends BaseTableDataManager {
   private final ExecutorService _segmentAsyncExecutorService =
       Executors.newSingleThreadExecutor(new NamedThreadFactory("SegmentAsyncExecutorService"));
   private SegmentBuildTimeLeaseExtender _leaseExtender;
@@ -313,25 +312,17 @@ public class RealtimeTableDataManager extends BaseTableDataManager {
   /**
    *  allow {@link UpsertRealtimeTableDataManager} to override this method
    */
-  protected LLRealtimeSegmentDataManager getLLRealtimeSegmentDataManager(RealtimeSegmentZKMetadata realtimeSegmentZKMetadata,
+  protected abstract LLRealtimeSegmentDataManager getLLRealtimeSegmentDataManager(RealtimeSegmentZKMetadata realtimeSegmentZKMetadata,
                                                                          TableConfig tableConfig,
                                                                          InstanceZKMetadata instanceZKMetadata,
                                                                          RealtimeTableDataManager realtimeTableDataManager,
                                                                          String indexDirPath,
                                                                          IndexLoadingConfig indexLoadingConfig,
                                                                          Schema schema, ServerMetrics serverMetrics)
-      throws Exception {
-    return new LLRealtimeSegmentDataManager(realtimeSegmentZKMetadata, tableConfig, instanceZKMetadata,
-        realtimeTableDataManager, indexDirPath, indexLoadingConfig, schema, serverMetrics);
-  }
+      throws Exception;
 
-  /**
-   *  allow {@link UpsertRealtimeTableDataManager} to override this method
-   */
-  protected ImmutableSegment loadImmutableSegment(File indexDir, IndexLoadingConfig indexLoadingConfig, Schema schema)
-      throws Exception {
-    return ImmutableSegmentLoader.load(indexDir, indexLoadingConfig, schema);
-  }
+  protected abstract ImmutableSegment loadImmutableSegment(File indexDir, IndexLoadingConfig indexLoadingConfig, Schema schema)
+      throws Exception;
 
   /**
    * Validate a schema against the table config for real-time record consumption.

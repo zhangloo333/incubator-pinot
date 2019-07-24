@@ -82,13 +82,11 @@ public class UpsertLLRealtimeSegmentDataManager extends LLRealtimeSegmentDataMan
   @Override
   protected void processTransformedRow(GenericRow row, long offset) {
     row.putField(_schema.getOffsetKey(), offset);
-    super.processTransformedRow(row, offset);
   }
 
   @Override
   protected void postIndexProcessing(GenericRow row, long offset) {
     emitEventToKeyCoordinator(row, offset);
-    super.postIndexProcessing(row, offset);
   }
 
   @Override

@@ -83,7 +83,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * Segment data manager for low level consumer realtime segments, which manages consumption and segment completion.
  */
-public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
+public abstract class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
   protected enum State {
     // The state machine starts off with this state. While in this state we consume stream events
     // and index them in memory. We continue to be in this state until the end criteria is satisfied
@@ -491,14 +491,10 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
     }
   }
 
-  protected void processTransformedRow(GenericRow row, long offset) {
-    //nothing, to be override by upsert component
-  }
+  protected abstract void processTransformedRow(GenericRow row, long offset);
 
 
-  protected void postIndexProcessing(GenericRow row, long offset) {
-    //nothing, to be override by upsert component
-  }
+  protected abstract void postIndexProcessing(GenericRow row, long offset);
 
   public class PartitionConsumer implements Runnable {
     public void run() {
@@ -1168,14 +1164,7 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
     start();
   }
 
-  /**
-   * allow {@link UpsertLLRealtimeSegmentDataManager to override this method}
-   * @param config
-   * @return
-   */
-  protected MutableSegmentImpl createMutableSegment(RealtimeSegmentConfig config) {
-    return new MutableSegmentImpl(config);
-  }
+  protected abstract MutableSegmentImpl createMutableSegment(RealtimeSegmentConfig config);
 
   /**
    * Creates a new stream consumer

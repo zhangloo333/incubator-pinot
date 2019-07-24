@@ -63,7 +63,7 @@ import java.util.Map;
 import java.util.Set;
 
 
-public class MutableSegmentImpl implements MutableSegment {
+public abstract class MutableSegmentImpl implements MutableSegment {
   // For multi-valued column, forward-index.
   // Maximum number of multi-values per row. We assert on this.
   protected static final int MAX_MULTI_VALUES_PER_ROW = 1000;
@@ -377,9 +377,7 @@ public class MutableSegmentImpl implements MutableSegment {
     }
   }
 
-  protected void postProcessRecords(GenericRow row, int docId) {
-    // to be override by upsert component
-  }
+  protected abstract void postProcessRecords(GenericRow row, int docId);
 
   private boolean aggregateMetrics(GenericRow row, int docId) {
     for (FieldSpec metricSpec : _schema.getMetricFieldSpecs()) {

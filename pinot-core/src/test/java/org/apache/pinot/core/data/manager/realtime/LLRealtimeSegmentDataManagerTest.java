@@ -19,12 +19,6 @@
 package org.apache.pinot.core.data.manager.realtime;
 
 import com.yammer.metrics.core.MetricsRegistry;
-import java.io.File;
-import java.io.IOException;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.util.LinkedList;
 import org.apache.commons.io.FileUtils;
 import org.apache.pinot.common.config.TableConfig;
 import org.apache.pinot.common.data.Schema;
@@ -47,8 +41,16 @@ import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
+import java.io.File;
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.LinkedList;
+
 import static org.mockito.Matchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 
 // TODO Write more tests for other parts of the class
@@ -610,7 +612,7 @@ public class LLRealtimeSegmentDataManagerTest {
     Assert.assertFalse(new File(segTarFileName).exists());
   }
 
-  public static class FakeLLRealtimeSegmentDataManager extends LLRealtimeSegmentDataManager {
+  public static class FakeLLRealtimeSegmentDataManager extends AppendLLRealtimeSegmentDataManager {
 
     public Field _state;
     public Field _shouldStop;

@@ -36,6 +36,7 @@ import org.apache.pinot.core.data.recordtransformer.RecordTransformer;
 import org.apache.pinot.core.indexsegment.generator.SegmentVersion;
 import org.apache.pinot.core.indexsegment.immutable.ImmutableSegment;
 import org.apache.pinot.core.indexsegment.immutable.ImmutableSegmentLoader;
+import org.apache.pinot.core.indexsegment.mutable.MutableAppendSegmentImpl;
 import org.apache.pinot.core.indexsegment.mutable.MutableSegment;
 import org.apache.pinot.core.indexsegment.mutable.MutableSegmentImpl;
 import org.apache.pinot.core.realtime.converter.RealtimeSegmentConverter;
@@ -192,7 +193,7 @@ public class HLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
             serverMetrics))
         .setStatsHistory(realtimeTableDataManager.getStatsHistory())
         .build();
-    realtimeSegment = new MutableSegmentImpl(realtimeSegmentConfig);
+    realtimeSegment = new MutableAppendSegmentImpl(realtimeSegmentConfig);
 
     notifier = realtimeTableDataManager;
 

@@ -18,36 +18,22 @@
  */
 package org.apache.pinot.core.data.manager.realtime;
 
-import org.apache.pinot.core.data.manager.offline.UpsertImmutableSegmentDataManager;
 import org.apache.pinot.common.config.TableConfig;
 import org.apache.pinot.common.data.Schema;
 import org.apache.pinot.common.metadata.instance.InstanceZKMetadata;
 import org.apache.pinot.common.metadata.segment.RealtimeSegmentZKMetadata;
 import org.apache.pinot.common.metrics.ServerMetrics;
-import org.apache.pinot.core.data.manager.offline.ImmutableSegmentDataManager;
 import org.apache.pinot.core.indexsegment.immutable.ImmutableSegment;
 import org.apache.pinot.core.indexsegment.immutable.ImmutableSegmentLoader;
 import org.apache.pinot.core.segment.index.loader.IndexLoadingConfig;
-import org.apache.pinot.opal.common.StorageProvider.UpdateLogStorageProvider;
 
-import javax.annotation.Nonnull;
 import java.io.File;
-import java.io.IOException;
 import java.util.concurrent.Semaphore;
 
-public class UpsertRealtimeTableDataManager extends RealtimeTableDataManager {
-  private UpdateLogStorageProvider _updateLogStorageProvider;
+public class AppendRealtimeTableDataManager extends RealtimeTableDataManager {
 
-  public UpsertRealtimeTableDataManager(Semaphore segmentBuildSemaphore) {
+  public AppendRealtimeTableDataManager(Semaphore segmentBuildSemaphore) {
     super(segmentBuildSemaphore);
-    _updateLogStorageProvider = UpdateLogStorageProvider.getInstance();
-  }
-
-  @Override
-  public void addSegment(@Nonnull String segmentName, @Nonnull TableConfig tableConfig,
-                         @Nonnull IndexLoadingConfig indexLoadingConfig) throws Exception {
-    _updateLogStorageProvider.addSegment(_tableNameWithType, segmentName);
-    super.addSegment(segmentName, tableConfig, indexLoadingConfig);
   }
 
   @Override
@@ -59,26 +45,13 @@ public class UpsertRealtimeTableDataManager extends RealtimeTableDataManager {
                                                                          IndexLoadingConfig indexLoadingConfig,
                                                                          Schema schema, ServerMetrics serverMetrics)
       throws Exception {
-    return new UpsertLLRealtimeSegmentDataManager(realtimeSegmentZKMetadata, tableConfig, instanceZKMetadata,
+    return new AppendLLRealtimeSegmentDataManager(realtimeSegmentZKMetadata, tableConfig, instanceZKMetadata,
         realtimeTableDataManager, indexDirPath, indexLoadingConfig, schema, serverMetrics);
   }
 
   @Override
-  protected ImmutableSegmentDataManager getImmutableSegmentDataManager(ImmutableSegment immutableSegment) {
-    try {
-      return new UpsertImmutableSegmentDataManager(immutableSegment);
-    } catch (IOException e) {
-      throw new RuntimeException("failed to init the upsert immutable segment", e);
-    }
+  protected ImmutableSegment loadImmutableSegment(File indexDir, IndexLoadingConfig indexLoadingConfig, Schema schema)
+      throws Exception {
+    return ImmutableSegmentLoader.load(indexDir, indexLoadingConfig, schema);
   }
-
-  @Override
-  protected ImmutableSegment loadImmutableSegment(File indexDir, IndexLoadingConfig indexLoadingConfig, Schema schema) {
-    try {
-      return ImmutableSegmentLoader.loadUpsertSegment(indexDir, indexLoadingConfig, schema);
-    } catch (Exception e) {
-      throw new RuntimeException("failed to load immutable segment", e);
-    }
-  }
-
 }
