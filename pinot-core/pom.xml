@@ -65,7 +65,8 @@
     </dependency>
     <dependency>
       <groupId>org.apache.pinot</groupId>
-      <artifactId>pinot-opal</artifactId>
+      <artifactId>pinot-opal-common</artifactId>
+      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>org.testng</groupId>

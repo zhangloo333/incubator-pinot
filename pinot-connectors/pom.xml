@@ -44,25 +44,11 @@
       <groupId>org.apache.pinot</groupId>
       <artifactId>pinot-common</artifactId>
       <scope>provided</scope>
-      <!-- TODO: fix dependency -->
-      <exclusions>
-        <exclusion>
-          <groupId>org.apache.pinot</groupId>
-          <artifactId>pinot-opal</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.pinot</groupId>
       <artifactId>pinot-core</artifactId>
       <scope>provided</scope>
-      <!-- TODO: fix dependency -->
-      <exclusions>
-        <exclusion>
-          <groupId>org.apache.pinot</groupId>
-          <artifactId>pinot-opal</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
 
     <!-- test -->

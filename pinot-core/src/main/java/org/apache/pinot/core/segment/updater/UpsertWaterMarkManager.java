@@ -20,7 +20,7 @@ package org.apache.pinot.core.segment.updater;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableMap;
-import org.apache.pinot.opal.common.StorageProvider.UpdateLogEntry;
+import org.apache.pinot.opal.common.storageProvider.UpdateLogEntry;
 import org.apache.pinot.opal.common.utils.PartitionIdMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

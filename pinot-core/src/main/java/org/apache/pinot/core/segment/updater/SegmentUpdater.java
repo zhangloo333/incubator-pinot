@@ -20,19 +20,20 @@ package org.apache.pinot.core.segment.updater;
 
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.Uninterruptibles;
+import io.netty.util.internal.ConcurrentSet;
+import org.apache.commons.configuration.Configuration;
 import org.apache.pinot.common.config.TableNameBuilder;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.LLCSegmentName;
 import org.apache.pinot.core.data.manager.UpsertSegmentDataManager;
-import org.apache.pinot.opal.common.StorageProvider.UpdateLogEntry;
-import org.apache.pinot.opal.common.StorageProvider.UpdateLogStorageProvider;
+import org.apache.pinot.opal.common.config.CommonConfig;
+import org.apache.pinot.opal.common.rpcQueue.QueueConsumer;
+import org.apache.pinot.opal.common.rpcQueue.QueueConsumerRecord;
+import org.apache.pinot.opal.common.storageProvider.UpdateLogEntry;
+import org.apache.pinot.opal.common.storageProvider.UpdateLogStorageProvider;
 import org.apache.pinot.opal.common.messages.LogCoordinatorMessage;
-import org.apache.pinot.opal.distributed.keyCoordinator.common.DistributedCommonUtils;
-import org.apache.pinot.opal.distributed.keyCoordinator.serverUpdater.SegmentUpdaterProvider;
-import org.apache.pinot.opal.distributed.keyCoordinator.serverUpdater.SegmentUpdateQueueConsumer;
-import io.netty.util.internal.ConcurrentSet;
-import org.apache.commons.configuration.Configuration;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.pinot.opal.common.utils.CommonUtils;
+import org.apache.pinot.opal.servers.SegmentUpdaterProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,8 +63,9 @@ public class SegmentUpdater implements SegmentDeletionListener {
 
   private final Configuration _conf;
   private final int _updateSleepMs;
+  private final String _topicPrefix;
   private final ExecutorService _ingestionExecutorService;
-  private final SegmentUpdateQueueConsumer _consumer;
+  private final QueueConsumer _consumer;
   private final Map<String, Map<String, Set<UpsertSegmentDataManager>>> _tableSegmentMap = new ConcurrentHashMap<>();
   private final Map<String, Map<Integer, Long>> _tablePartitionCreationTime = new ConcurrentHashMap<>();
   private final UpdateLogStorageProvider _updateLogStorageProvider;
@@ -72,8 +74,11 @@ public class SegmentUpdater implements SegmentDeletionListener {
 
   public SegmentUpdater(Configuration conf, SegmentUpdaterProvider provider) {
     _conf = conf;
+    _topicPrefix = conf.getString(SegmentUpdaterConfig.INPUT_TOPIC_PREFIX,
+        CommonConfig.RPC_QUEUE_CONFIG.DEFAULT_OUTPUT_TOPIC_PREFIX);
     _updateSleepMs = conf.getInt(SegmentUpdaterConfig.SEGMENT_UDPATE_SLEEP_MS,
         SegmentUpdaterConfig.SEGMENT_UDPATE_SLEEP_MS_DEFAULT);
+
     _consumer = provider.getConsumer();
     _ingestionExecutorService = Executors.newFixedThreadPool(1);
     _updateLogStorageProvider = UpdateLogStorageProvider.getInstance();
@@ -116,17 +121,17 @@ public class SegmentUpdater implements SegmentDeletionListener {
     try {
       LOGGER.info("starting update loop");
       while(isStarted) {
-        final ConsumerRecords<String, LogCoordinatorMessage> records = _consumer.getConsumerRecords(_updateSleepMs, TimeUnit.MILLISECONDS);
+        final List<QueueConsumerRecord<String, LogCoordinatorMessage>> records = _consumer.getRequests(_updateSleepMs, TimeUnit.MILLISECONDS);
         final Map<String, Map<String, List<UpdateLogEntry>>> tableSegmentToUpdateLogs = new HashMap<>();
-        int eventCount = records.count();
+        int eventCount = records.size();
 
         // organize the update logs by {tableName: {segmentName: {list of updatelogs}}}
         records.iterator().forEachRemaining(consumerRecord -> {
           Map<String, List<UpdateLogEntry>> segmentMap = tableSegmentToUpdateLogs.computeIfAbsent(
-              DistributedCommonUtils.getTableNameFromKafkaTopic(consumerRecord.topic()),
+              CommonUtils.getTableNameFromKafkaTopic(consumerRecord.getTopic(), _topicPrefix),
               t -> new HashMap<>());
-          String segmentName = consumerRecord.value().getSegmentName();
-          segmentMap.computeIfAbsent(segmentName, s -> new ArrayList<>()).add(new UpdateLogEntry(consumerRecord.value()));
+          String segmentName = consumerRecord.getRecord().getSegmentName();
+          segmentMap.computeIfAbsent(segmentName, s -> new ArrayList<>()).add(new UpdateLogEntry(consumerRecord.getRecord()));
         });
 
         for (Map.Entry<String, Map<String, List<UpdateLogEntry>>> entry: tableSegmentToUpdateLogs.entrySet()) {

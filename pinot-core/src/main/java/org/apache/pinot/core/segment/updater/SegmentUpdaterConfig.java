@@ -19,6 +19,7 @@
 package org.apache.pinot.core.segment.updater;
 
 public class SegmentUpdaterConfig {
-  public static final String SEGMENT_UDPATE_SLEEP_MS = "segment.update.sleep.ms";
+  public static final String SEGMENT_UDPATE_SLEEP_MS = "sleep.ms";
+  public static final String INPUT_TOPIC_PREFIX  = "input.topic.prefix";
   public static final int SEGMENT_UDPATE_SLEEP_MS_DEFAULT = 100;
 }
