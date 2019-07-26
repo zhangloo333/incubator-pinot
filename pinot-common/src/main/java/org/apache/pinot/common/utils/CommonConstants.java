@@ -45,6 +45,9 @@ public class CommonConstants {
 
     public static final String BROKER_RESOURCE_INSTANCE = "brokerResource";
     public static final String LEAD_CONTROLLER_RESOURCE_NAME = "leadControllerResource";
+    public static final String KEY_COORDINATOR_MESSAGE_RESOURCE_NAME = "keyCoordinatorMessageResource";
+
+    public static final int KEY_COORDINATOR_MESSAGE_RESOURCE_REPLICA_COUNT = 1;
 
     // More information on why these numbers are set can be found in the following doc:
     // https://cwiki.apache.org/confluence/display/PINOT/Controller+Separation+between+Helix+and+Pinot

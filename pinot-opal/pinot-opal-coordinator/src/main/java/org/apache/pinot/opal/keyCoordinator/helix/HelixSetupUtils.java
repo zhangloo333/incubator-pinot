@@ -29,23 +29,25 @@ public class HelixSetupUtils {
   private static final Logger LOGGER = LoggerFactory.getLogger(HelixSetupUtils.class);
 
   public static synchronized HelixManager setup(String helixClusterName, String zkPath, String instanceId) {
+    HelixManager helixManager;
     try {
       createHelixClusterIfNeeded(helixClusterName, zkPath);
     } catch (final Exception ex) {
-      LOGGER.error("failed to set up helix for opal components", ex);
+      LOGGER.error("failed to set up helix for key coordinator", ex);
       return null;
     }
 
     try {
-      return startHelixControllerInStandadloneMode(helixClusterName, zkPath, instanceId);
+      helixManager = startHelixController(helixClusterName, zkPath, instanceId);
     } catch (final Exception ex) {
-      LOGGER.error("failed to start up helix controller for opal", ex);
+      LOGGER.error("failed to start up helix controller for key coordinator", ex);
       return null;
     }
 
+    return helixManager;
   }
 
-  public static void createHelixClusterIfNeeded(String helixClusterName, String zkPath) {
+  private static void createHelixClusterIfNeeded(String helixClusterName, String zkPath) {
     final HelixAdmin admin = new ZKHelixAdmin(zkPath);
     if (admin.getClusters().contains(helixClusterName)) {
       LOGGER.info("cluster {} already exists", helixClusterName);
@@ -54,7 +56,7 @@ public class HelixSetupUtils {
     admin.addCluster(helixClusterName);
   }
 
-  private static HelixManager startHelixControllerInStandadloneMode(String helixClusterName, String zkUrl,
+  private static HelixManager startHelixController(String helixClusterName, String zkUrl,
       String instanceId) {
     LOGGER.info("Starting Helix Standalone Controller ... ");
     return HelixControllerMain.startHelixController(zkUrl, helixClusterName, instanceId,

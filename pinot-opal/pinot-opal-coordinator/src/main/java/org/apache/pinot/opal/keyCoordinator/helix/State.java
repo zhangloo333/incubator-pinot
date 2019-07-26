@@ -20,7 +20,6 @@ package org.apache.pinot.opal.keyCoordinator.helix;
 
 public enum State {
   INIT,
-  STARTING,
   RUNNING,
   SHUTTING_DOWN,
   SHUTDOWN

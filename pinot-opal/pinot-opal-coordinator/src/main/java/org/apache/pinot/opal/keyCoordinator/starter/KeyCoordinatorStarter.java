@@ -19,20 +19,17 @@
 package org.apache.pinot.opal.keyCoordinator.starter;
 
 import com.google.common.base.Preconditions;
+import java.io.File;
+import java.util.Iterator;
 import org.apache.commons.configuration.Configuration;
-import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.lang.StringUtils;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.opal.common.config.CommonConfig;
-import org.apache.pinot.opal.common.storageProvider.UpdateLogStorageProvider;
-import org.apache.pinot.opal.common.messages.KeyCoordinatorQueueMsg;
-import org.apache.pinot.opal.common.messages.LogCoordinatorMessage;
-import org.apache.pinot.opal.common.updateStrategy.MessageResolveStrategy;
-import org.apache.pinot.opal.common.updateStrategy.MessageTimeResolveStrategy;
 import org.apache.pinot.opal.common.rpcQueue.KeyCoordinatorQueueConsumer;
 import org.apache.pinot.opal.common.rpcQueue.LogCoordinatorQueueProducer;
-import org.apache.pinot.opal.common.rpcQueue.KafkaQueueConsumer;
-import org.apache.pinot.opal.common.rpcQueue.KafkaQueueProducer;
+import org.apache.pinot.opal.common.storageProvider.UpdateLogStorageProvider;
+import org.apache.pinot.opal.common.updateStrategy.MessageResolveStrategy;
+import org.apache.pinot.opal.common.updateStrategy.MessageTimeResolveStrategy;
 import org.apache.pinot.opal.keyCoordinator.api.KeyCoordinatorApiApplication;
 import org.apache.pinot.opal.keyCoordinator.helix.KeyCoordinatorClusterHelixManager;
 import org.apache.pinot.opal.keyCoordinator.helix.State;
@@ -40,15 +37,12 @@ import org.apache.pinot.opal.keyCoordinator.internal.DistributedKeyCoordinatorCo
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.util.Iterator;
-
 public class KeyCoordinatorStarter {
   private static final Logger LOGGER = LoggerFactory.getLogger(KeyCoordinatorStarter.class);
 
   private KeyCoordinatorConf _keyCoordinatorConf;
-  private KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> _consumer;
-  private KafkaQueueProducer<Integer, LogCoordinatorMessage> _producer;
+  private KeyCoordinatorQueueConsumer _consumer;
+  private LogCoordinatorQueueProducer _producer;
   private MessageResolveStrategy _messageResolveStrategy;
   private DistributedKeyCoordinatorCore _keyCoordinatorCore;
   private KeyCoordinatorApiApplication _application;
@@ -57,19 +51,22 @@ public class KeyCoordinatorStarter {
   private String _instanceId;
   private KeyCoordinatorClusterHelixManager _keyCoordinatorClusterHelixManager;
 
-  public KeyCoordinatorStarter(KeyCoordinatorConf conf) {
+  public KeyCoordinatorStarter(KeyCoordinatorConf conf) throws Exception {
     _keyCoordinatorConf = conf;
     _hostName = conf.getString(KeyCoordinatorConf.HOST_NAME);
+    Preconditions.checkState(StringUtils.isNotEmpty(_hostName), "expect host name in configuration");
     _port = conf.getPort();
     _instanceId = CommonConstants.Helix.PREFIX_OF_KEY_COORDINATOR_INSTANCE + _hostName + "_" + _port;
+    _consumer = getConsumer(_keyCoordinatorConf.getConsumerConf());
+    _producer = getProducer(_keyCoordinatorConf.getProducerConf());
     _keyCoordinatorClusterHelixManager = new KeyCoordinatorClusterHelixManager(
         _keyCoordinatorConf.getZkStr(),
         _keyCoordinatorConf.getKeyCoordinatorClusterName(),
-        _instanceId
+        _instanceId,
+        _consumer,
+        conf.getKeyCoordinatorMessageTopic(),
+        conf.getKeyCoordinatorMessagePartitionCount()
     );
-    Preconditions.checkState(StringUtils.isNotEmpty(_hostName), "expect host name in configuration");
-    _consumer = getConsumer(_keyCoordinatorConf.getConsumerConf());
-    _producer = getProducer(_keyCoordinatorConf.getProducerConf());
     UpdateLogStorageProvider.init(_keyCoordinatorConf.getStorageProviderConf());
     _messageResolveStrategy = new MessageTimeResolveStrategy();
     _keyCoordinatorCore = new DistributedKeyCoordinatorCore();
@@ -117,13 +114,13 @@ public class KeyCoordinatorStarter {
     return _keyCoordinatorCore != null && _keyCoordinatorCore.getState() == State.RUNNING;
   }
 
-  public static KeyCoordinatorStarter startDefault(KeyCoordinatorConf conf) {
+  public static KeyCoordinatorStarter startDefault(KeyCoordinatorConf conf) throws Exception {
     KeyCoordinatorStarter starter = new KeyCoordinatorStarter(conf);
     starter.start();
     return starter;
   }
 
-  public static void main(String[] args) throws ConfigurationException {
+  public static void main(String[] args) throws Exception {
     if (args.length == 0) {
       System.out.println("need path to file in props");
     }

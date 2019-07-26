@@ -18,14 +18,21 @@
  */
 package org.apache.pinot.opal.keyCoordinator.helix;
 
+import java.util.List;
+import javax.annotation.Nonnull;
 import org.apache.helix.HelixAdmin;
+import org.apache.helix.HelixException;
 import org.apache.helix.HelixManager;
+import org.apache.helix.HelixManagerFactory;
+import org.apache.helix.InstanceType;
+import org.apache.helix.model.IdealState;
+import org.apache.helix.model.InstanceConfig;
+import org.apache.helix.model.OnlineOfflineSMD;
+import org.apache.pinot.common.utils.CommonConstants;
+import org.apache.pinot.opal.common.rpcQueue.KeyCoordinatorQueueConsumer;
 import org.apache.pinot.opal.keyCoordinator.api.KeyCoordinatorInstance;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.annotation.Nonnull;
-import java.util.List;
 
 
 /**
@@ -37,16 +44,40 @@ public class KeyCoordinatorClusterHelixManager {
   private final String _helixZkURL;
   private final String _keyCoordinatorClusterName;
   private final String _keyCoordinatorId;
-  private final HelixManager _controllerParticipantHelixManager;
+  private final HelixManager _controllerHelixManager;
+  private final HelixManager _participantHelixManager;
   private final HelixAdmin _helixAdmin;
 
-  public KeyCoordinatorClusterHelixManager(@Nonnull String zkURL, @Nonnull String keyCoordinatorClusterName, @Nonnull String keyCoordinatorId) {
+  public KeyCoordinatorClusterHelixManager(@Nonnull String zkURL, @Nonnull String keyCoordinatorClusterName,
+      @Nonnull String keyCoordinatorId, @Nonnull KeyCoordinatorQueueConsumer keyCoordinatorQueueConsumer,
+      @Nonnull String keyCoordinatorMessageTopic, int keyCoordinatorMessagePartitionCount)
+      throws Exception {
     _helixZkURL = zkURL;
     _keyCoordinatorClusterName = keyCoordinatorClusterName;
     _keyCoordinatorId = keyCoordinatorId;
 
-    _controllerParticipantHelixManager = HelixSetupUtils.setup(_keyCoordinatorClusterName, _helixZkURL, _keyCoordinatorId);
-    _helixAdmin = _controllerParticipantHelixManager.getClusterManagmentTool();
+    _controllerHelixManager = HelixSetupUtils.setup(_keyCoordinatorClusterName, _helixZkURL, _keyCoordinatorId);
+    _helixAdmin = _controllerHelixManager.getClusterManagmentTool();
+
+    IdealState keyCoordinatorMessageResourceIdealState = _helixAdmin
+        .getResourceIdealState(_keyCoordinatorClusterName, CommonConstants.Helix.KEY_COORDINATOR_MESSAGE_RESOURCE_NAME);
+    if (keyCoordinatorMessageResourceIdealState == null) {
+      _helixAdmin.addResource(_keyCoordinatorClusterName, CommonConstants.Helix.KEY_COORDINATOR_MESSAGE_RESOURCE_NAME,
+          keyCoordinatorMessagePartitionCount, OnlineOfflineSMD.name, IdealState.RebalanceMode.CUSTOMIZED.name());
+    }
+
+    try {
+      _helixAdmin.addInstance(_keyCoordinatorClusterName, new InstanceConfig(_keyCoordinatorId));
+    } catch (final HelixException ex) {
+      LOGGER.info("key coordinator instance {} already exist in helix cluster {}", _keyCoordinatorId,
+          _keyCoordinatorClusterName);
+    }
+
+    _participantHelixManager = HelixManagerFactory
+        .getZKHelixManager(_keyCoordinatorClusterName, _keyCoordinatorId, InstanceType.PARTICIPANT, _helixZkURL);
+    _participantHelixManager.getStateMachineEngine().registerStateModelFactory(OnlineOfflineSMD.name,
+        new KeyCoordinatorMessageStateModelFactory(keyCoordinatorQueueConsumer, keyCoordinatorMessageTopic));
+    _participantHelixManager.connect();
   }
 
   public List<String> getAllInstances() {
@@ -59,5 +90,10 @@ public class KeyCoordinatorClusterHelixManager {
 
   public void dropInstance(KeyCoordinatorInstance keyCoordinatorInstance) {
     _helixAdmin.dropInstance(_keyCoordinatorClusterName, keyCoordinatorInstance.toInstanceConfig());
+  }
+
+  public void rebalance() {
+    _helixAdmin.rebalance(_keyCoordinatorClusterName, CommonConstants.Helix.KEY_COORDINATOR_MESSAGE_RESOURCE_NAME,
+        CommonConstants.Helix.KEY_COORDINATOR_MESSAGE_RESOURCE_REPLICA_COUNT);
   }
 }

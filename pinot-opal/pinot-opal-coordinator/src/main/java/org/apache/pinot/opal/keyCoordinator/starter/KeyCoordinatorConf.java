@@ -41,8 +41,6 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
 
   public static final String KEY_COORDINATOR_KV_STORE = "kvstore";
 
-  public static final String KEY_COORDINATOR_PARTITIONS = "partitions";
-
   // server related config
   public static final String SERVER_CONFIG = "web.server";
   public static final String PORT = "jersey.port";
@@ -56,10 +54,12 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
   public static final String KAFKA_CLIENT_ID_PREFIX = "pinot_upsert_client_";
   public static final String KAFKA_CONSUMER_GROUP_ID_PREFIX = "pinot_upsert_kc_consumerGroup_";
 
+  private static final String KC_MESSAGE_TOPIC = "kc.message.topic";
+  private static final String KC_MESSAGE_PARTITION_COUNT = "kc.message.partition.count";  // todo: get partition count from topic
   // helix related config
-  public static final String HELIX_CLUSTER_NAME = "helix.cluster.name";
-  public static final String ZK_STR = "zk.str";
-  public static final String KC_CLUSTER_NAME = "kc.cluster.name";
+  private static final String HELIX_CLUSTER_NAME = "helix.cluster.name";
+  private static final String ZK_STR = "zk.str";
+  private static final String KC_CLUSTER_NAME = "kc.cluster.name";
 
   public KeyCoordinatorConf(File file) throws ConfigurationException {
     super(file);
@@ -103,5 +103,13 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
 
   public String getZkStr() {
     return this.getString(ZK_STR);
+  }
+
+  public String getKeyCoordinatorMessageTopic() {
+    return this.getString(KC_MESSAGE_TOPIC);
+  }
+
+  public int getKeyCoordinatorMessagePartitionCount() {
+    return this.getInt(KC_MESSAGE_PARTITION_COUNT);
   }
 }

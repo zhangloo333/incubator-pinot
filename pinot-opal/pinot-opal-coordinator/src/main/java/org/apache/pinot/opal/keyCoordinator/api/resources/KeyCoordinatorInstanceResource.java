@@ -46,12 +46,12 @@ public class KeyCoordinatorInstanceResource {
   private static final Logger LOGGER = LoggerFactory.getLogger(KeyCoordinatorInstanceResource.class);
 
   @Inject
-  KeyCoordinatorClusterHelixManager _keyCoordinatorClusterHelixManager;
+  private KeyCoordinatorClusterHelixManager _keyCoordinatorClusterHelixManager;
 
   @GET
   @Path("/instances")
   @Produces(MediaType.APPLICATION_JSON)
-  @ApiOperation(value = "List all instances")
+  @ApiOperation(value = "List all instances", produces = MediaType.APPLICATION_JSON)
   @ApiResponses(value = {
       @ApiResponse(code = 200, message = "Success"),
       @ApiResponse(code = 500, message = "Internal error")
@@ -66,7 +66,7 @@ public class KeyCoordinatorInstanceResource {
   @Path("/instances")
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.TEXT_PLAIN)
-  @ApiOperation(value = "Create a new instance", consumes = MediaType.APPLICATION_JSON,
+  @ApiOperation(value = "Create a new instance", consumes = MediaType.APPLICATION_JSON, produces = MediaType.TEXT_PLAIN,
       notes = "Create a new instance with given instance config")
   @ApiResponses(value = {
       @ApiResponse(code = 200, message = "Success"),
@@ -83,7 +83,8 @@ public class KeyCoordinatorInstanceResource {
   @Path("/instances")
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.TEXT_PLAIN)
-  @ApiOperation(value = "Drop an instance", consumes = MediaType.APPLICATION_JSON, notes = "Drop an instance")
+  @ApiOperation(value = "Drop an instance", consumes = MediaType.APPLICATION_JSON, produces = MediaType.TEXT_PLAIN,
+      notes = "Drop an instance")
   @ApiResponses(value = {
       @ApiResponse(code = 200, message = "Success"),
       @ApiResponse(code = 404, message = "Instance not found"),

@@ -38,6 +38,10 @@ import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+
+/**
+ * Consumer to ingest data from key coordinator messages produced by pinot servers into key coordinators
+ */
 public class KeyCoordinatorQueueConsumer extends KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(KeyCoordinatorQueueConsumer.class);
@@ -48,21 +52,15 @@ public class KeyCoordinatorQueueConsumer extends KafkaQueueConsumer<Integer, Key
    * @param conf configuration of the kafka key coordinator queue consumer
    */
   public void init(Configuration conf) {
-    String _topic = conf.getString(CommonConfig.RPC_QUEUE_CONFIG.TOPIC_KEY);
-    List<String> _partitions = conf.getList(KeyCoordinatorConf.KEY_COORDINATOR_PARTITIONS);
     String _consumerGroupPrefix = conf.getString(CoordinatorConfig.KAFKA_CONFIG.CONSUMER_GROUP_PREFIX_KEY, KeyCoordinatorConf.KAFKA_CONSUMER_GROUP_ID_PREFIX);
     String hostname = conf.getString(CommonConfig.RPC_QUEUE_CONFIG.HOSTNAME_KEY);
-    Preconditions.checkState(StringUtils.isNotEmpty(_topic), "kafka consumer topic should not be empty");
-    Preconditions.checkState(_partitions != null && _partitions.size() > 0, "kafka partitions list should not be empty");
 
     Properties kafkaProperties = CommonUtils.getPropertiesFromConf(conf.subset(CoordinatorConfig.KAFKA_CONFIG.KAFKA_CONFIG_KEY));
     kafkaProperties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class.getName());
     kafkaProperties.put(ConsumerConfig.GROUP_ID_CONFIG, _consumerGroupPrefix + hostname);
     kafkaProperties.put(ConsumerConfig.CLIENT_ID_CONFIG, DistributedCommonUtils.getClientId(hostname));
     kafkaProperties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-    List<Integer> integerPartitions = _partitions.stream().map(Integer::parseInt).collect(Collectors.toList());
     _consumer = new KafkaConsumer<>(kafkaProperties);
-    subscribe(ImmutableMap.of(_topic, integerPartitions));
   }
 
   @Override
