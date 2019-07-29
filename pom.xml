@@ -142,8 +142,9 @@
     <commons-logging.version>1.2</commons-logging.version>
     <snappy-java.version>1.1.1.7</snappy-java.version>
     <log4j.version>2.11.2</log4j.version>
-    <rocks-db.version>5.13.4</rocks-db.version>
+    <joptsimple.version>5.0.3</joptsimple.version>
 
+    <rocks-db.version>5.13.4</rocks-db.version>
     <kafka.version>0.11</kafka.version>
 
     <!-- Sets the VM argument line used when unit tests are run. -->
@@ -854,7 +855,7 @@
       <dependency>
         <groupId>net.sf.jopt-simple</groupId>
         <artifactId>jopt-simple</artifactId>
-        <version>4.6</version>
+        <version>${joptsimple.version}</version>
       </dependency>
       <!-- kafka_2.10 & larray use scala-library -->
       <dependency>

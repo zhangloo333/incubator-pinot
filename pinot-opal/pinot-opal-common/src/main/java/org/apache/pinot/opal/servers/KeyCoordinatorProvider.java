@@ -75,6 +75,8 @@ public class KeyCoordinatorProvider {
   }
 
   public void close() {
-    //TODO close producer and what not
+    if (_producer != null) {
+      _producer.close();
+    }
   }
 }
