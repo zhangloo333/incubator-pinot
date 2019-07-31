@@ -88,7 +88,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.pinot</groupId>
-      <artifactId>pinot-opal-connector-${kafka.version}</artifactId>
+      <artifactId>pinot-connector-kafka-${kafka.version}</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
