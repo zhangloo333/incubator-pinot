@@ -19,10 +19,10 @@
 package org.apache.pinot.opal.common.keyValueStore;
 
 import com.google.common.base.Preconditions;
-import org.apache.pinot.opal.common.messages.KeyCoordinatorMessageContext;
-import org.apache.pinot.opal.common.utils.CommonUtils;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang.StringUtils;
+import org.apache.pinot.opal.common.messages.KeyCoordinatorMessageContext;
+import org.apache.pinot.opal.common.utils.CommonUtils;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.Options;
 import org.rocksdb.ReadOptions;
@@ -33,6 +33,7 @@ import org.rocksdb.util.SizeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.concurrent.ConcurrentHashMap;
@@ -54,6 +55,11 @@ public class RocksDBKeyValueStoreDB implements KeyValueStoreDB<ByteArrayWrapper,
     _DBBasePath = configuration.getString(RocksDBConfig.DATABASE_DIR);
     LOGGER.info("rocksdb config {}", _DBBasePath);
     Preconditions.checkState(StringUtils.isNotEmpty(_DBBasePath), "db path should not be empty");
+    File dbDir = new File(_DBBasePath);
+    if (!dbDir.exists()) {
+      LOGGER.info("db directory {} does not exist, creating one now", _DBBasePath);
+      dbDir.mkdirs();
+    }
     _rocksDBOptions = getDBOptions(configuration);
     _writeOptions = getWriteOptions(configuration);
     _readOptions = getReadOptions(configuration);

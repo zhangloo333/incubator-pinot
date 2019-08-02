@@ -16,16 +16,28 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.opal.common;
+package org.apache.pinot.opal.common.messages;
 
-public class SuccessResponse {
-  private final String _status;
+import org.testng.Assert;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Test;
 
-  public SuccessResponse(String status) {
-    _status = status;
+public class LogCoordinatorMessageTest {
+
+  private LogCoordinatorMessage message;
+
+  @BeforeClass
+  public void setup() {
+    message = new LogCoordinatorMessage("name", 123, 1, LogEventType.INSERT);
   }
 
-  public String getStatus() {
-    return _status;
+  @Test
+  public void testGets() {
+    Assert.assertEquals(message.getSegmentName(), "name");
+    Assert.assertEquals(message.getKafkaOffset(), 123);
+    Assert.assertEquals(message.getValue(), 1);
+    Assert.assertEquals(message.getUpdateEventType(), LogEventType.INSERT);
+
   }
+
 }

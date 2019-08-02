@@ -18,6 +18,7 @@
  */
 package org.apache.pinot.opal.common.storageProvider;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import org.apache.pinot.opal.common.messages.LogEventType;
@@ -41,8 +42,10 @@ import java.util.List;
 public class SegmentUpdateLogStorageProvider {
   private static final Logger LOGGER = LoggerFactory.getLogger(SegmentUpdateLogStorageProvider.class);
 
-  private final File _file;
-  private final FileChannel _channel;
+  @VisibleForTesting
+  protected final File _file;
+  @VisibleForTesting
+  protected final FileChannel _channel;
 
   public SegmentUpdateLogStorageProvider(File file)
       throws IOException {
@@ -51,7 +54,7 @@ public class SegmentUpdateLogStorageProvider {
     _channel = openAndLoadDataFromFile(file);
   }
 
-  public List<UpdateLogEntry> readAllMessagesFromFile() throws IOException {
+  public synchronized List<UpdateLogEntry> readAllMessagesFromFile() throws IOException {
     int insertMessageCount = 0;
     int deleteMessageCount = 0;
     int fileLength = (int) _file.length();

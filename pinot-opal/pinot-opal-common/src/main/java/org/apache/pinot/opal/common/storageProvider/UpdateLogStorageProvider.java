@@ -18,6 +18,7 @@
  */
 package org.apache.pinot.opal.common.storageProvider;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import org.apache.commons.configuration.Configuration;
@@ -40,7 +41,8 @@ public class UpdateLogStorageProvider {
 
   public static final String BASE_PATH_CONF_KEY = "basePath";
 
-  private static volatile UpdateLogStorageProvider _instance = null;
+  @VisibleForTesting
+  protected static volatile UpdateLogStorageProvider _instance = null;
 
   public static synchronized void init(Configuration conf) {
     LOGGER.info("initializing virtual column storage");
@@ -53,7 +55,7 @@ public class UpdateLogStorageProvider {
 
   public static UpdateLogStorageProvider getInstance() {
     if (_instance == null) {
-      throw new RuntimeException("validfrom storage has not been inited");
+      throw new RuntimeException("virtual column storage has not been inited");
     }
     return _instance;
   }
@@ -66,6 +68,10 @@ public class UpdateLogStorageProvider {
       throw new IllegalStateException("base path doesn't exists in config");
     }
     _virtualColumnStorageDir = new File(basePath);
+    if (!_virtualColumnStorageDir.exists()) {
+      LOGGER.info("virtual column storage path {} doesn't exist, creating now", basePath);
+      _virtualColumnStorageDir.mkdirs();
+    }
   }
 
   public synchronized void addSegment(String tableName, String segmentName) throws IOException {
@@ -80,7 +86,7 @@ public class UpdateLogStorageProvider {
     }
     Map<String, SegmentUpdateLogStorageProvider> segmentMap = _virtualColumnStorage.computeIfAbsent(tableName, t -> new ConcurrentHashMap<>());
     if (!segmentMap.containsKey(segmentName)) {
-//      LOGGER.info("adding virtual column for table {} segment {}", tableName, segmentName);
+      LOGGER.info("adding virtual column for table {} segment {}", tableName, segmentName);
       final File segmentUpdateFile = new File(tableDir, segmentName);
       if (!segmentUpdateFile.exists()) {
         boolean result = segmentUpdateFile.createNewFile();
@@ -114,6 +120,7 @@ public class UpdateLogStorageProvider {
         // need to work on new design to prevent writing too much data
         addSegment(tableName, segmentName);
       }
+      LOGGER.info("adding data for table {}, segment {}, {} messages",tableName, segmentName, messages.size());
       segmentProviderMap.get(segmentName).addData(messages);
     } else {
       LOGGER.warn("receive update event for table {} not in this server", tableName);
@@ -123,7 +130,7 @@ public class UpdateLogStorageProvider {
   public synchronized void removeSegment(String tableName, String segmentName) throws IOException {
     if (_virtualColumnStorage.containsKey(tableName)) {
       SegmentUpdateLogStorageProvider provider = _virtualColumnStorage.get(tableName).remove(segmentName);
-      if (provider != null ) {
+      if (provider != null) {
         LOGGER.info("deleting table {} segment {}", tableName, segmentName);
         provider.destroy();
       }

@@ -23,7 +23,7 @@ import org.apache.commons.configuration.PropertiesConfiguration;
 import org.apache.pinot.opal.common.rpcQueue.ProduceTask;
 import org.apache.pinot.opal.common.rpcQueue.QueueProducer;
 import org.testng.Assert;
-import org.testng.annotations.BeforeTest;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import java.util.List;
@@ -36,28 +36,40 @@ public class KeyCoordinatorProviderTest {
 
   private Configuration conf = new PropertiesConfiguration();
 
-  @BeforeTest
+  @BeforeMethod
   public void setup() {
-
     conf.addProperty(PRODUCER_CONFIG_KEY + "." + CLASS_NAME, MockProducer.class.getName());
+    KeyCoordinatorProvider._instance = null;
   }
 
   @Test
-  public void testCreteProucer() {
+  public void testCreteProducer() {
     KeyCoordinatorProvider provider = new KeyCoordinatorProvider(conf, "host_name_sample");
 
-    Configuration producerConfig = ((MockProducer)provider.getProducer())._conf;
+    MockProducer producer1 = (MockProducer) provider.getCachedProducer("table1");
+    MockProducer producer2 = (MockProducer) provider.getCachedProducer("table2");
+    Configuration producerConfig = producer1._conf;
 
     Assert.assertEquals(producerConfig.getString(HOSTNAME_KEY), "host_name_sample");
     Assert.assertEquals(producerConfig.getString(CLASS_NAME), MockProducer.class.getName());
     Assert.assertEquals(KeyCoordinatorProvider.getInstance(), provider);
 
-    // verify close logic
-    Assert.assertEquals(((MockProducer)provider.getProducer())._isClosed, false);
-    provider.close();
-    Assert.assertEquals(((MockProducer)provider.getProducer())._isClosed, true);
+    Assert.assertNotEquals(producer1, producer2);
+    Assert.assertEquals(producer1, provider.getCachedProducer("table1"));
   }
 
+  @Test
+  public void testClose() {
+    KeyCoordinatorProvider provider = new KeyCoordinatorProvider(conf, "host_name_sample");
+    MockProducer producer1 = (MockProducer) provider.getCachedProducer("table1");
+    MockProducer producer2 = (MockProducer) provider.getCachedProducer("table2");
+    // verify close logic
+    Assert.assertEquals(producer1._isClosed, false);
+    Assert.assertEquals(producer2._isClosed, false);
+    provider.close();
+    Assert.assertEquals(producer1._isClosed, true);
+    Assert.assertEquals(producer2._isClosed, true);
+  }
 
   static class MockProducer implements QueueProducer {
     protected Configuration _conf;
@@ -66,8 +78,6 @@ public class KeyCoordinatorProviderTest {
     @Override
     public void init(Configuration conf) {
       _conf = conf;
-
-
     }
 
     @Override

@@ -216,7 +216,11 @@ public class TableConfig {
       jsonConfig.set(ROUTING_CONFIG_KEY, JsonUtils.objectToJsonNode(_routingConfig));
     }
 
-    jsonConfig.put(UPDATE_SEMANTIC_CONFIG_KEY, _updateSemantic.toString());
+    if (_updateSemantic != null) {
+      jsonConfig.put(UPDATE_SEMANTIC_CONFIG_KEY, _updateSemantic.toString());
+    } else {
+      jsonConfig.put(UPDATE_SEMANTIC_CONFIG_KEY, UpdateSemantic.APPEND.toString());
+    }
     return jsonConfig;
   }
 

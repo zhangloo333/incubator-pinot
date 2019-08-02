@@ -18,10 +18,6 @@
  */
 package org.apache.pinot.opal.common.messages;
 
-import org.apache.commons.lang.SerializationUtils;
-
-import java.io.Serializable;
-
 /**
  * this message contains the following 4 attributes:
  * 1. segmentName: the name of the segment for the pinot record we are going to update
@@ -32,7 +28,7 @@ import java.io.Serializable;
  * segment updater will use the segment name & offset to identify the location of the pinot record, and use the
  * updateEventType to decide which virtual column to update. And it will use
  */
-public class LogCoordinatorMessage implements Serializable {
+public class LogCoordinatorMessage {
   private final String _segmentName;
   private final long _value;
   private final LogEventType _updateEventType;
@@ -48,10 +44,6 @@ public class LogCoordinatorMessage implements Serializable {
 
   public LogEventType getUpdateEventType() {
     return _updateEventType;
-  }
-
-  public byte[] toBytes() {
-    return SerializationUtils.serialize(this);
   }
 
   public long getKafkaOffset() {

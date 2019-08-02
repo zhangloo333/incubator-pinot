@@ -54,8 +54,7 @@ public class UpsertLLRealtimeSegmentDataManager extends LLRealtimeSegmentDataMan
     super(segmentZKMetadata, tableConfig, instanceZKMetadata, realtimeTableDataManager, resourceDataDir, indexLoadingConfig, schema, serverMetrics);
     Preconditions.checkState(_schema.getPrimaryKeyFieldSpec() != null, "primary key not found");
     Preconditions.checkState(_schema.getOffsetKeyFieldSpec() != null, "offset key not found");
-
-    _keyCoordinatorQueueProducer = KeyCoordinatorProvider.getInstance().getProducer();
+    _keyCoordinatorQueueProducer = KeyCoordinatorProvider.getInstance().getCachedProducer(_tableNameWithType);
     initVirtualColumns();
   }
 

@@ -18,17 +18,18 @@
  */
 package org.apache.pinot.core.realtime.impl.kafka;
 
-import java.io.File;
-import java.security.Permission;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
 import kafka.admin.TopicCommand;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaServerStartable;
 import org.I0Itec.zkclient.ZkClient;
 import org.apache.commons.io.FileUtils;
 import org.apache.pinot.common.utils.ZkStarter;
+
+import java.io.File;
+import java.security.Permission;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
 
 
 /**
@@ -84,6 +85,8 @@ public class KafkaStarterUtils {
     File logDir = new File(logDirPath);
     logDir.mkdirs();
 
+    configuration.put("message.max.bytes", "300000000");
+    configuration.put("replica.fetch.max.bytes", "300000000");
     configureKafkaPort(configuration, port);
     configureZkConnectionString(configuration, zkStr);
     configureBrokerId(configuration, brokerId);
