@@ -39,6 +39,7 @@ import org.apache.pinot.common.request.Selection;
 import org.apache.pinot.common.request.SelectionSort;
 import org.apache.pinot.common.response.ServerInstance;
 import org.apache.pinot.common.response.broker.SelectionResults;
+import org.apache.pinot.common.utils.BytesUtils;
 import org.apache.pinot.common.utils.DataSchema;
 import org.apache.pinot.common.utils.DataTable;
 import org.apache.pinot.core.common.DataSourceMetadata;
@@ -249,7 +250,11 @@ public class SelectionOperatorUtils {
             break;
           case STRING:
           case BYTES: // BYTES are already converted to String for Selection, before reaching this layer.
-            dataTableBuilder.setColumn(i, ((String) columnValue));
+            if (columnValue instanceof byte[]) {
+              dataTableBuilder.setColumn(i, BytesUtils.toHexString((byte[]) columnValue));
+            } else {
+              dataTableBuilder.setColumn(i, ((String) columnValue));
+            }
             break;
 
           // Multi-value column.
