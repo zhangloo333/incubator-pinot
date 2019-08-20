@@ -27,7 +27,7 @@ public class CommonConfig {
     public static final String HOSTNAME_KEY = "hostname";
     public static final String CLASS_NAME = "class.name";
 
-    public static final String DEFAULT_OUTPUT_TOPIC_PREFIX = "pinot_upsert_";
+    public static final String DEFAULT_KC_OUTPUT_TOPIC_PREFIX = "pinot_upsert_";
   }
 
 }

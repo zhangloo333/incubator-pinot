@@ -16,35 +16,39 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.minion.metrics;
+package org.apache.pinot.opal.common.metrics;
 
-import com.yammer.metrics.core.MetricsRegistry;
+import org.apache.pinot.common.Utils;
 import org.apache.pinot.common.metrics.AbstractMetrics;
-import org.apache.pinot.common.utils.CommonConstants;
 
+public enum OpalTimer implements AbstractMetrics.Timer {
 
-public class MinionMetrics extends AbstractMetrics<MinionQueryPhase, MinionMeter, MinionGauge, MinionTimer> {
+  // comment metrics for kafka component
+  PRODUCER_LAG(),
+  FLUSH_LAG(),
+  COMMIT_OFFSET_LAG(),
+  FETCH_MESSAGE_LAG(),
 
-  public MinionMetrics(MetricsRegistry metricsRegistry) {
-    this(CommonConstants.Minion.CONFIG_OF_METRICS_PREFIX, metricsRegistry);
-  }
+  // metrics for segment updater
+  FETCH_MSG_FROM_CONSUMER_TIME(),
+  UPDATE_DATAMANAGER_TIME(),
+  UPDATE_LOCAL_LOG_FILE_TIME(),
+  SEGMENT_UPDATER_LOOP_TIME()
+  ;
 
-  public MinionMetrics(String prefix, MetricsRegistry metricsRegistry) {
-    super(prefix, metricsRegistry, MinionMetrics.class);
+  private final String _timerName;
+
+  OpalTimer() {
+    this._timerName = Utils.toCamelCase(name().toLowerCase());
   }
 
   @Override
-  protected MinionQueryPhase[] getQueryPhases() {
-    return MinionQueryPhase.values();
+  public String getTimerName() {
+    return _timerName;
   }
 
   @Override
-  protected MinionMeter[] getMeters() {
-    return MinionMeter.values();
-  }
-
-  @Override
-  protected MinionGauge[] getGauges() {
-    return MinionGauge.values();
+  public boolean isGlobal() {
+    return false;
   }
 }

@@ -56,10 +56,13 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
 
   private static final String KC_MESSAGE_TOPIC = "kc.message.topic";
   private static final String KC_MESSAGE_PARTITION_COUNT = "kc.message.partition.count";  // todo: get partition count from topic
-  // helix related config
+  // helix related cofig
   private static final String HELIX_CLUSTER_NAME = "helix.cluster.name";
   private static final String ZK_STR = "zk.str";
   private static final String KC_CLUSTER_NAME = "kc.cluster.name";
+
+  // metrics related config
+  public static final String METRICS_CONFIG = "metrics";
 
   public KeyCoordinatorConf(File file) throws ConfigurationException {
     super(file);
@@ -79,6 +82,10 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
 
   public Configuration getConsumerConf() {
     return this.subset(CommonConfig.RPC_QUEUE_CONFIG.CONSUMER_CONFIG_KEY);
+  }
+
+  public Configuration getMetricsConf() {
+    return this.subset(METRICS_CONFIG);
   }
 
   public Configuration getServerConf() {

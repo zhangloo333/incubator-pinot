@@ -26,9 +26,8 @@ import java.util.Properties;
 
 public class DistributedCommonUtils {
 
-
   public static String getKafkaTopicFromTableName(String tableName) {
-    return CommonConfig.RPC_QUEUE_CONFIG.DEFAULT_OUTPUT_TOPIC_PREFIX + tableName;
+    return CommonConfig.RPC_QUEUE_CONFIG.DEFAULT_KC_OUTPUT_TOPIC_PREFIX + tableName;
   }
 
   public static String getClientId(String hostName) {

@@ -19,12 +19,13 @@
 package org.apache.pinot.opal.common.rpcQueue;
 
 import org.apache.commons.configuration.Configuration;
+import org.apache.pinot.opal.common.metrics.OpalMetrics;
 
 import java.util.List;
 
 public interface QueueProducer<K, V> {
 
-  void init(Configuration conf);
+  void init(Configuration conf, OpalMetrics metrics);
 
   void produce(ProduceTask<K, V> task);
 

@@ -41,6 +41,7 @@ public class KafkaStarterUtils {
   public static final int DEFAULT_BROKER_ID = 0;
   public static final String DEFAULT_ZK_STR = ZkStarter.DEFAULT_ZK_STR + "/kafka";
   public static final String DEFAULT_KAFKA_BROKER = "localhost:" + DEFAULT_KAFKA_PORT;
+  public static final String BUFFER_SIZE = "300000000";
 
   public static Properties getDefaultKafkaConfiguration() {
     final Properties configuration = new Properties();
@@ -85,8 +86,8 @@ public class KafkaStarterUtils {
     File logDir = new File(logDirPath);
     logDir.mkdirs();
 
-    configuration.put("message.max.bytes", "300000000");
-    configuration.put("replica.fetch.max.bytes", "300000000");
+    configuration.put("message.max.bytes", BUFFER_SIZE);
+    configuration.put("replica.fetch.max.bytes", BUFFER_SIZE);
     configureKafkaPort(configuration, port);
     configureZkConnectionString(configuration, zkStr);
     configureBrokerId(configuration, brokerId);

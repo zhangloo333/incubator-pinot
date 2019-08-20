@@ -20,13 +20,18 @@ package org.apache.pinot.opal.common.rpcQueue;
 
 
 import org.apache.commons.configuration.Configuration;
+import org.apache.pinot.opal.common.metrics.OpalMetrics;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 public interface QueueConsumer<K, V> {
 
-  void init(Configuration conf);
+  void init(Configuration conf, OpalMetrics metrics);
+
+  void subscribeForTable(String table);
+
+  void unsubscribeForTable(String table);
 
   List<QueueConsumerRecord<K, V>> getRequests(long timeout, TimeUnit timeUnit);
 

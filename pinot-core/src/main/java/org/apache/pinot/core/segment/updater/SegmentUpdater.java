@@ -27,11 +27,14 @@ import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.LLCSegmentName;
 import org.apache.pinot.core.data.manager.UpsertSegmentDataManager;
 import org.apache.pinot.opal.common.config.CommonConfig;
+import org.apache.pinot.opal.common.messages.LogCoordinatorMessage;
+import org.apache.pinot.opal.common.metrics.OpalMeter;
+import org.apache.pinot.opal.common.metrics.OpalMetrics;
+import org.apache.pinot.opal.common.metrics.OpalTimer;
 import org.apache.pinot.opal.common.rpcQueue.QueueConsumer;
 import org.apache.pinot.opal.common.rpcQueue.QueueConsumerRecord;
 import org.apache.pinot.opal.common.storageProvider.UpdateLogEntry;
 import org.apache.pinot.opal.common.storageProvider.UpdateLogStorageProvider;
-import org.apache.pinot.opal.common.messages.LogCoordinatorMessage;
 import org.apache.pinot.opal.common.utils.CommonUtils;
 import org.apache.pinot.opal.servers.SegmentUpdaterProvider;
 import org.slf4j.Logger;
@@ -48,6 +51,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * class to perform fetching updates for upsert related information from kafka to local machine and fill in
@@ -69,13 +73,15 @@ public class SegmentUpdater implements SegmentDeletionListener {
   private final Map<String, Map<String, Set<UpsertSegmentDataManager>>> _tableSegmentMap = new ConcurrentHashMap<>();
   private final Map<String, Map<Integer, Long>> _tablePartitionCreationTime = new ConcurrentHashMap<>();
   private final UpdateLogStorageProvider _updateLogStorageProvider;
+  private final OpalMetrics _metrics;
 
   private volatile boolean isStarted = true;
 
-  public SegmentUpdater(Configuration conf, SegmentUpdaterProvider provider) {
+  public SegmentUpdater(Configuration conf, SegmentUpdaterProvider provider, OpalMetrics metrics) {
     _conf = conf;
+    _metrics = metrics;
     _topicPrefix = conf.getString(SegmentUpdaterConfig.INPUT_TOPIC_PREFIX,
-        CommonConfig.RPC_QUEUE_CONFIG.DEFAULT_OUTPUT_TOPIC_PREFIX);
+        CommonConfig.RPC_QUEUE_CONFIG.DEFAULT_KC_OUTPUT_TOPIC_PREFIX);
     _updateSleepMs = conf.getInt(SegmentUpdaterConfig.SEGMENT_UDPATE_SLEEP_MS,
         SegmentUpdaterConfig.SEGMENT_UDPATE_SLEEP_MS_DEFAULT);
 
@@ -121,9 +127,13 @@ public class SegmentUpdater implements SegmentDeletionListener {
     try {
       LOGGER.info("starting update loop");
       while(isStarted) {
+        long startTime = System.currentTimeMillis();
+        long loopStartTime = startTime;
         final List<QueueConsumerRecord<String, LogCoordinatorMessage>> records = _consumer.getRequests(_updateSleepMs, TimeUnit.MILLISECONDS);
         final Map<String, Map<String, List<UpdateLogEntry>>> tableSegmentToUpdateLogs = new HashMap<>();
+        _metrics.addTimedValueMs(OpalTimer.FETCH_MSG_FROM_CONSUMER_TIME, System.currentTimeMillis() - startTime);
         int eventCount = records.size();
+        _metrics.addMeteredGlobalValue(OpalMeter.MESSAGE_FETCH_PER_ROUND, eventCount);
 
         // organize the update logs by {tableName: {segmentName: {list of updatelogs}}}
         records.iterator().forEachRemaining(consumerRecord -> {
@@ -134,25 +144,33 @@ public class SegmentUpdater implements SegmentDeletionListener {
           segmentMap.computeIfAbsent(segmentName, s -> new ArrayList<>()).add(new UpdateLogEntry(consumerRecord.getRecord()));
         });
 
+        startTime = System.currentTimeMillis();
+        AtomicLong timeToStoreUpdateLogs = new AtomicLong(0);
         for (Map.Entry<String, Map<String, List<UpdateLogEntry>>> entry: tableSegmentToUpdateLogs.entrySet()) {
           String tableName = TableNameBuilder.ensureTableNameWithType(entry.getKey(), CommonConstants.Helix.TableType.REALTIME);
+          int tableMessageCount = 0;
           if (_tableSegmentMap.containsKey(tableName)) {
             final Map<String, Set<UpsertSegmentDataManager>> segmentManagersMap = _tableSegmentMap.get(tableName);
             final Map<String, List<UpdateLogEntry>> segmentDataMap = entry.getValue();
             for (Map.Entry<String, List<UpdateLogEntry>> segmentEntry: entry.getValue().entrySet()) {
+              tableMessageCount += segmentEntry.getValue().size();
               final String segmentNameStr = segmentEntry.getKey();
               updateVirtualColumn(tableName, segmentEntry.getKey(),
-                  segmentManagersMap.computeIfAbsent(segmentNameStr, sn -> new ConcurrentSet<>()), segmentDataMap.get(segmentNameStr));
+                  segmentManagersMap.computeIfAbsent(segmentNameStr, sn -> new ConcurrentSet<>()),
+                  segmentDataMap.get(segmentNameStr),
+                  timeToStoreUpdateLogs);
             }
-          } else {
-//            LOGGER.warn("got messages for table {} not in this server", tableName);
           }
+          _metrics.addMeteredTableValue(tableName, OpalMeter.MESSAGE_FETCH_PER_ROUND, tableMessageCount);
         }
+        _metrics.addTimedValueMs(OpalTimer.UPDATE_LOCAL_LOG_FILE_TIME, timeToStoreUpdateLogs.get());
+        _metrics.addTimedValueMs(OpalTimer.UPDATE_DATAMANAGER_TIME, System.currentTimeMillis() - startTime);
         if (eventCount == 0) {
           Uninterruptibles.sleepUninterruptibly(NO_MESSAGE_SLEEP_MS, TimeUnit.MILLISECONDS);
         } else {
           LOGGER.info("latest high water mark is {}", UpsertWaterMarkManager.getInstance().toString());
           _consumer.ackOffset();
+          _metrics.addTimedValueMs(OpalTimer.SEGMENT_UPDATER_LOOP_TIME, System.currentTimeMillis() - loopStartTime);
         }
       }
     } catch (Exception ex) {
@@ -169,12 +187,12 @@ public class SegmentUpdater implements SegmentDeletionListener {
    * in this set of UpsertSegmentDataManager
    */
   private void updateVirtualColumn(String table, String segment, Set<UpsertSegmentDataManager> segmentDataManagers,
-                                   List<UpdateLogEntry> messages) throws IOException {
-//    LOGGER.info("updating segment {} with {} results for {} data managers", segment, messages.size(),
-//        segmentDataManagers.size());
-
+                                   List<UpdateLogEntry> messages, AtomicLong timeToStoreUpdateLogs) throws IOException {
     // update storage
+    long startTime = System.currentTimeMillis();
     _updateLogStorageProvider.addDataToFile(table, segment, messages);
+    timeToStoreUpdateLogs.addAndGet(System.currentTimeMillis() - startTime);
+
     try {
       for (UpsertSegmentDataManager dataManager: segmentDataManagers) {
         dataManager.updateVirtualColumn(messages);
@@ -186,30 +204,32 @@ public class SegmentUpdater implements SegmentDeletionListener {
 
   /**
    * called when we create a new segment data manager, associate this data manager with the given table/segment info
-   * @param tableName
+   * @param tableNameWithType
    * @param segmentName
    * @param dataManager the data manager for the current given table/segment combination
    */
-  public synchronized void addSegmentDataManager(String tableName, LLCSegmentName segmentName, UpsertSegmentDataManager dataManager) {
+  public synchronized void addSegmentDataManager(String tableNameWithType, LLCSegmentName segmentName, UpsertSegmentDataManager dataManager) {
     // TODO get partition assignment from
-    LOGGER.info("segment updater adding table {} segment {}", tableName, segmentName.getSegmentName());
-    if (!_tableSegmentMap.containsKey(tableName)) {
+    LOGGER.info("segment updater adding table {} segment {}", tableNameWithType, segmentName.getSegmentName());
+    if (!_tableSegmentMap.containsKey(tableNameWithType)) {
       synchronized (_tableSegmentMap) {
-        _tableSegmentMap.put(tableName, new ConcurrentHashMap<>());
+        _tableSegmentMap.put(tableNameWithType, new ConcurrentHashMap<>());
       }
+      LOGGER.info("adding table {} to segment updater consumer", tableNameWithType);
+      handleNewTableInServer(tableNameWithType);
     }
-    _tableSegmentMap.get(tableName).computeIfAbsent(segmentName.getSegmentName(), sn -> new HashSet<>()).add(dataManager);
+    _tableSegmentMap.get(tableNameWithType).computeIfAbsent(segmentName.getSegmentName(), sn -> new HashSet<>()).add(dataManager);
     synchronized (_tablePartitionCreationTime) {
-      long creationTime = _tablePartitionCreationTime.computeIfAbsent(tableName, t -> new ConcurrentHashMap<>())
+      long creationTime = _tablePartitionCreationTime.computeIfAbsent(tableNameWithType, t -> new ConcurrentHashMap<>())
           .computeIfAbsent(segmentName.getPartitionId(), p -> segmentName.getCreationTimeStamp());
-      _tablePartitionCreationTime.get(tableName)
+      _tablePartitionCreationTime.get(tableNameWithType)
           .put(segmentName.getPartitionId(), Long.max(creationTime, segmentName.getCreationTimeStamp()));
     }
   }
 
-  public synchronized void removeSegmentDataManager(String tableName, String segmentName, UpsertSegmentDataManager toDeleteManager) {
-    LOGGER.info("segment updater removing table {} segment {}", tableName, segmentName);
-    Map<String, Set<UpsertSegmentDataManager>> segmentMap = _tableSegmentMap.get(tableName);
+  public synchronized void removeSegmentDataManager(String tableNameWithType, String segmentName, UpsertSegmentDataManager toDeleteManager) {
+    LOGGER.info("segment updater removing table {} segment {}", tableNameWithType, segmentName);
+    Map<String, Set<UpsertSegmentDataManager>> segmentMap = _tableSegmentMap.get(tableNameWithType);
     if (segmentMap != null) {
       Set<UpsertSegmentDataManager> segmentDataManagers = segmentMap.get(segmentName);
       if (segmentDataManagers != null) {
@@ -218,26 +238,56 @@ public class SegmentUpdater implements SegmentDeletionListener {
           segmentMap.remove(segmentName);
         }
         if (segmentMap.size() == 0) {
-          _tableSegmentMap.remove(tableName);
+          _tableSegmentMap.remove(tableNameWithType);
           // TODO do other handling of table mapping removal
         }
       }
     }
   }
 
+  /**
+   * handle how to read update logs we need to do for adding a new pinot table
+   * need to do the following:
+   * subscribe to table update log kafka topics
+   * @param tableNameWithType the name of the table without
+   */
+  private void handleNewTableInServer(String tableNameWithType) {
+    LOGGER.info("subscribing to new table {}", tableNameWithType);
+    // key coordinator generate message without table name
+    _consumer.subscribeForTable(TableNameBuilder.extractRawTableName(tableNameWithType));
+  }
+
+  /**
+   * handle clean up when a table no longer has any segment in the current server
+   * @param tableNameWithType
+   */
+  private void handleTableRemovalInServer(String tableNameWithType) {
+    LOGGER.info("subscribing to new table {}", tableNameWithType);
+    // key coordinator generate message without table name
+    _consumer.unsubscribeForTable(TableNameBuilder.extractRawTableName(tableNameWithType));
+  }
+
   @Override
-  public synchronized void onSegmentDeletion(String tableName, String segmentName) {
-    LOGGER.info("deleting segment virtual column from local storage for table {} segment {}", tableName, segmentName);
-    Map<String, Set<UpsertSegmentDataManager>> segmentManagerMap = _tableSegmentMap.get(tableName);
+  public synchronized void onSegmentDeletion(String tableNameWithType, String segmentName) {
+    LOGGER.info("deleting segment virtual column from local storage for table {} segment {}", tableNameWithType, segmentName);
+    Map<String, Set<UpsertSegmentDataManager>> segmentManagerMap = _tableSegmentMap.get(tableNameWithType);
     if (segmentManagerMap != null) {
-      if (segmentManagerMap.containsKey(segmentName)) {
-        LOGGER.warn("trying to remove segment storage with {} segment data manager", segmentManagerMap.get(segmentName).size());
-        try {
-          _updateLogStorageProvider.removeSegment(tableName, segmentName);
-        } catch (IOException e) {
-          throw new RuntimeException(String.format("failed to delete table %s segment %s", tableName, segmentName), e);
-        }
+      if (segmentManagerMap.containsKey(segmentName) && segmentManagerMap.get(segmentName).size() > 0) {
+        LOGGER.error("trying to remove segment storage with {} segment data manager", segmentManagerMap.get(segmentName).size());
       }
+      try {
+        segmentManagerMap.remove(segmentName);
+        _updateLogStorageProvider.removeSegment(tableNameWithType, segmentName);
+      } catch (IOException e) {
+        throw new RuntimeException(String.format("failed to delete table %s segment %s", tableNameWithType, segmentName), e);
+      }
+      if (segmentManagerMap.size() == 0) {
+        _tableSegmentMap.remove(tableNameWithType);
+        handleTableRemovalInServer(tableNameWithType);
+      }
+    } else {
+      LOGGER.error("deleting a segment {}:{} from current server but don't have segment map on updater",
+          tableNameWithType, segmentName);
     }
   }
 }

@@ -20,6 +20,8 @@ package org.apache.pinot.opal.servers;
 
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.PropertiesConfiguration;
+import org.apache.pinot.opal.common.metrics.MockOpalMetrics;
+import org.apache.pinot.opal.common.metrics.OpalMetrics;
 import org.apache.pinot.opal.common.rpcQueue.ProduceTask;
 import org.apache.pinot.opal.common.rpcQueue.QueueProducer;
 import org.testng.Assert;
@@ -44,7 +46,7 @@ public class KeyCoordinatorProviderTest {
 
   @Test
   public void testCreteProducer() {
-    KeyCoordinatorProvider provider = new KeyCoordinatorProvider(conf, "host_name_sample");
+    KeyCoordinatorProvider provider = new KeyCoordinatorProvider(conf, "host_name_sample", new MockOpalMetrics());
 
     MockProducer producer1 = (MockProducer) provider.getCachedProducer("table1");
     MockProducer producer2 = (MockProducer) provider.getCachedProducer("table2");
@@ -60,7 +62,7 @@ public class KeyCoordinatorProviderTest {
 
   @Test
   public void testClose() {
-    KeyCoordinatorProvider provider = new KeyCoordinatorProvider(conf, "host_name_sample");
+    KeyCoordinatorProvider provider = new KeyCoordinatorProvider(conf, "host_name_sample", new MockOpalMetrics());
     MockProducer producer1 = (MockProducer) provider.getCachedProducer("table1");
     MockProducer producer2 = (MockProducer) provider.getCachedProducer("table2");
     // verify close logic
@@ -76,7 +78,7 @@ public class KeyCoordinatorProviderTest {
     protected boolean _isClosed = false;
 
     @Override
-    public void init(Configuration conf) {
+    public void init(Configuration conf, OpalMetrics metrics) {
       _conf = conf;
     }
 

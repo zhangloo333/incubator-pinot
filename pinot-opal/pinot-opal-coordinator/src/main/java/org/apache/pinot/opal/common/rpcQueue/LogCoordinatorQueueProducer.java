@@ -25,6 +25,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.pinot.opal.common.config.CommonConfig;
 import org.apache.pinot.opal.common.messages.LogCoordinatorMessage;
+import org.apache.pinot.opal.common.metrics.OpalMetrics;
 import org.apache.pinot.opal.common.utils.CommonUtils;
 import org.apache.pinot.opal.common.CoordinatorConfig;
 import org.apache.pinot.opal.common.DistributedCommonUtils;
@@ -36,6 +37,7 @@ public class LogCoordinatorQueueProducer extends KafkaQueueProducer<Integer, Log
 
   private KafkaProducer<Integer, LogCoordinatorMessage> _kafkaProducer;
   private String _topic;
+  private OpalMetrics _opalMetrics;
 
   @Override
   protected KafkaProducer<Integer, LogCoordinatorMessage> getKafkaNativeProducer() {
@@ -50,11 +52,17 @@ public class LogCoordinatorQueueProducer extends KafkaQueueProducer<Integer, Log
   }
 
   @Override
-  public void init(Configuration conf) {
+  protected OpalMetrics getMetrics() {
+    return _opalMetrics;
+  }
+
+  @Override
+  public void init(Configuration conf, OpalMetrics opalMetrics) {
     final Properties kafkaProducerConfig = CommonUtils.getPropertiesFromConf(
         conf.subset(CoordinatorConfig.KAFKA_CONFIG.KAFKA_CONFIG_KEY));
     String hostName = conf.getString(CommonConfig.RPC_QUEUE_CONFIG.HOSTNAME_KEY);
     _topic = conf.getString(CommonConfig.RPC_QUEUE_CONFIG.TOPIC_KEY);
+    _opalMetrics = opalMetrics;
 
     kafkaProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class.getName());
     kafkaProducerConfig.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, IntPartitioner.class.getName());

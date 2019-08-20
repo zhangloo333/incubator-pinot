@@ -24,6 +24,7 @@ import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang.StringUtils;
 import org.apache.pinot.common.Utils;
 import org.apache.pinot.opal.common.config.CommonConfig;
+import org.apache.pinot.opal.common.metrics.OpalMetrics;
 import org.apache.pinot.opal.common.rpcQueue.QueueProducer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,11 +46,13 @@ public class KeyCoordinatorProvider {
   private Configuration _producerConf;
   private Map<String, QueueProducer> _cachedProducerMap = new HashMap<>();
   private volatile boolean _isClosed = false;
+  private OpalMetrics _opalMetrics;
 
-  public KeyCoordinatorProvider(Configuration conf, String hostname) {
+  public KeyCoordinatorProvider(Configuration conf, String hostname, OpalMetrics opalMetrics) {
     Preconditions.checkState(StringUtils.isNotEmpty(hostname), "host name should not be empty");
     _producerConf = conf.subset(PRODUCER_CONFIG_KEY);
     _className = _producerConf.getString(CLASS_NAME);
+    _opalMetrics = opalMetrics;
     Preconditions.checkState(StringUtils.isNotEmpty(_className),
         "key coordinator producer class should not be empty");
     _producerConf.addProperty(CommonConfig.RPC_QUEUE_CONFIG.HOSTNAME_KEY, hostname);
@@ -80,7 +83,7 @@ public class KeyCoordinatorProvider {
     QueueProducer producer = null;
     try {
       producer = (QueueProducer) Class.forName(_className).newInstance();
-      producer.init(_producerConf);
+      producer.init(_producerConf, _opalMetrics);
     } catch (ClassNotFoundException | InstantiationException | IllegalAccessException ex) {
       LOGGER.info("failed to load/create class for key coordinator producer for class {}", _className);
       Utils.rethrowException(ex);

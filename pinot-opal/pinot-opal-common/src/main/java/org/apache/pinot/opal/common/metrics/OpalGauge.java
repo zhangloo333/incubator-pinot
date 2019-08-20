@@ -16,35 +16,37 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.minion.metrics;
+package org.apache.pinot.opal.common.metrics;
 
-import com.yammer.metrics.core.MetricsRegistry;
+import org.apache.pinot.common.Utils;
 import org.apache.pinot.common.metrics.AbstractMetrics;
-import org.apache.pinot.common.utils.CommonConstants;
+
+public enum OpalGauge implements AbstractMetrics.Gauge {
+
+  MESSAGES("messages");
 
 
-public class MinionMetrics extends AbstractMetrics<MinionQueryPhase, MinionMeter, MinionGauge, MinionTimer> {
+  private final String gaugeName;
+  private final String unit;
 
-  public MinionMetrics(MetricsRegistry metricsRegistry) {
-    this(CommonConstants.Minion.CONFIG_OF_METRICS_PREFIX, metricsRegistry);
+  OpalGauge(String unit) {
+    this.unit = unit;
+    this.gaugeName = Utils.toCamelCase(name().toLowerCase());
   }
 
-  public MinionMetrics(String prefix, MetricsRegistry metricsRegistry) {
-    super(prefix, metricsRegistry, MinionMetrics.class);
+
+  @Override
+  public String getGaugeName() {
+    return gaugeName;
   }
 
   @Override
-  protected MinionQueryPhase[] getQueryPhases() {
-    return MinionQueryPhase.values();
+  public String getUnit() {
+    return unit;
   }
 
   @Override
-  protected MinionMeter[] getMeters() {
-    return MinionMeter.values();
-  }
-
-  @Override
-  protected MinionGauge[] getGauges() {
-    return MinionGauge.values();
+  public boolean isGlobal() {
+    return true;
   }
 }

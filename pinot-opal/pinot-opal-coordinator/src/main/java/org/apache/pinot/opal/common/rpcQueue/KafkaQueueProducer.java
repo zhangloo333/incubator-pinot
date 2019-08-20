@@ -21,6 +21,8 @@ package org.apache.pinot.opal.common.rpcQueue;
 import org.apache.commons.lang.StringUtils;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.pinot.opal.common.metrics.OpalMetrics;
+import org.apache.pinot.opal.common.metrics.OpalTimer;
 
 import java.util.List;
 
@@ -30,10 +32,16 @@ public abstract class KafkaQueueProducer<K, V> implements QueueProducer<K, V> {
 
   protected abstract String getDefaultTopic();
 
+  protected abstract OpalMetrics getMetrics();
+
   @Override
   public void produce(ProduceTask<K, V> produceTask) {
+    long startTime = System.currentTimeMillis();
     getKafkaNativeProducer().send(new ProducerRecord<>(getTopic(produceTask), produceTask.getKey(),
         produceTask.getValue()), produceTask::markComplete);
+    long produceLag = System.currentTimeMillis() - startTime;
+    getMetrics().addTimedValueMs(OpalTimer.PRODUCER_LAG, produceLag);
+    getMetrics().addTimedTableValueMs(produceTask.getTopic(), OpalTimer.PRODUCER_LAG, produceLag);
   }
 
   public String getTopic(ProduceTask<K, V> produceTask) {
@@ -52,7 +60,10 @@ public abstract class KafkaQueueProducer<K, V> implements QueueProducer<K, V> {
 
   @Override
   public void flush() {
+    long startTime = System.currentTimeMillis();
     getKafkaNativeProducer().flush();
+    long flushLag = System.currentTimeMillis() - startTime;
+    getMetrics().addTimedValueMs(OpalTimer.FLUSH_LAG, flushLag);
   }
 
   @Override

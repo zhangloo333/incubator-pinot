@@ -35,7 +35,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 
 public class KeyCoordinatorApiApplication extends ResourceConfig {
-  private static final String RESOURCE_PACKAGE = "org.apache.pinot.opal.distributed.keyCoordinator.api.resources";
+  private static final String RESOURCE_PACKAGE = "org.apache.pinot.opal.keyCoordinator.api.resources";
 
   private URI _baseUri;
   private HttpServer _httpServer;

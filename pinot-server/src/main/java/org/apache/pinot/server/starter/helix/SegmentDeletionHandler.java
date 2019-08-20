@@ -29,7 +29,7 @@ public class SegmentDeletionHandler {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SegmentDeletionHandler.class);
 
-  private List<SegmentDeletionListener> _deletionListeners;
+  private List<SegmentDeletionListener> _deleteListeners;
 
 
   public SegmentDeletionHandler() {
@@ -37,16 +37,18 @@ public class SegmentDeletionHandler {
   }
 
   public SegmentDeletionHandler(List<SegmentDeletionListener> listeners) {
-    _deletionListeners = listeners;
+    _deleteListeners = listeners;
   }
 
   public void deleteSegmentFromLocalStorage(String tableNameWithType, String segmentName) {
     //TODO move the deletion from file system logic to here
-    for (SegmentDeletionListener deletionListener : _deletionListeners) {
+    LOGGER.info("trying to perform deletion for {}:{} on {} deletion handler", tableNameWithType, segmentName,
+        _deleteListeners.size());
+    for (SegmentDeletionListener deletionListener : _deleteListeners) {
       try {
         deletionListener.onSegmentDeletion(tableNameWithType, segmentName);
       } catch (Exception ex) {
-        LOGGER.error("failed to delete table {} segment {} with exception", tableNameWithType, segmentName);
+        LOGGER.error("failed to delete table {} segment {} with exception", tableNameWithType, segmentName, ex);
       }
     }
   }

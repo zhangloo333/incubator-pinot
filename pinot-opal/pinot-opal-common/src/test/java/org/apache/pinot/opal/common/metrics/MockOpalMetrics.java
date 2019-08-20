@@ -16,35 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.minion.metrics;
+package org.apache.pinot.opal.common.metrics;
 
 import com.yammer.metrics.core.MetricsRegistry;
-import org.apache.pinot.common.metrics.AbstractMetrics;
-import org.apache.pinot.common.utils.CommonConstants;
 
+public class MockOpalMetrics extends OpalMetrics{
 
-public class MinionMetrics extends AbstractMetrics<MinionQueryPhase, MinionMeter, MinionGauge, MinionTimer> {
-
-  public MinionMetrics(MetricsRegistry metricsRegistry) {
-    this(CommonConstants.Minion.CONFIG_OF_METRICS_PREFIX, metricsRegistry);
-  }
-
-  public MinionMetrics(String prefix, MetricsRegistry metricsRegistry) {
-    super(prefix, metricsRegistry, MinionMetrics.class);
-  }
-
-  @Override
-  protected MinionQueryPhase[] getQueryPhases() {
-    return MinionQueryPhase.values();
-  }
-
-  @Override
-  protected MinionMeter[] getMeters() {
-    return MinionMeter.values();
-  }
-
-  @Override
-  protected MinionGauge[] getGauges() {
-    return MinionGauge.values();
+  public MockOpalMetrics() {
+    super("", new MetricsRegistry());
   }
 }

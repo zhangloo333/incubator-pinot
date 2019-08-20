@@ -23,7 +23,7 @@
   <parent>
     <artifactId>pinot-connectors</artifactId>
     <groupId>org.apache.pinot</groupId>
-    <version>0.2.2.5-SNAPSHOT</version>
+    <version>0.2.2.5.4-SNAPSHOT</version>
     <relativePath>..</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -45,7 +45,7 @@
     <!-- Kafka  -->
     <dependency>
       <groupId>org.apache.kafka</groupId>
-      <artifactId>kafka_2.10</artifactId>
+      <artifactId>kafka_2.11</artifactId>
       <version>${kafka.lib.version}</version>
       <exclusions>
         <exclusion>

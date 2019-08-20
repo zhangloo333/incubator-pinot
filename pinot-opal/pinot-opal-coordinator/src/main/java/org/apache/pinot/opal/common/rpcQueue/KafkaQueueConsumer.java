@@ -19,13 +19,7 @@
 package org.apache.pinot.opal.common.rpcQueue;
 
 import com.google.common.base.Preconditions;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
+import com.google.common.collect.ImmutableList;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -33,12 +27,24 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.pinot.opal.common.OffsetInfo;
+import org.apache.pinot.opal.common.metrics.OpalMeter;
+import org.apache.pinot.opal.common.metrics.OpalMetrics;
+import org.apache.pinot.opal.common.metrics.OpalTimer;
 import org.slf4j.Logger;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 
 public abstract class KafkaQueueConsumer<K, V> implements QueueConsumer<K, V> {
 
   protected abstract KafkaConsumer<K, V> getConsumer();
+  protected abstract OpalMetrics getMetrics();
 
   /**
    * Subscribe to the topic specified
@@ -99,17 +105,30 @@ public abstract class KafkaQueueConsumer<K, V> implements QueueConsumer<K, V> {
     getConsumer().assign(resultTopicPartitions);
   }
 
+  public Set<TopicPartition> getListOfSubscribedTopicPartitions() {
+    return getConsumer().assignment();
+  }
+
   public abstract Logger getLogger();
 
   @Override
   public synchronized List<QueueConsumerRecord<K, V>> getRequests(long timeout, TimeUnit timeUnit) {
-    ConsumerRecords<K, V> records = getConsumerRecords(timeout, timeUnit);
-    List<QueueConsumerRecord<K, V>> msgList = new ArrayList<>(records.count());
-    for (ConsumerRecord<K, V> record : records) {
-      msgList.add(
-          new QueueConsumerRecord<>(record.topic(), record.partition(), record.offset(), record.key(), record.value()));
+    long start = System.currentTimeMillis();
+    List<QueueConsumerRecord<K, V>> msgList;
+    if (getConsumer().assignment().size() == 0) {
+      msgList = ImmutableList.of();
+    } else {
+      ConsumerRecords<K, V> records = getConsumerRecords(timeout, timeUnit);
+      msgList = new ArrayList<>(records.count());
+      for (ConsumerRecord<K, V> record : records) {
+        msgList.add(
+            new QueueConsumerRecord<>(record.topic(), record.partition(), record.offset(), record.key(), record.value()));
+      }
     }
+    getMetrics().addMeteredGlobalValue(OpalMeter.MESSAGE_INGEST_COUNT_PER_BATCH, msgList.size());
+    getMetrics().addTimedValueMs(OpalTimer.FETCH_MESSAGE_LAG, System.currentTimeMillis() - start);
     return msgList;
+
   }
 
   private synchronized ConsumerRecords<K, V> getConsumerRecords(long timeout, TimeUnit timeUnit) {
@@ -127,7 +146,9 @@ public abstract class KafkaQueueConsumer<K, V> implements QueueConsumer<K, V> {
       getLogger().info("topic {} partition {} offset {}", entry.getKey().topic(), entry.getKey().partition(),
           entry.getValue().offset());
     }
+    long start = System.currentTimeMillis();
     getConsumer().commitSync(offsetInfo.getOffsetMap());
+    getMetrics().addTimedValueMs(OpalTimer.COMMIT_OFFSET_LAG, System.currentTimeMillis() - start);
   }
 
   public void close() {

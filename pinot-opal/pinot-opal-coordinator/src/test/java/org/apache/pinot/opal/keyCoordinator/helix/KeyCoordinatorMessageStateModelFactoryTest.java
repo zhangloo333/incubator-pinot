@@ -16,8 +16,15 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.core.segment.updater;
+package org.apache.pinot.opal.keyCoordinator.helix;
 
-public interface SegmentDeletionListener {
-  void onSegmentDeletion(String tableNameWithType, String segmentName);
+import org.testng.annotations.Test;
+
+import static org.testng.Assert.*;
+
+public class KeyCoordinatorMessageStateModelFactoryTest {
+
+  @Test
+  public void testGetKafkaPartitionNumberFromHelixPartition() {
+  }
 }

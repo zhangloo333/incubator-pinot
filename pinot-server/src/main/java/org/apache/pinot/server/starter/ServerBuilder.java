@@ -18,6 +18,10 @@
  */
 package org.apache.pinot.server.starter;
 
+import com.yammer.metrics.core.MetricsRegistry;
+import org.apache.commons.configuration.ConfigurationException;
+import org.apache.helix.ZNRecord;
+import org.apache.helix.store.zk.ZkHelixPropertyStore;
 import org.apache.pinot.common.metrics.MetricsHelper;
 import org.apache.pinot.common.metrics.ServerMetrics;
 import org.apache.pinot.core.data.manager.InstanceDataManager;
@@ -26,23 +30,22 @@ import org.apache.pinot.core.operator.transform.function.TransformFunctionFactor
 import org.apache.pinot.core.query.executor.QueryExecutor;
 import org.apache.pinot.core.query.scheduler.QueryScheduler;
 import org.apache.pinot.core.query.scheduler.QuerySchedulerFactory;
-import org.apache.pinot.server.conf.ServerConf;
-import org.apache.pinot.transport.netty.NettyServer;
-import org.apache.pinot.transport.netty.NettyTCPServer;
 import org.apache.pinot.core.segment.updater.SegmentUpdater;
+import org.apache.pinot.opal.common.metrics.OpalMetrics;
 import org.apache.pinot.opal.common.storageProvider.UpdateLogStorageProvider;
 import org.apache.pinot.opal.servers.KeyCoordinatorProvider;
 import org.apache.pinot.opal.servers.SegmentUpdaterProvider;
-import com.yammer.metrics.core.MetricsRegistry;
-import org.apache.commons.configuration.ConfigurationException;
-import org.apache.helix.ZNRecord;
-import org.apache.helix.store.zk.ZkHelixPropertyStore;
+import org.apache.pinot.server.conf.ServerConf;
+import org.apache.pinot.transport.netty.NettyServer;
+import org.apache.pinot.transport.netty.NettyTCPServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.LongAccumulator;
+
+import static org.apache.pinot.common.utils.CommonConstants.Opal.PINOT_UPSERT_SERVER_COMPONENT_PREFIX;
 
 
 /**
@@ -54,6 +57,9 @@ public class ServerBuilder {
   private final ServerConf _serverConf;
   private final ZkHelixPropertyStore<ZNRecord> _propertyStore;
   private ServerMetrics _serverMetrics;
+  private OpalMetrics _opalMetrics;
+
+  private static final String PINOT_UPSERT_METRICS_PREFIX = "upsert.";
 
   /**
    * Construct with ServerConf object.
@@ -75,8 +81,18 @@ public class ServerBuilder {
     MetricsHelper.initializeMetrics(_serverConf.getMetricsConfig());
     MetricsRegistry metricsRegistry = new MetricsRegistry();
     MetricsHelper.registerMetricsRegistry(metricsRegistry);
-    _serverMetrics = new ServerMetrics(metricsRegistry, !_serverConf.emitTableLevelMetrics());
+    _serverMetrics = new ServerMetrics(_serverConf.getMetricsPrefix(), metricsRegistry, !_serverConf.emitTableLevelMetrics());
     _serverMetrics.initializeGlobalMeters();
+
+    maybeInitOpalMetrics(metricsRegistry);
+  }
+
+  private void maybeInitOpalMetrics(MetricsRegistry metricsRegistry) {
+    if (_serverConf.isUpsertEnabled()) {
+      _opalMetrics = new OpalMetrics(_serverConf.getMetricsPrefix() + PINOT_UPSERT_SERVER_COMPONENT_PREFIX,
+          metricsRegistry);
+      _opalMetrics.initializeGlobalMeters();
+    }
   }
 
   @SuppressWarnings("unchecked")
@@ -129,15 +145,15 @@ public class ServerBuilder {
   }
 
   public KeyCoordinatorProvider buildKeyCoordinatorProvider() {
-    return new KeyCoordinatorProvider(_serverConf.getUpsertKcProviderConfig(), _serverConf.getPinotServerHostname());
+    return new KeyCoordinatorProvider(_serverConf.getUpsertKcProviderConfig(), _serverConf.getPinotServerHostname(), _opalMetrics);
   }
 
   public SegmentUpdaterProvider buildSegmentUpdaterProvider() {
-    return new SegmentUpdaterProvider(_serverConf.getUpsertSegmentUpdateProviderConfig(), _serverConf.getPinotServerHostname());
+    return new SegmentUpdaterProvider(_serverConf.getUpsertSegmentUpdateProviderConfig(), _serverConf.getPinotServerHostname(), _opalMetrics);
   }
 
   public SegmentUpdater buildSegmentUpdater(SegmentUpdaterProvider updateProvider) {
-    return new SegmentUpdater(_serverConf.getUpsertSegmentUpdaterConfig(), updateProvider);
+    return new SegmentUpdater(_serverConf.getUpsertSegmentUpdaterConfig(), updateProvider, _opalMetrics);
   }
 
   public void initVirtualColumnStorageProvider() {

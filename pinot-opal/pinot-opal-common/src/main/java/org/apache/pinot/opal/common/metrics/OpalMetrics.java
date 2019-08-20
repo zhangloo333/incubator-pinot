@@ -16,35 +16,39 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.minion.metrics;
+package org.apache.pinot.opal.common.metrics;
 
 import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.pinot.common.metrics.AbstractMetrics;
-import org.apache.pinot.common.utils.CommonConstants;
 
+import java.util.concurrent.TimeUnit;
 
-public class MinionMetrics extends AbstractMetrics<MinionQueryPhase, MinionMeter, MinionGauge, MinionTimer> {
+public class OpalMetrics extends AbstractMetrics<AbstractMetrics.QueryPhase, OpalMeter, OpalGauge, OpalTimer> {
 
-  public MinionMetrics(MetricsRegistry metricsRegistry) {
-    this(CommonConstants.Minion.CONFIG_OF_METRICS_PREFIX, metricsRegistry);
-  }
-
-  public MinionMetrics(String prefix, MetricsRegistry metricsRegistry) {
-    super(prefix, metricsRegistry, MinionMetrics.class);
+  public OpalMetrics(String prefix, MetricsRegistry metricsRegistry) {
+    super(prefix, metricsRegistry, OpalMetrics.class);
   }
 
   @Override
-  protected MinionQueryPhase[] getQueryPhases() {
-    return MinionQueryPhase.values();
+  protected QueryPhase[] getQueryPhases() {
+    return new QueryPhase[0];
   }
 
   @Override
-  protected MinionMeter[] getMeters() {
-    return MinionMeter.values();
+  protected OpalMeter[] getMeters() {
+    return OpalMeter.values();
   }
 
   @Override
-  protected MinionGauge[] getGauges() {
-    return MinionGauge.values();
+  protected OpalGauge[] getGauges() {
+    return OpalGauge.values();
+  }
+
+  public void addTimedValueMs(OpalTimer timer, long duration) {
+    addTimedValue(timer, duration, TimeUnit.MILLISECONDS);
+  }
+
+  public void addTimedTableValueMs(String table, OpalTimer timer, long duration) {
+    addTimedTableValue(table, timer, duration, TimeUnit.MILLISECONDS);
   }
 }

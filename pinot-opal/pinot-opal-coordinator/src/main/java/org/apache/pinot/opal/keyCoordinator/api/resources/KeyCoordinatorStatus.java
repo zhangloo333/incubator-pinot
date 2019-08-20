@@ -18,11 +18,13 @@
  */
 package org.apache.pinot.opal.keyCoordinator.api.resources;
 
-import org.apache.pinot.opal.keyCoordinator.starter.KeyCoordinatorStarter;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiResponse;
 import io.swagger.annotations.ApiResponses;
+import org.apache.pinot.opal.keyCoordinator.starter.KeyCoordinatorStarter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.ws.rs.GET;
@@ -31,28 +33,37 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import java.util.stream.Collectors;
 
-@Api(tags = "Health")
+@Api(tags = "Status")
 @Path("/")
-public class KeyCoordinatorHealthCheck {
+public class KeyCoordinatorStatus {
+  private static final Logger LOGGER = LoggerFactory.getLogger(KeyCoordinatorStatus.class);
 
   @Inject
   private KeyCoordinatorStarter keyCoordinatorStarter;
 
   @GET
   @Produces(MediaType.TEXT_PLAIN)
-  @Path("health")
-  @ApiOperation(value = "Checking key coordinator health")
+  @Path("status")
+  @ApiOperation(value = "Checking log coordinator status")
   @ApiResponses(value = {
-      @ApiResponse(code = 200, message = "KC is healthy"),
-      @ApiResponse(code = 503, message = "KC is disabled")
+      @ApiResponse(code = 200, message = "success"),
   })
-  public String getKCHealth() {
-
-    if (keyCoordinatorStarter != null && keyCoordinatorStarter.isRunning()) {
-      return "OK";
-    } else {
-      throw new WebApplicationException("Pinot key coordinator is disabled", Response.Status.SERVICE_UNAVAILABLE);
+  public String getKCStatus() {
+    try {
+      if (keyCoordinatorStarter != null && keyCoordinatorStarter.isRunning()) {
+        String result = keyCoordinatorStarter.getConsumer().getListOfSubscribedTopicPartitions()
+            .stream()
+            .map(tp -> String.format("%s:%d", tp.topic(), tp.partition()))
+            .collect(Collectors.joining(","));
+        return "list of subscribed topic partitions: " + result;
+      } else {
+        throw new WebApplicationException("Pinot key coordinator is disabled", Response.Status.SERVICE_UNAVAILABLE);
+      }
+    } catch (Exception ex) {
+      LOGGER.error("failed to get kc status", ex);
+      throw new WebApplicationException(ex);
     }
   }
 

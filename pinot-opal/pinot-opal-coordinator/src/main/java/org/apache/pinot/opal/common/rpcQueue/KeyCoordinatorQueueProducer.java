@@ -26,6 +26,7 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.pinot.opal.common.config.CommonConfig;
 import org.apache.pinot.opal.common.CoordinatorConfig;
 import org.apache.pinot.opal.common.messages.KeyCoordinatorQueueMsg;
+import org.apache.pinot.opal.common.metrics.OpalMetrics;
 import org.apache.pinot.opal.common.utils.CommonUtils;
 import org.apache.pinot.opal.common.DistributedCommonUtils;
 import org.apache.pinot.opal.common.IntPartitioner;
@@ -40,6 +41,7 @@ public class KeyCoordinatorQueueProducer extends KafkaQueueProducer<Integer, Key
 
   private Configuration _conf;
   private String _topic;
+  private OpalMetrics _opalMetrics;
   private KafkaProducer<Integer, KeyCoordinatorQueueMsg> _kafkaProducer;
 
   @Override
@@ -55,8 +57,14 @@ public class KeyCoordinatorQueueProducer extends KafkaQueueProducer<Integer, Key
   }
 
   @Override
-  public void init(Configuration conf) {
+  protected OpalMetrics getMetrics() {
+    return _opalMetrics;
+  }
+
+  @Override
+  public void init(Configuration conf, OpalMetrics opalMetrics) {
     _conf = conf;
+    _opalMetrics = opalMetrics;
     _topic = _conf.getString(CommonConfig.RPC_QUEUE_CONFIG.TOPIC_KEY);
     String hostname = conf.getString(CommonConfig.RPC_QUEUE_CONFIG.HOSTNAME_KEY);
     final Properties kafkaProducerConfig = CommonUtils.getPropertiesFromConf(

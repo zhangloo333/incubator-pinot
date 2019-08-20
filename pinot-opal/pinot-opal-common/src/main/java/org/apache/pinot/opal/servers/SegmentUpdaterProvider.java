@@ -23,6 +23,7 @@ import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang.StringUtils;
 import org.apache.pinot.common.Utils;
 import org.apache.pinot.opal.common.config.CommonConfig;
+import org.apache.pinot.opal.common.metrics.OpalMetrics;
 import org.apache.pinot.opal.common.rpcQueue.QueueConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,7 +39,7 @@ public class SegmentUpdaterProvider {
   private Configuration _conf;
   private QueueConsumer _consumer;
 
-  public SegmentUpdaterProvider(Configuration conf, String hostName) {
+  public SegmentUpdaterProvider(Configuration conf, String hostName, OpalMetrics metrics) {
     Preconditions.checkState(StringUtils.isNotEmpty(hostName), "host name should not be empty");
     _conf = conf;
     Configuration consumerConfig = conf.subset(CommonConfig.RPC_QUEUE_CONFIG.CONSUMER_CONFIG_KEY);
@@ -48,7 +49,7 @@ public class SegmentUpdaterProvider {
     try {
       consumerConfig.setProperty(CommonConfig.RPC_QUEUE_CONFIG.HOSTNAME_KEY, hostName);
       _consumer = (QueueConsumer) Class.forName(className).newInstance();
-      _consumer.init(consumerConfig);
+      _consumer.init(consumerConfig, metrics);
       synchronized (SegmentUpdaterProvider.class) {
         if (_instance == null) {
           _instance = this;

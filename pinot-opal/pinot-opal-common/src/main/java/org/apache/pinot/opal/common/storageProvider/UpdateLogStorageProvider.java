@@ -120,7 +120,6 @@ public class UpdateLogStorageProvider {
         // need to work on new design to prevent writing too much data
         addSegment(tableName, segmentName);
       }
-      LOGGER.info("adding data for table {}, segment {}, {} messages",tableName, segmentName, messages.size());
       segmentProviderMap.get(segmentName).addData(messages);
     } else {
       LOGGER.warn("receive update event for table {} not in this server", tableName);

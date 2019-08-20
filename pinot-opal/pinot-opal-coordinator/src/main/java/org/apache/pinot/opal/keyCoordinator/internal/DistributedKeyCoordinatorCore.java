@@ -138,13 +138,18 @@ public class DistributedKeyCoordinatorCore {
       try {
         List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> records = _inputKafkaConsumer.getRequests(_fetchMsgMaxDelayMs,
             TimeUnit.MILLISECONDS);
-        records.forEach(c -> {
-          try {
-            _consumerRecordBlockingQueue.put(c);
-          } catch (InterruptedException e) {
-            LOGGER.warn("exception while trying to put message to queue", e);
-          }
-        });
+        if (records.size() == 0) {
+          LOGGER.info("no message found in kafka consumer, sleep and wait for next batch");
+          Uninterruptibles.sleepUninterruptibly(_fetchMsgMaxDelayMs, TimeUnit.MILLISECONDS);
+        } else {
+          records.forEach(c -> {
+            try {
+              _consumerRecordBlockingQueue.put(c);
+            } catch (InterruptedException e) {
+              LOGGER.warn("exception while trying to put message to queue", e);
+            }
+          });
+        }
       } catch (Exception ex) {
         LOGGER.error("encountered exception in consumer ingest loop, will retry", ex);
       }

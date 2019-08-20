@@ -18,8 +18,6 @@
  */
 package org.apache.pinot.opal.keyCoordinator.helix;
 
-import java.util.List;
-import javax.annotation.Nonnull;
 import org.apache.helix.HelixAdmin;
 import org.apache.helix.HelixException;
 import org.apache.helix.HelixManager;
@@ -29,10 +27,14 @@ import org.apache.helix.model.IdealState;
 import org.apache.helix.model.InstanceConfig;
 import org.apache.helix.model.OnlineOfflineSMD;
 import org.apache.pinot.common.utils.CommonConstants;
-import org.apache.pinot.opal.common.rpcQueue.KeyCoordinatorQueueConsumer;
+import org.apache.pinot.opal.common.messages.KeyCoordinatorQueueMsg;
+import org.apache.pinot.opal.common.rpcQueue.KafkaQueueConsumer;
 import org.apache.pinot.opal.keyCoordinator.api.KeyCoordinatorInstance;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nonnull;
+import java.util.List;
 
 
 /**
@@ -49,8 +51,8 @@ public class KeyCoordinatorClusterHelixManager {
   private final HelixAdmin _helixAdmin;
 
   public KeyCoordinatorClusterHelixManager(@Nonnull String zkURL, @Nonnull String keyCoordinatorClusterName,
-      @Nonnull String keyCoordinatorId, @Nonnull KeyCoordinatorQueueConsumer keyCoordinatorQueueConsumer,
-      @Nonnull String keyCoordinatorMessageTopic, int keyCoordinatorMessagePartitionCount)
+                                           @Nonnull String keyCoordinatorId, @Nonnull KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> keyCoordinatorQueueConsumer,
+                                           @Nonnull String keyCoordinatorMessageTopic, int keyCoordinatorMessagePartitionCount)
       throws Exception {
     _helixZkURL = zkURL;
     _keyCoordinatorClusterName = keyCoordinatorClusterName;

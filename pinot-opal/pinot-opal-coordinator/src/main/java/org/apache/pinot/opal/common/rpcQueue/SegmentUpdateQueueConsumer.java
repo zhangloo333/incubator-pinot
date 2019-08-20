@@ -26,6 +26,7 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.pinot.opal.common.config.CommonConfig;
 import org.apache.pinot.opal.common.CoordinatorConfig;
 import org.apache.pinot.opal.common.messages.LogCoordinatorMessage;
+import org.apache.pinot.opal.common.metrics.OpalMetrics;
 import org.apache.pinot.opal.common.utils.CommonUtils;
 import org.apache.pinot.opal.common.DistributedCommonUtils;
 import org.slf4j.Logger;
@@ -41,12 +42,14 @@ public class SegmentUpdateQueueConsumer extends KafkaQueueConsumer<String, LogCo
 
   public static final String DEFAULT_CONSUMER_GROUP_ID_PREFIX = "pinot_upsert_updater_";
 
-  private String _topic;
   private KafkaConsumer<String, LogCoordinatorMessage> _consumer;
+  private OpalMetrics _metrics;
 
-  public void init(Configuration conf) {
+  @Override
+  public void init(Configuration conf, OpalMetrics metrics) {
+    this._metrics = metrics;
     String hostName = conf.getString(CommonConfig.RPC_QUEUE_CONFIG.HOSTNAME_KEY);
-    final String groupid = conf.getString(CoordinatorConfig.KAFKA_CONFIG.CONSUMER_GROUP_PREFIX_KEY,
+    String groupid = conf.getString(CoordinatorConfig.KAFKA_CONFIG.CONSUMER_GROUP_PREFIX_KEY,
         DEFAULT_CONSUMER_GROUP_ID_PREFIX) + hostName;
 
     LOGGER.info("creating segment updater kafka consumer with group id {}", groupid);
@@ -55,15 +58,32 @@ public class SegmentUpdateQueueConsumer extends KafkaQueueConsumer<String, LogCo
     kafkaProperties.put(ConsumerConfig.GROUP_ID_CONFIG, groupid);
     kafkaProperties.put(ConsumerConfig.CLIENT_ID_CONFIG, DistributedCommonUtils.getClientId(hostName));
     kafkaProperties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-    _topic = conf.getString(CommonConfig.RPC_QUEUE_CONFIG.TOPIC_KEY);
     _consumer = new KafkaConsumer<>(kafkaProperties);
-    this.subscribe(_topic);
+  }
+
+  @Override
+  public void subscribeForTable(String table) {
+    String topicName = DistributedCommonUtils.getKafkaTopicFromTableName(table);
+    LOGGER.info("subscribing for table {}, kafka topic {}", table, topicName);
+    this.subscribe(topicName);
+  }
+
+  @Override
+  public void unsubscribeForTable(String table) {
+    String topicName = DistributedCommonUtils.getKafkaTopicFromTableName(table);
+    LOGGER.info("unsubscribing for table {}, kafka topic {}", table, topicName);
+    this.unsubscribe(topicName);
   }
 
   @Override
   protected KafkaConsumer<String, LogCoordinatorMessage> getConsumer() {
     Preconditions.checkState(_consumer != null, "consumer is not initialized yet");
     return _consumer;
+  }
+
+  @Override
+  protected OpalMetrics getMetrics() {
+    return _metrics;
   }
 
   @Override

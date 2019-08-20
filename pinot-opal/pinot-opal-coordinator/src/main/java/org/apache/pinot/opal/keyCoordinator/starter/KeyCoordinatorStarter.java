@@ -19,12 +19,17 @@
 package org.apache.pinot.opal.keyCoordinator.starter;
 
 import com.google.common.base.Preconditions;
-import java.io.File;
-import java.util.Iterator;
+import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang.StringUtils;
+import org.apache.pinot.common.metrics.MetricsHelper;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.opal.common.config.CommonConfig;
+import org.apache.pinot.opal.common.messages.KeyCoordinatorQueueMsg;
+import org.apache.pinot.opal.common.messages.LogCoordinatorMessage;
+import org.apache.pinot.opal.common.metrics.OpalMetrics;
+import org.apache.pinot.opal.common.rpcQueue.KafkaQueueConsumer;
+import org.apache.pinot.opal.common.rpcQueue.KafkaQueueProducer;
 import org.apache.pinot.opal.common.rpcQueue.KeyCoordinatorQueueConsumer;
 import org.apache.pinot.opal.common.rpcQueue.LogCoordinatorQueueProducer;
 import org.apache.pinot.opal.common.storageProvider.UpdateLogStorageProvider;
@@ -37,12 +42,16 @@ import org.apache.pinot.opal.keyCoordinator.internal.DistributedKeyCoordinatorCo
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.util.Iterator;
+
 public class KeyCoordinatorStarter {
   private static final Logger LOGGER = LoggerFactory.getLogger(KeyCoordinatorStarter.class);
 
   private KeyCoordinatorConf _keyCoordinatorConf;
-  private KeyCoordinatorQueueConsumer _consumer;
-  private LogCoordinatorQueueProducer _producer;
+  private OpalMetrics _metrics;
+  private KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> _consumer;
+  private KafkaQueueProducer<Integer, LogCoordinatorMessage> _producer;
   private MessageResolveStrategy _messageResolveStrategy;
   private DistributedKeyCoordinatorCore _keyCoordinatorCore;
   private KeyCoordinatorApiApplication _application;
@@ -51,8 +60,11 @@ public class KeyCoordinatorStarter {
   private String _instanceId;
   private KeyCoordinatorClusterHelixManager _keyCoordinatorClusterHelixManager;
 
+  private static final String KEY_COORDINATOR_PREFIX = "pinot.kc.";
+
   public KeyCoordinatorStarter(KeyCoordinatorConf conf) throws Exception {
     _keyCoordinatorConf = conf;
+    initMetrics(_keyCoordinatorConf.getMetricsConf());
     _hostName = conf.getString(KeyCoordinatorConf.HOST_NAME);
     Preconditions.checkState(StringUtils.isNotEmpty(_hostName), "expect host name in configuration");
     _port = conf.getPort();
@@ -73,22 +85,34 @@ public class KeyCoordinatorStarter {
     _application = new KeyCoordinatorApiApplication(this);
   }
 
+  private void initMetrics(Configuration conf) {
+    MetricsHelper.initializeMetrics(conf);
+    MetricsRegistry registry = new MetricsRegistry();
+    MetricsHelper.registerMetricsRegistry(registry);
+    _metrics = new OpalMetrics(KEY_COORDINATOR_PREFIX, registry);
+    _metrics.initializeGlobalMeters();
+  }
+
   private KeyCoordinatorQueueConsumer getConsumer(Configuration consumerConfig) {
     consumerConfig.setProperty(CommonConfig.RPC_QUEUE_CONFIG.HOSTNAME_KEY, _hostName);
     KeyCoordinatorQueueConsumer consumer = new KeyCoordinatorQueueConsumer();
-    consumer.init(consumerConfig);
+    consumer.init(consumerConfig, _metrics);
     return consumer;
   }
 
   private LogCoordinatorQueueProducer getProducer(Configuration producerConfig) {
     producerConfig.setProperty(CommonConfig.RPC_QUEUE_CONFIG.HOSTNAME_KEY, _hostName);
     LogCoordinatorQueueProducer producer = new LogCoordinatorQueueProducer();
-    producer.init(producerConfig);
+    producer.init(producerConfig, _metrics);
     return producer;
   }
 
   public KeyCoordinatorClusterHelixManager getKeyCoordinatorClusterHelixManager() {
     return _keyCoordinatorClusterHelixManager;
+  }
+
+  public KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> getConsumer() {
+    return _consumer;
   }
 
   public void start() {

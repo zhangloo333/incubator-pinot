@@ -20,6 +20,8 @@ package org.apache.pinot.opal.servers;
 
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.PropertiesConfiguration;
+import org.apache.pinot.opal.common.metrics.MockOpalMetrics;
+import org.apache.pinot.opal.common.metrics.OpalMetrics;
 import org.apache.pinot.opal.common.rpcQueue.QueueConsumer;
 import org.apache.pinot.opal.common.rpcQueue.QueueConsumerRecord;
 import org.testng.Assert;
@@ -44,7 +46,7 @@ public class SegmentUpdaterProviderTest {
 
   @Test
   public void testGetConsumer() {
-    SegmentUpdaterProvider provider = new SegmentUpdaterProvider(conf, "host_name_sample");
+    SegmentUpdaterProvider provider = new SegmentUpdaterProvider(conf, "host_name_sample", new MockOpalMetrics());
     Configuration conf = ((MockConsumer) provider.getConsumer())._conf;
 
     Assert.assertEquals(conf.getString(HOSTNAME_KEY), "host_name_sample");
@@ -62,8 +64,16 @@ public class SegmentUpdaterProviderTest {
     protected boolean _isClosed = false;
 
     @Override
-    public void init(Configuration conf) {
+    public void init(Configuration conf, OpalMetrics metrics) {
       _conf = conf;
+    }
+
+    @Override
+    public void subscribeForTable(String table) {
+    }
+
+    @Override
+    public void unsubscribeForTable(String table) {
     }
 
     @Override
@@ -73,7 +83,6 @@ public class SegmentUpdaterProviderTest {
 
     @Override
     public void ackOffset() {
-
     }
 
     @Override

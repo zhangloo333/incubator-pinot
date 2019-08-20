@@ -19,24 +19,21 @@
 package org.apache.pinot.opal.common.rpcQueue;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableMap;
 import org.apache.commons.configuration.Configuration;
-import org.apache.commons.lang.StringUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.pinot.opal.common.config.CommonConfig;
 import org.apache.pinot.opal.common.CoordinatorConfig;
-import org.apache.pinot.opal.common.messages.KeyCoordinatorQueueMsg;
-import org.apache.pinot.opal.common.utils.CommonUtils;
 import org.apache.pinot.opal.common.DistributedCommonUtils;
+import org.apache.pinot.opal.common.config.CommonConfig;
+import org.apache.pinot.opal.common.messages.KeyCoordinatorQueueMsg;
+import org.apache.pinot.opal.common.metrics.OpalMetrics;
+import org.apache.pinot.opal.common.utils.CommonUtils;
 import org.apache.pinot.opal.keyCoordinator.starter.KeyCoordinatorConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
 import java.util.Properties;
-import java.util.stream.Collectors;
 
 
 /**
@@ -47,11 +44,14 @@ public class KeyCoordinatorQueueConsumer extends KafkaQueueConsumer<Integer, Key
   private static final Logger LOGGER = LoggerFactory.getLogger(KeyCoordinatorQueueConsumer.class);
 
   private KafkaConsumer<Integer, KeyCoordinatorQueueMsg> _consumer;
+  private OpalMetrics _metrics;
 
   /**
    * @param conf configuration of the kafka key coordinator queue consumer
    */
-  public void init(Configuration conf) {
+  @Override
+  public void init(Configuration conf, OpalMetrics metrics) {
+    this._metrics = metrics;
     String _consumerGroupPrefix = conf.getString(CoordinatorConfig.KAFKA_CONFIG.CONSUMER_GROUP_PREFIX_KEY, KeyCoordinatorConf.KAFKA_CONSUMER_GROUP_ID_PREFIX);
     String hostname = conf.getString(CommonConfig.RPC_QUEUE_CONFIG.HOSTNAME_KEY);
 
@@ -64,9 +64,24 @@ public class KeyCoordinatorQueueConsumer extends KafkaQueueConsumer<Integer, Key
   }
 
   @Override
+  public void subscribeForTable(String table) {
+    // nothing as key coordinator don't subscribe for table
+  }
+
+  @Override
+  public void unsubscribeForTable(String table) {
+    // nothing as key coordinator don't subscribe for table
+  }
+
+  @Override
   protected KafkaConsumer<Integer, KeyCoordinatorQueueMsg> getConsumer() {
     Preconditions.checkState(_consumer != null, "consumer is not initialized yet");
     return _consumer;
+  }
+
+  @Override
+  protected OpalMetrics getMetrics() {
+    return _metrics;
   }
 
   @Override
