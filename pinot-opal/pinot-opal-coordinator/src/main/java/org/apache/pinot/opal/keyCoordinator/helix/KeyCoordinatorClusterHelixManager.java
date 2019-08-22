@@ -27,8 +27,7 @@ import org.apache.helix.model.IdealState;
 import org.apache.helix.model.InstanceConfig;
 import org.apache.helix.model.OnlineOfflineSMD;
 import org.apache.pinot.common.utils.CommonConstants;
-import org.apache.pinot.opal.common.messages.KeyCoordinatorQueueMsg;
-import org.apache.pinot.opal.common.rpcQueue.KafkaQueueConsumer;
+import org.apache.pinot.opal.common.rpcQueue.KeyCoordinatorQueueConsumer;
 import org.apache.pinot.opal.keyCoordinator.api.KeyCoordinatorInstance;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,7 +50,7 @@ public class KeyCoordinatorClusterHelixManager {
   private final HelixAdmin _helixAdmin;
 
   public KeyCoordinatorClusterHelixManager(@Nonnull String zkURL, @Nonnull String keyCoordinatorClusterName,
-                                           @Nonnull String keyCoordinatorId, @Nonnull KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> keyCoordinatorQueueConsumer,
+                                           @Nonnull String keyCoordinatorId, @Nonnull KeyCoordinatorQueueConsumer keyCoordinatorQueueConsumer,
                                            @Nonnull String keyCoordinatorMessageTopic, int keyCoordinatorMessagePartitionCount)
       throws Exception {
     _helixZkURL = zkURL;
@@ -80,6 +79,10 @@ public class KeyCoordinatorClusterHelixManager {
     _participantHelixManager.getStateMachineEngine().registerStateModelFactory(OnlineOfflineSMD.name,
         new KeyCoordinatorMessageStateModelFactory(keyCoordinatorQueueConsumer, keyCoordinatorMessageTopic));
     _participantHelixManager.connect();
+  }
+
+  public HelixManager getControllerHelixManager() {
+    return _controllerHelixManager;
   }
 
   public List<String> getAllInstances() {

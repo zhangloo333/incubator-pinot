@@ -25,12 +25,9 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.pinot.common.metrics.MetricsHelper;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.opal.common.config.CommonConfig;
-import org.apache.pinot.opal.common.messages.KeyCoordinatorQueueMsg;
-import org.apache.pinot.opal.common.messages.LogCoordinatorMessage;
 import org.apache.pinot.opal.common.metrics.OpalMetrics;
-import org.apache.pinot.opal.common.rpcQueue.KafkaQueueConsumer;
-import org.apache.pinot.opal.common.rpcQueue.KafkaQueueProducer;
 import org.apache.pinot.opal.common.rpcQueue.KeyCoordinatorQueueConsumer;
+import org.apache.pinot.opal.common.rpcQueue.KeyCoordinatorQueueProducer;
 import org.apache.pinot.opal.common.rpcQueue.LogCoordinatorQueueProducer;
 import org.apache.pinot.opal.common.storageProvider.UpdateLogStorageProvider;
 import org.apache.pinot.opal.common.updateStrategy.MessageResolveStrategy;
@@ -50,8 +47,9 @@ public class KeyCoordinatorStarter {
 
   private KeyCoordinatorConf _keyCoordinatorConf;
   private OpalMetrics _metrics;
-  private KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> _consumer;
-  private KafkaQueueProducer<Integer, LogCoordinatorMessage> _producer;
+  private KeyCoordinatorQueueConsumer _consumer;
+  private LogCoordinatorQueueProducer _producer;
+  private KeyCoordinatorQueueProducer _versionMessageProducer;
   private MessageResolveStrategy _messageResolveStrategy;
   private DistributedKeyCoordinatorCore _keyCoordinatorCore;
   private KeyCoordinatorApiApplication _application;
@@ -71,6 +69,7 @@ public class KeyCoordinatorStarter {
     _instanceId = CommonConstants.Helix.PREFIX_OF_KEY_COORDINATOR_INSTANCE + _hostName + "_" + _port;
     _consumer = getConsumer(_keyCoordinatorConf.getConsumerConf());
     _producer = getProducer(_keyCoordinatorConf.getProducerConf());
+    _versionMessageProducer = getVersionMessageProducer(_keyCoordinatorConf.getVersionMessageProducerConf());
     _keyCoordinatorClusterHelixManager = new KeyCoordinatorClusterHelixManager(
         _keyCoordinatorConf.getZkStr(),
         _keyCoordinatorConf.getKeyCoordinatorClusterName(),
@@ -107,17 +106,26 @@ public class KeyCoordinatorStarter {
     return producer;
   }
 
+  private KeyCoordinatorQueueProducer getVersionMessageProducer(Configuration configuration) {
+    configuration.setProperty(CommonConfig.RPC_QUEUE_CONFIG.HOSTNAME_KEY, _hostName);
+    KeyCoordinatorQueueProducer versionMessageProducer = new KeyCoordinatorQueueProducer();
+    versionMessageProducer.init(configuration, _metrics);
+    return versionMessageProducer;
+  }
+
   public KeyCoordinatorClusterHelixManager getKeyCoordinatorClusterHelixManager() {
     return _keyCoordinatorClusterHelixManager;
   }
 
-  public KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> getConsumer() {
+  public KeyCoordinatorQueueConsumer getConsumer() {
     return _consumer;
   }
 
   public void start() {
     LOGGER.info("starting key coordinator instance");
-    _keyCoordinatorCore.init(_keyCoordinatorConf, _producer, _consumer, _messageResolveStrategy);
+    _keyCoordinatorCore
+        .init(_keyCoordinatorConf, _producer, _consumer, _versionMessageProducer, _messageResolveStrategy,
+            _keyCoordinatorClusterHelixManager);
     LOGGER.info("finished init key coordinator instance, starting loop");
     _keyCoordinatorCore.start();
     LOGGER.info("starting web service");
@@ -132,6 +140,8 @@ public class KeyCoordinatorStarter {
     LOGGER.info("finished shutdown producer");
     _consumer.close();
     LOGGER.info("finished shutdown consumer");
+    _versionMessageProducer.close();
+    LOGGER.info("finished shutdown version message producer");
   }
 
   public boolean isRunning() {

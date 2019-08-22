@@ -23,6 +23,7 @@ public class CommonConfig {
   public static class RPC_QUEUE_CONFIG {
     public static final String PRODUCER_CONFIG_KEY = "producer";
     public static final String CONSUMER_CONFIG_KEY = "consumer";
+    public static final String VERSION_MESSAGE_PRODUCER_CONFIG_KEY = "version.message.producer";
     public static final String TOPIC_KEY = "topic";
     public static final String HOSTNAME_KEY = "hostname";
     public static final String CLASS_NAME = "class.name";

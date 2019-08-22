@@ -21,7 +21,11 @@ package org.apache.pinot.opal.keyCoordinator.internal;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.Uninterruptibles;
+import java.util.Collections;
 import org.apache.commons.configuration.Configuration;
+import org.apache.pinot.opal.common.rpcQueue.KeyCoordinatorQueueConsumer;
+import org.apache.pinot.opal.common.rpcQueue.KeyCoordinatorQueueProducer;
+import org.apache.pinot.opal.common.rpcQueue.LogCoordinatorQueueProducer;
 import org.apache.pinot.opal.common.rpcQueue.ProduceTask;
 import org.apache.pinot.opal.common.rpcQueue.QueueConsumerRecord;
 import org.apache.pinot.opal.common.storageProvider.UpdateLogEntry;
@@ -38,9 +42,10 @@ import org.apache.pinot.opal.common.utils.CommonUtils;
 import org.apache.pinot.opal.common.utils.PartitionIdMapper;
 import org.apache.pinot.opal.common.DistributedCommonUtils;
 import org.apache.pinot.opal.common.OffsetInfo;
-import org.apache.pinot.opal.common.rpcQueue.KafkaQueueConsumer;
-import org.apache.pinot.opal.common.rpcQueue.KafkaQueueProducer;
 import org.apache.pinot.opal.common.keyValueStore.RocksDBKeyValueStoreDB;
+import org.apache.pinot.opal.keyCoordinator.helix.KeyCoordinatorClusterHelixManager;
+import org.apache.pinot.opal.keyCoordinator.helix.KeyCoordinatorLeadershipManager;
+import org.apache.pinot.opal.keyCoordinator.helix.KeyCoordinatorVersionManager;
 import org.apache.pinot.opal.keyCoordinator.helix.State;
 import org.apache.pinot.opal.keyCoordinator.starter.KeyCoordinatorConf;
 import org.slf4j.Logger;
@@ -53,6 +58,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
@@ -67,8 +74,9 @@ public class DistributedKeyCoordinatorCore {
   private static final long TERMINATION_WAIT_MS = 10000;
 
   protected KeyCoordinatorConf _conf;
-  protected KafkaQueueProducer<Integer, LogCoordinatorMessage> _outputKafkaProducer;
-  protected KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> _inputKafkaConsumer;
+  protected LogCoordinatorQueueProducer _outputKafkaProducer;
+  protected KeyCoordinatorQueueConsumer _inputKafkaConsumer;
+  protected KeyCoordinatorQueueProducer _versionMessageKafkaProducer;
   protected MessageResolveStrategy _messageResolveStrategy;
   protected KeyValueStoreDB<ByteArrayWrapper, KeyCoordinatorMessageContext> _keyValueStoreDB;
   protected ExecutorService _messageProcessThread;
@@ -76,33 +84,43 @@ public class DistributedKeyCoordinatorCore {
   protected BlockingQueue<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> _consumerRecordBlockingQueue;
   protected PartitionIdMapper _partitionIdMapper;
   protected UpdateLogStorageProvider _storageProvider;
+  protected KeyCoordinatorClusterHelixManager _keyCoordinatorClusterHelixManager;
+  protected KeyCoordinatorLeadershipManager _keyCoordinatorLeadershipManager;
+  protected KeyCoordinatorVersionManager _keyCoordinatorVersionManager;
   protected int _fetchMsgDelayMs;
   protected int _fetchMsgMaxDelayMs;
   protected int _fetchMsgMaxCount;
+  protected long _versionMessageIntervalMs;
+  protected Timer _versionMessageTimer;
+  protected TimerTask _versionMessageProduceTask;
+  protected List<Long> _currentVersionConsumed;
 
   protected volatile State _state = State.SHUTDOWN;
 
   public DistributedKeyCoordinatorCore() {}
 
-  public void init(KeyCoordinatorConf conf, KafkaQueueProducer<Integer, LogCoordinatorMessage> keyCoordinatorProducer,
-                   KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> keyCoordinatorConsumer,
-                   MessageResolveStrategy messageResolveStrategy) {
-    init(conf, keyCoordinatorProducer, keyCoordinatorConsumer, messageResolveStrategy,
+  public void init(KeyCoordinatorConf conf, LogCoordinatorQueueProducer keyCoordinatorProducer,
+                   KeyCoordinatorQueueConsumer keyCoordinatorConsumer, KeyCoordinatorQueueProducer versionMessageKafkaProducer,
+                   MessageResolveStrategy messageResolveStrategy, KeyCoordinatorClusterHelixManager keyCoordinatorClusterHelixManager) {
+    init(conf, keyCoordinatorProducer, keyCoordinatorConsumer, versionMessageKafkaProducer, messageResolveStrategy,
         getKeyValueStore(conf.subset(KeyCoordinatorConf.KEY_COORDINATOR_KV_STORE)), Executors.newSingleThreadExecutor(),
-        Executors.newSingleThreadExecutor(), UpdateLogStorageProvider.getInstance());
+        Executors.newSingleThreadExecutor(), UpdateLogStorageProvider.getInstance(), keyCoordinatorClusterHelixManager);
   }
 
   @VisibleForTesting
-  public void init(KeyCoordinatorConf conf, KafkaQueueProducer<Integer, LogCoordinatorMessage> keyCoordinatorProducer,
-                   KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> keyCoordinatorConsumer,
+  public void init(KeyCoordinatorConf conf, LogCoordinatorQueueProducer keyCoordinatorProducer,
+                   KeyCoordinatorQueueConsumer keyCoordinatorConsumer,
+                   KeyCoordinatorQueueProducer versionMessageKafkaProducer,
                    MessageResolveStrategy messageResolveStrategy,
                    KeyValueStoreDB<ByteArrayWrapper, KeyCoordinatorMessageContext> keyValueStoreDB,
-                   ExecutorService coreThread, ExecutorService consumerThread, UpdateLogStorageProvider storageProvider) {
+                   ExecutorService coreThread, ExecutorService consumerThread, UpdateLogStorageProvider storageProvider,
+                   KeyCoordinatorClusterHelixManager keyCoordinatorClusterHelixManager) {
     CommonUtils.printConfiguration(conf, "distributed key coordinator core");
     Preconditions.checkState(_state == State.SHUTDOWN, "can only init if it is not running yet");
     _conf = conf;
     _outputKafkaProducer = keyCoordinatorProducer;
     _inputKafkaConsumer = keyCoordinatorConsumer;
+    _versionMessageKafkaProducer = versionMessageKafkaProducer;
     _messageResolveStrategy = messageResolveStrategy;
     _keyValueStoreDB = keyValueStoreDB;
     _messageProcessThread = coreThread;
@@ -112,6 +130,7 @@ public class DistributedKeyCoordinatorCore {
     _consumerRecordBlockingQueue = new ArrayBlockingQueue<>(_conf.getConsumerBlockingQueueSize());
 
     _storageProvider = storageProvider;
+    _keyCoordinatorClusterHelixManager = keyCoordinatorClusterHelixManager;
 
     _fetchMsgDelayMs = conf.getInt(KeyCoordinatorConf.FETCH_MSG_DELAY_MS,
         KeyCoordinatorConf.FETCH_MSG_DELAY_MS_DEFAULT);
@@ -122,6 +141,23 @@ public class DistributedKeyCoordinatorCore {
     LOGGER.info("starting with fetch delay: {} max delay: {}, fetch max count: {}", _fetchMsgDelayMs, _fetchMsgMaxDelayMs,
         _fetchMsgMaxCount);
 
+    _versionMessageIntervalMs = conf.getLong(KeyCoordinatorConf.VERSION_MESSAGE_INTERVAL_MS,
+        KeyCoordinatorConf.VERSION_MESSAGE_INTERVAL_MS_DEFAULT);
+    _versionMessageTimer = new Timer();
+    _versionMessageProduceTask = new TimerTask() {
+      @Override
+      public void run() {
+        produceVersionMessage();
+      }
+    };
+    _keyCoordinatorLeadershipManager =
+        new KeyCoordinatorLeadershipManager(_keyCoordinatorClusterHelixManager.getControllerHelixManager());
+    _keyCoordinatorVersionManager =
+        new KeyCoordinatorVersionManager(_keyCoordinatorClusterHelixManager.getControllerHelixManager());
+
+    // todo: handle key coordinator restart
+    _currentVersionConsumed = new ArrayList<>(Collections.nCopies(conf.getKeyCoordinatorMessagePartitionCount(), 0L));
+
     _state = State.INIT;
   }
 
@@ -129,8 +165,34 @@ public class DistributedKeyCoordinatorCore {
     Preconditions.checkState(_state == State.INIT, "key coordinate is not in correct state");
     LOGGER.info("starting key coordinator message process loop");
     _state = State.RUNNING;
+    _versionMessageTimer.schedule(_versionMessageProduceTask, 0L, _versionMessageIntervalMs);
     _consumerThread.submit(this::consumerIngestLoop);
     _messageProcessThread.submit(this::messageProcessLoop);
+  }
+
+  private void produceVersionMessage() {
+    if (_state == State.RUNNING) {
+      if (_keyCoordinatorLeadershipManager.isLeader()) {
+        long versionProduced = _keyCoordinatorVersionManager.getVersionProducedFromPropertyStore();
+        long versionToProduce = versionProduced + 1;
+        LOGGER.info("Producing version messages to all partitions with version {}", versionToProduce);
+        try {
+          // produce to all partitions
+          for (int partition = 0; partition < _conf.getKeyCoordinatorMessagePartitionCount(); partition++) {
+            ProduceTask<Integer, KeyCoordinatorQueueMsg> produceTask =
+                new ProduceTask<>(_conf.getKeyCoordinatorMessageTopic(), partition,
+                    new KeyCoordinatorQueueMsg(versionToProduce));
+            _versionMessageKafkaProducer.produce(produceTask);
+          }
+          // todo: make producing version messages and setting versions in property store atomic
+          _keyCoordinatorVersionManager.setVersionProducedToPropertyStore(versionToProduce);
+        } catch (Exception ex) {
+          LOGGER.error("Failed to produce version message", ex);
+        }
+      } else {
+        LOGGER.debug("Not controller leader, skip producing version messages");
+      }
+    }
   }
 
   private void consumerIngestLoop() {
@@ -206,7 +268,8 @@ public class DistributedKeyCoordinatorCore {
   public void stop() {
     _state = State.SHUTTING_DOWN;
     _messageProcessThread.shutdown();
-    _consumerThread.shutdownNow();
+    _consumerThread.shutdown();
+    _versionMessageTimer.cancel();
     try {
       _consumerThread.awaitTermination(TERMINATION_WAIT_MS, TimeUnit.MILLISECONDS);
       _messageProcessThread.awaitTermination(TERMINATION_WAIT_MS, TimeUnit.MILLISECONDS);
@@ -223,11 +286,11 @@ public class DistributedKeyCoordinatorCore {
   }
 
   private void processMessages(List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> messages) {
-    Map<String, List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>>> topicMsgMap = new HashMap<>();
+    Map<String, List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>>> tableMsgMap = new HashMap<>();
     for (QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg> msg: messages) {
-      topicMsgMap.computeIfAbsent(msg.getRecord().getPinotTableName(), t -> new ArrayList<>()).add(msg);
+      tableMsgMap.computeIfAbsent(msg.getRecord().getPinotTableName(), t -> new ArrayList<>()).add(msg);
     }
-    for (Map.Entry<String, List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>>> perTableUpdates: topicMsgMap.entrySet()) {
+    for (Map.Entry<String, List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>>> perTableUpdates: tableMsgMap.entrySet()) {
       processMessagesForTable(perTableUpdates.getKey(), perTableUpdates.getValue());
     }
   }
@@ -250,6 +313,10 @@ public class DistributedKeyCoordinatorCore {
       start = System.currentTimeMillis();
 
       for (QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg> msg: msgList) {
+        if (msg.getRecord().isVersionMessage()) {
+          _currentVersionConsumed.set(msg.getPartition(), msg.getRecord().getVersion());
+          continue;
+        }
         KeyCoordinatorMessageContext currentContext = msg.getRecord().getContext();
         ByteArrayWrapper key = new ByteArrayWrapper(msg.getRecord().getKey());
         if (primaryKeyToValueMap.containsKey(key)) {
@@ -260,13 +327,13 @@ public class DistributedKeyCoordinatorCore {
             if (_messageResolveStrategy.shouldDeleteFirstMessage(oldContext, currentContext)) {
               // the existing message we have is older than the message we just processed, create delete for it
               tasks.add(createMessageToLogCoordinator(tableName, oldContext.getSegmentName(), oldContext.getKafkaOffset(),
-                  currentContext.getKafkaOffset(), LogEventType.DELETE, msg.getPartition()));
+                  _currentVersionConsumed.get(msg.getPartition()), LogEventType.DELETE, msg.getPartition()));
               // update the local cache to the latest message, so message within the same batch can override each other
               primaryKeyToValueMap.put(key, currentContext);
             } else {
               // the new message is older than the existing message
               tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
-                  currentContext.getKafkaOffset(), LogEventType.DELETE, msg.getPartition()));
+                  _currentVersionConsumed.get(msg.getPartition()), LogEventType.DELETE, msg.getPartition()));
             }
           }
         } else {
@@ -275,7 +342,7 @@ public class DistributedKeyCoordinatorCore {
         }
         // always create a insert event for validFrom if is not a duplicated input
         tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
-            currentContext.getKafkaOffset(), LogEventType.INSERT, msg.getPartition()));
+            _currentVersionConsumed.get(msg.getPartition()), LogEventType.INSERT, msg.getPartition()));
       }
       LOGGER.info("processed all messages in {} ms", System.currentTimeMillis() - start);
       List<ProduceTask<Integer, LogCoordinatorMessage>> failedTasks = sendMessagesToLogCoordinator(tasks, 10, TimeUnit.SECONDS);

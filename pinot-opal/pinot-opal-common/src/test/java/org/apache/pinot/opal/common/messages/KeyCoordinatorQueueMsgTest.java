@@ -53,4 +53,9 @@ public class KeyCoordinatorQueueMsgTest {
   public void testGetPinotTable() {
     assertEquals("table_name", msg.getPinotTableName());
   }
+
+  @Test
+  public void testGetVersion() {
+    assertFalse(msg.isVersionMessage());
+  }
 }

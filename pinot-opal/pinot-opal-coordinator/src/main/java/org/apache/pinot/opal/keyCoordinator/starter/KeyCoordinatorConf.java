@@ -39,6 +39,9 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
   public static final String CONSUMER_BLOCKING_QUEUE_SIZE = "consumer.queue.size";
   public static final int CONSUMER_BLOCKING_QUEUE_SIZE_DEFAULT = 10000;
 
+  public static final String VERSION_MESSAGE_INTERVAL_MS = "version.message.interval.ms";
+  public static final long VERSION_MESSAGE_INTERVAL_MS_DEFAULT = 1000;
+
   public static final String KEY_COORDINATOR_KV_STORE = "kvstore";
 
   // server related config
@@ -82,6 +85,10 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
 
   public Configuration getConsumerConf() {
     return this.subset(CommonConfig.RPC_QUEUE_CONFIG.CONSUMER_CONFIG_KEY);
+  }
+
+  public Configuration getVersionMessageProducerConf() {
+    return this.subset(CommonConfig.RPC_QUEUE_CONFIG.VERSION_MESSAGE_PRODUCER_CONFIG_KEY);
   }
 
   public Configuration getMetricsConf() {
