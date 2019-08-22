@@ -42,6 +42,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -55,7 +56,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * class to perform fetching updates for upsert related information from kafka to local machine and fill in
- * virtual columns. It should be started after all segment are loaded in current pinot server
+ * virtual columns. It should be started after all segments are loaded in current pinot server.
  */
 public class SegmentUpdater implements SegmentDeletionListener {
   private static final Logger LOGGER = LoggerFactory.getLogger(SegmentUpdater.class);
@@ -126,40 +127,34 @@ public class SegmentUpdater implements SegmentDeletionListener {
   private void updateLoop() {
     try {
       LOGGER.info("starting update loop");
-      while(isStarted) {
+      while (isStarted) {
         long startTime = System.currentTimeMillis();
         long loopStartTime = startTime;
         final List<QueueConsumerRecord<String, LogCoordinatorMessage>> records = _consumer.getRequests(_updateSleepMs, TimeUnit.MILLISECONDS);
-        final Map<String, Map<String, List<UpdateLogEntry>>> tableSegmentToUpdateLogs = new HashMap<>();
         _metrics.addTimedValueMs(OpalTimer.FETCH_MSG_FROM_CONSUMER_TIME, System.currentTimeMillis() - startTime);
+        final Map<String, TableUpdateLogs> tableSegmentToUpdateLogs = new HashMap<>();
         int eventCount = records.size();
         _metrics.addMeteredGlobalValue(OpalMeter.MESSAGE_FETCH_PER_ROUND, eventCount);
 
         // organize the update logs by {tableName: {segmentName: {list of updatelogs}}}
         records.iterator().forEachRemaining(consumerRecord -> {
-          Map<String, List<UpdateLogEntry>> segmentMap = tableSegmentToUpdateLogs.computeIfAbsent(
+          TableUpdateLogs tableUpdateLogs = tableSegmentToUpdateLogs.computeIfAbsent(
               CommonUtils.getTableNameFromKafkaTopic(consumerRecord.getTopic(), _topicPrefix),
-              t -> new HashMap<>());
-          String segmentName = consumerRecord.getRecord().getSegmentName();
-          segmentMap.computeIfAbsent(segmentName, s -> new ArrayList<>()).add(new UpdateLogEntry(consumerRecord.getRecord()));
+              t -> new TableUpdateLogs());
+          tableUpdateLogs.addUpdateLogEntry(consumerRecord.getRecord(), consumerRecord.getPartition());
         });
 
         startTime = System.currentTimeMillis();
         AtomicLong timeToStoreUpdateLogs = new AtomicLong(0);
-        for (Map.Entry<String, Map<String, List<UpdateLogEntry>>> entry: tableSegmentToUpdateLogs.entrySet()) {
+        for (Map.Entry<String, TableUpdateLogs> entry : tableSegmentToUpdateLogs.entrySet()) {
           String tableName = TableNameBuilder.ensureTableNameWithType(entry.getKey(), CommonConstants.Helix.TableType.REALTIME);
           int tableMessageCount = 0;
           if (_tableSegmentMap.containsKey(tableName)) {
             final Map<String, Set<UpsertSegmentDataManager>> segmentManagersMap = _tableSegmentMap.get(tableName);
-            final Map<String, List<UpdateLogEntry>> segmentDataMap = entry.getValue();
-            for (Map.Entry<String, List<UpdateLogEntry>> segmentEntry: entry.getValue().entrySet()) {
-              tableMessageCount += segmentEntry.getValue().size();
-              final String segmentNameStr = segmentEntry.getKey();
-              updateVirtualColumn(tableName, segmentEntry.getKey(),
-                  segmentManagersMap.computeIfAbsent(segmentNameStr, sn -> new ConcurrentSet<>()),
-                  segmentDataMap.get(segmentNameStr),
-                  timeToStoreUpdateLogs);
-            }
+            final TableUpdateLogs segment2UpdateLogsMap = entry.getValue();
+            updateSegmentVirtualColumns(tableName, segmentManagersMap, segment2UpdateLogsMap, timeToStoreUpdateLogs);
+          } else {
+            LOGGER.debug("got messages for table {} not in this server", tableName);
           }
           _metrics.addMeteredTableValue(tableName, OpalMeter.MESSAGE_FETCH_PER_ROUND, tableMessageCount);
         }
@@ -182,12 +177,29 @@ public class SegmentUpdater implements SegmentDeletionListener {
   }
 
   /**
+   *
+   * Update the virtual columns of affected segments of a table.
+   */
+  private void updateSegmentVirtualColumns(String tableName, Map<String, Set<UpsertSegmentDataManager>> segmentManagersMap,
+                                           TableUpdateLogs segment2UpdateLogsMap, AtomicLong timeToStoreUpdateLogs) throws IOException{
+    for (Map.Entry<String, List<UpdateLogEntry>> segmentEntry : segment2UpdateLogsMap.getSegments2UpdateLog().entrySet()) {
+      final String segmentNameStr = segmentEntry.getKey();
+      updateVirtualColumn(tableName, segmentNameStr,
+              segmentManagersMap.computeIfAbsent(segmentNameStr, sn -> new ConcurrentSet<>()),
+          segment2UpdateLogsMap.get(segmentNameStr), timeToStoreUpdateLogs);
+    }
+  }
+
+  /**
    * in pinot server, there could be multiple segment data managers per table/segment pair during pinot switch a segment
    * from consuming to online (mutable segment to immutable segment). In most of cases we expect only one segment manager
    * in this set of UpsertSegmentDataManager
    */
   private void updateVirtualColumn(String table, String segment, Set<UpsertSegmentDataManager> segmentDataManagers,
                                    List<UpdateLogEntry> messages, AtomicLong timeToStoreUpdateLogs) throws IOException {
+    LOGGER.debug("updating segment {} with {} results for {} data managers", segment, messages.size(),
+        segmentDataManagers.size());
+
     // update storage
     long startTime = System.currentTimeMillis();
     _updateLogStorageProvider.addDataToFile(table, segment, messages);
@@ -289,5 +301,33 @@ public class SegmentUpdater implements SegmentDeletionListener {
       LOGGER.error("deleting a segment {}:{} from current server but don't have segment map on updater",
           tableNameWithType, segmentName);
     }
+  }
+}
+
+// A table's update logs grouped by segment names.
+class TableUpdateLogs {
+  private static final Logger LOGGER = LoggerFactory.getLogger(TableUpdateLogs.class);
+  private Map<String, List<UpdateLogEntry>> _segments2UpdateLog;
+
+  public TableUpdateLogs() {
+    _segments2UpdateLog = new HashMap<>();
+  }
+
+  public Map<String, List<UpdateLogEntry>> getSegments2UpdateLog() {
+    return Collections.unmodifiableMap(_segments2UpdateLog);
+  }
+
+  // Partition is the partition where the record appears in the Segment Update Event message queue.
+  public void addUpdateLogEntry(LogCoordinatorMessage record, int partition) {
+    if (record == null || record.getSegmentName() == null) {
+      LOGGER.error("Empty update log or no segment in the entry: {}", record);
+      return;
+    }
+    _segments2UpdateLog.computeIfAbsent(
+            record.getSegmentName(), s -> new ArrayList<>()).add(new UpdateLogEntry(record, partition));
+  }
+
+  public List<UpdateLogEntry> get(String segmentNameStr) {
+    return Collections.unmodifiableList(_segments2UpdateLog.get(segmentNameStr));
   }
 }

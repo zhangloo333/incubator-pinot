@@ -164,8 +164,8 @@ public class DistributedKeyCoordinatorCore {
         LOGGER.info("starting new loop");
         long start = System.currentTimeMillis();
         // process message when we got max message count or reach max delay ms
-        MessageAndOffset<KeyCoordinatorQueueMsg> messageAndOffset = getMessagesFromQueue(_consumerRecordBlockingQueue, deadline);
-        List<KeyCoordinatorQueueMsg> messages = messageAndOffset.getMessages();
+        MessageAndOffset<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> messageAndOffset = getMessagesFromQueue(_consumerRecordBlockingQueue, deadline);
+        List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> messages = messageAndOffset.getMessages();
         deadline = System.currentTimeMillis() + _fetchMsgMaxDelayMs;
 
         if (messages.size() > 0) {
@@ -187,7 +187,7 @@ public class DistributedKeyCoordinatorCore {
     LOGGER.info("existing key coordinator core /procthread");
   }
 
-  private MessageAndOffset<KeyCoordinatorQueueMsg> getMessagesFromQueue(
+  private MessageAndOffset<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> getMessagesFromQueue(
       BlockingQueue<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> queue, long deadline) {
     List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> buffer = new ArrayList<>(_fetchMsgMaxCount * 2);
     while(System.currentTimeMillis() < deadline && buffer.size() < _fetchMsgMaxCount) {
@@ -197,12 +197,10 @@ public class DistributedKeyCoordinatorCore {
       }
     }
     OffsetInfo offsetInfo = new OffsetInfo();
-    List<KeyCoordinatorQueueMsg> messages = new ArrayList<>(buffer.size());
     for (QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg> record: buffer) {
       offsetInfo.updateOffsetIfNecessary(record);
-      messages.add(record.getRecord());
     }
-    return new MessageAndOffset<>(messages, offsetInfo);
+    return new MessageAndOffset<>(buffer, offsetInfo);
   }
 
   public void stop() {
@@ -224,17 +222,17 @@ public class DistributedKeyCoordinatorCore {
     return _state;
   }
 
-  private void processMessages(List<KeyCoordinatorQueueMsg> messages) {
-    Map<String, List<KeyCoordinatorQueueMsg>> topicMsgMap = new HashMap<>();
-    for (KeyCoordinatorQueueMsg msg: messages) {
-      topicMsgMap.computeIfAbsent(msg.getPinotTableName(), t -> new ArrayList<>()).add(msg);
+  private void processMessages(List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> messages) {
+    Map<String, List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>>> topicMsgMap = new HashMap<>();
+    for (QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg> msg: messages) {
+      topicMsgMap.computeIfAbsent(msg.getRecord().getPinotTableName(), t -> new ArrayList<>()).add(msg);
     }
-    for (Map.Entry<String, List<KeyCoordinatorQueueMsg>> entry: topicMsgMap.entrySet()) {
-      processMessagesForTable(entry.getKey(), entry.getValue());
+    for (Map.Entry<String, List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>>> perTableUpdates: topicMsgMap.entrySet()) {
+      processMessagesForTable(perTableUpdates.getKey(), perTableUpdates.getValue());
     }
   }
 
-  private void processMessagesForTable(String tableName, List<KeyCoordinatorQueueMsg> msgList) {
+  private void processMessagesForTable(String tableName, List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> msgList) {
     try {
       long start = System.currentTimeMillis();
       if (msgList == null || msgList.size() == 0) {
@@ -245,15 +243,15 @@ public class DistributedKeyCoordinatorCore {
 
       List<ProduceTask<Integer, LogCoordinatorMessage>> tasks = new ArrayList<>();
       // get a set of unique primary key and retrieve its corresponding value in kv store
-      Set<ByteArrayWrapper> primaryKeys = msgList.stream().map(msg -> new ByteArrayWrapper(msg.getKey()))
+      Set<ByteArrayWrapper> primaryKeys = msgList.stream().map(msg -> new ByteArrayWrapper(msg.getRecord().getKey()))
           .collect(Collectors.toCollection(HashSet::new));
       Map<ByteArrayWrapper, KeyCoordinatorMessageContext> primaryKeyToValueMap = new HashMap<>(table.multiGet(new ArrayList<>(primaryKeys)));
       LOGGER.info("input keys got {} results from kv store in {} ms", primaryKeyToValueMap.size(), System.currentTimeMillis() - start);
       start = System.currentTimeMillis();
 
-      for (KeyCoordinatorQueueMsg msg: msgList) {
-        KeyCoordinatorMessageContext currentContext = msg.getContext();
-        ByteArrayWrapper key = new ByteArrayWrapper(msg.getKey());
+      for (QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg> msg: msgList) {
+        KeyCoordinatorMessageContext currentContext = msg.getRecord().getContext();
+        ByteArrayWrapper key = new ByteArrayWrapper(msg.getRecord().getKey());
         if (primaryKeyToValueMap.containsKey(key)) {
           // key conflicts, should resolve which one to delete
           KeyCoordinatorMessageContext oldContext = primaryKeyToValueMap.get(key);
@@ -262,13 +260,13 @@ public class DistributedKeyCoordinatorCore {
             if (_messageResolveStrategy.shouldDeleteFirstMessage(oldContext, currentContext)) {
               // the existing message we have is older than the message we just processed, create delete for it
               tasks.add(createMessageToLogCoordinator(tableName, oldContext.getSegmentName(), oldContext.getKafkaOffset(),
-                  currentContext.getKafkaOffset(), LogEventType.DELETE));
+                  currentContext.getKafkaOffset(), LogEventType.DELETE, msg.getPartition()));
               // update the local cache to the latest message, so message within the same batch can override each other
               primaryKeyToValueMap.put(key, currentContext);
             } else {
               // the new message is older than the existing message
               tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
-                  currentContext.getKafkaOffset(), LogEventType.DELETE));
+                  currentContext.getKafkaOffset(), LogEventType.DELETE, msg.getPartition()));
             }
           }
         } else {
@@ -277,7 +275,7 @@ public class DistributedKeyCoordinatorCore {
         }
         // always create a insert event for validFrom if is not a duplicated input
         tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
-            currentContext.getKafkaOffset(), LogEventType.INSERT));
+            currentContext.getKafkaOffset(), LogEventType.INSERT, msg.getPartition()));
       }
       LOGGER.info("processed all messages in {} ms", System.currentTimeMillis() - start);
       List<ProduceTask<Integer, LogCoordinatorMessage>> failedTasks = sendMessagesToLogCoordinator(tasks, 10, TimeUnit.SECONDS);
@@ -293,12 +291,13 @@ public class DistributedKeyCoordinatorCore {
     }
   }
 
-  public ProduceTask<Integer, LogCoordinatorMessage> createMessageToLogCoordinator(String tableName, String segmentName,
-                                                                                   long oldKafkaOffset, long value,
-                                                                                   LogEventType eventType) {
+  // partition is the partition number of the ingestion upsert event. Note that the partition of records with primary
+  // key will be the same across ingestion upsert event and segment update event topics.
+  private ProduceTask<Integer, LogCoordinatorMessage> createMessageToLogCoordinator(String tableName, String segmentName,
+                                                                                    long oldKafkaOffset, long value,
+                                                                                    LogEventType eventType, int partition) {
     return new ProduceTask<>(DistributedCommonUtils.getKafkaTopicFromTableName(tableName),
-        _partitionIdMapper.getPartitionFromLLRealtimeSegment(segmentName),
-        new LogCoordinatorMessage(segmentName, oldKafkaOffset, value, eventType));
+            partition, new LogCoordinatorMessage(segmentName, oldKafkaOffset, value, eventType));
   }
 
   private List<ProduceTask<Integer, LogCoordinatorMessage>> sendMessagesToLogCoordinator(
@@ -334,7 +333,7 @@ public class DistributedKeyCoordinatorCore {
     Map<String, List<UpdateLogEntry>> segmentUpdateLogs = new HashMap<>();
     for (ProduceTask<Integer, LogCoordinatorMessage> task: tasks) {
       String segmentName = task.getValue().getSegmentName();
-      UpdateLogEntry entry = new UpdateLogEntry(task.getValue());
+      UpdateLogEntry entry = new UpdateLogEntry(task.getValue(), task.getKey());
       segmentUpdateLogs.computeIfAbsent(segmentName, s -> new ArrayList<>()).add(entry);
     }
     for (Map.Entry<String, List<UpdateLogEntry>> segmentEntry: segmentUpdateLogs.entrySet()) {

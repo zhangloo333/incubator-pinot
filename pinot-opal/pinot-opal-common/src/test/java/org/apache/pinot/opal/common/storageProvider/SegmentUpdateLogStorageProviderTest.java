@@ -33,9 +33,9 @@ public class SegmentUpdateLogStorageProviderTest {
 
   SegmentUpdateLogStorageProvider provider;
   List<UpdateLogEntry> inputDataList = ImmutableList.of(
-      new UpdateLogEntry(1, 2, LogEventType.INSERT),
-      new UpdateLogEntry(2, 3, LogEventType.DELETE),
-      new UpdateLogEntry(4,10, LogEventType.DELETE));
+      new UpdateLogEntry(1, 2, LogEventType.INSERT, 0),
+      new UpdateLogEntry(2, 3, LogEventType.DELETE, 0),
+      new UpdateLogEntry(4,10, LogEventType.DELETE, 0));
 
   @BeforeMethod
   public void setup() throws IOException {

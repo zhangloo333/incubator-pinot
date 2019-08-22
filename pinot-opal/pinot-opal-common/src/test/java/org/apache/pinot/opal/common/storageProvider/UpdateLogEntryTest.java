@@ -28,7 +28,7 @@ public class UpdateLogEntryTest {
 
   @Test
   public void testGets() {
-    UpdateLogEntry entry = new UpdateLogEntry(123, 12, LogEventType.INSERT);
+    UpdateLogEntry entry = new UpdateLogEntry(123, 12, LogEventType.INSERT, 0);
     Assert.assertEquals(entry.getOffset(), 123);
     Assert.assertEquals(entry.getValue(), 12);
     Assert.assertEquals(entry.getType(), LogEventType.INSERT);
@@ -36,17 +36,17 @@ public class UpdateLogEntryTest {
 
   @Test
   public void testEquals() {
-    UpdateLogEntry entry = new UpdateLogEntry(123, 12, LogEventType.INSERT);
-    Assert.assertEquals(entry, new UpdateLogEntry(123, 12, LogEventType.INSERT));
-    Assert.assertNotEquals(entry, new UpdateLogEntry(12, 12, LogEventType.INSERT));
-    Assert.assertNotEquals(entry, new UpdateLogEntry(123, 121, LogEventType.INSERT));
-    Assert.assertNotEquals(entry, new UpdateLogEntry(123, 12, LogEventType.DELETE));
+    UpdateLogEntry entry = new UpdateLogEntry(123, 12, LogEventType.INSERT, 0);
+    Assert.assertEquals(entry, new UpdateLogEntry(123, 12, LogEventType.INSERT, 0));
+    Assert.assertNotEquals(entry, new UpdateLogEntry(12, 12, LogEventType.INSERT, 0));
+    Assert.assertNotEquals(entry, new UpdateLogEntry(123, 121, LogEventType.INSERT, 0));
+    Assert.assertNotEquals(entry, new UpdateLogEntry(123, 12, LogEventType.DELETE, 0));
   }
 
   @Test
   public void testSerialDeserial() {
     ByteBuffer buffer = ByteBuffer.allocate(UpdateLogEntry.SIZE);
-    UpdateLogEntry entry = new UpdateLogEntry(1, 2, LogEventType.INSERT);
+    UpdateLogEntry entry = new UpdateLogEntry(1, 2, LogEventType.INSERT, 0);
     entry.addEntryToBuffer(buffer);
     buffer.flip();
     Assert.assertEquals(UpdateLogEntry.fromBytesBuffer(buffer), entry);

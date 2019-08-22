@@ -19,6 +19,7 @@
 package org.apache.pinot.core.segment.updater;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import org.apache.pinot.opal.common.storageProvider.UpdateLogEntry;
 import org.apache.pinot.opal.common.utils.PartitionIdMapper;
@@ -30,8 +31,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class UpsertWaterMarkManager {
   private static final Logger LOGGER = LoggerFactory.getLogger(UpsertWaterMarkManager.class);
-
-  private final PartitionIdMapper partitionIdMapper = new PartitionIdMapper();
   private final Map<String, Map<Integer, Long>> _highWaterMarkTablePartitionMap = new ConcurrentHashMap<>();
 
   private static volatile UpsertWaterMarkManager _instance;
@@ -50,16 +49,26 @@ public class UpsertWaterMarkManager {
     return _instance;
   }
 
+  // TODO(tingchen) Look into the case where Segment Update Messages might arrive before the corresponding physical data.
   public void processMessage(String table, String segment, UpdateLogEntry logEntry) {
     if (logEntry == null) {
       return;
     }
-    long newOffset = logEntry.getValue();
-    int partition = partitionIdMapper.getPartitionFromLLRealtimeSegment(segment);
+    long version = logEntry.getValue();
+    int partition = logEntry.getPartition();
+    Preconditions.checkState(partition >= 0, "logEntry has no partition info {} for table ", logEntry.toString(), table);
 
     Map<Integer, Long> partitionToHighWaterMark = _highWaterMarkTablePartitionMap.computeIfAbsent(table, t -> new ConcurrentHashMap<>());
-    partitionToHighWaterMark.compute(partition, (key, currentOffset) ->
-        (currentOffset == null) ? newOffset: Math.max(newOffset, currentOffset));
+    if (partitionToHighWaterMark.get(partition) == null) {
+      partitionToHighWaterMark.put(partition, version);
+    } else {
+      long currentVersion = partitionToHighWaterMark.get(partition);
+      if (version < currentVersion) {
+        // We expect the version number to increase monotonically unless we are reprocessing previous seen messages.
+        LOGGER.warn("The latest record {} has lower version than the current one for the table {} ", logEntry, table);
+      }
+      partitionToHighWaterMark.put(partition, Math.max(version, currentVersion));
+    }
   }
 
   public Map<Integer, Long> getHighWaterMarkForTable(String tableName) {

@@ -59,13 +59,13 @@ public class UpdateLogStorageProviderTest {
   public void testAddAndGetData() throws IOException {
     UpdateLogStorageProvider provider = UpdateLogStorageProvider.getInstance();
     List<UpdateLogEntry> inputDataList1 = ImmutableList.of(
-        new UpdateLogEntry(1, 2, LogEventType.INSERT),
-        new UpdateLogEntry(2, 3, LogEventType.DELETE),
-        new UpdateLogEntry(4,10, LogEventType.DELETE));
+        new UpdateLogEntry(1, 2, LogEventType.INSERT, 0),
+        new UpdateLogEntry(2, 3, LogEventType.DELETE, 0),
+        new UpdateLogEntry(4,10, LogEventType.DELETE, 0));
     List<UpdateLogEntry> inputDataList2 = ImmutableList.of(
-        new UpdateLogEntry(10, 11, LogEventType.INSERT));
+        new UpdateLogEntry(10, 11, LogEventType.INSERT, 0));
     List<UpdateLogEntry> inputDataList3 = ImmutableList.of(
-        new UpdateLogEntry(100, 110, LogEventType.DELETE));
+        new UpdateLogEntry(100, 110, LogEventType.DELETE, 0));
     List<UpdateLogEntry> inputDataList4 = ImmutableList.of();
 
     provider.addSegment("table", "segment");

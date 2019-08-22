@@ -96,7 +96,8 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
     for (UpdateLogEntry logEntry: logEntryList) {
       ImmutableRoaringBitmap bitmap = getDocIdsForOffset(logEntry.getOffset());
       if (bitmap == null) {
-        LOGGER.info("offset {} not found while trying to update", logEntry.getOffset());
+        // The segment does not have the record.
+        LOGGER.debug("offset {} not found while trying to update segment {}", logEntry.getOffset(), _segmentName);
       } else {
         IntIterator it = bitmap.getIntIterator();
         boolean updated = false;
@@ -129,7 +130,7 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
 
   /**
    * this method will fetch all updates from update logs in local disk and apply those updates to the current virtual columns
-   * it traverse through all records in current segment and match existing updates log to its kafka offsets
+   * it traverses through all records in the current segment and match existing updates log to its kafka offsets
    * @throws IOException
    */
   @Override

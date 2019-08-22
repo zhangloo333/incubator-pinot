@@ -26,7 +26,7 @@ package org.apache.pinot.opal.common.messages;
  * 4. kafka offset: the offset of the pinot record we are going to update.
  *
  * segment updater will use the segment name & offset to identify the location of the pinot record, and use the
- * updateEventType to decide which virtual column to update. And it will use
+ * updateEventType to decide which virtual column to update. And it will use value to update the corresponding column.
  */
 public class LogCoordinatorMessage {
   private final String _segmentName;
@@ -56,5 +56,9 @@ public class LogCoordinatorMessage {
     this._value = newValue;
     this._updateEventType = updateEventType;
     this._kafkaOffset = kafkaOffset;
+  }
+
+  public String toString() {
+    return _segmentName + "|"  + _updateEventType + "|" + _value + "|" + _kafkaOffset;
   }
 }
