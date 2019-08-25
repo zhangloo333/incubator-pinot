@@ -26,17 +26,17 @@ import org.apache.pinot.common.config.TableNameBuilder;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.LLCSegmentName;
 import org.apache.pinot.core.data.manager.UpsertSegmentDataManager;
-import org.apache.pinot.opal.common.config.CommonConfig;
-import org.apache.pinot.opal.common.messages.LogCoordinatorMessage;
-import org.apache.pinot.opal.common.metrics.OpalMeter;
-import org.apache.pinot.opal.common.metrics.OpalMetrics;
-import org.apache.pinot.opal.common.metrics.OpalTimer;
-import org.apache.pinot.opal.common.rpcQueue.QueueConsumer;
-import org.apache.pinot.opal.common.rpcQueue.QueueConsumerRecord;
-import org.apache.pinot.opal.common.storageProvider.UpdateLogEntry;
-import org.apache.pinot.opal.common.storageProvider.UpdateLogStorageProvider;
-import org.apache.pinot.opal.common.utils.CommonUtils;
-import org.apache.pinot.opal.servers.SegmentUpdaterProvider;
+import org.apache.pinot.grigio.common.config.CommonConfig;
+import org.apache.pinot.grigio.common.messages.LogCoordinatorMessage;
+import org.apache.pinot.grigio.common.metrics.GrigioMeter;
+import org.apache.pinot.grigio.common.metrics.GrigioMetrics;
+import org.apache.pinot.grigio.common.metrics.GrigioTimer;
+import org.apache.pinot.grigio.common.rpcQueue.QueueConsumer;
+import org.apache.pinot.grigio.common.rpcQueue.QueueConsumerRecord;
+import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
+import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
+import org.apache.pinot.grigio.common.utils.CommonUtils;
+import org.apache.pinot.grigio.servers.SegmentUpdaterProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,11 +74,11 @@ public class SegmentUpdater implements SegmentDeletionListener {
   private final Map<String, Map<String, Set<UpsertSegmentDataManager>>> _tableSegmentMap = new ConcurrentHashMap<>();
   private final Map<String, Map<Integer, Long>> _tablePartitionCreationTime = new ConcurrentHashMap<>();
   private final UpdateLogStorageProvider _updateLogStorageProvider;
-  private final OpalMetrics _metrics;
+  private final GrigioMetrics _metrics;
 
   private volatile boolean isStarted = true;
 
-  public SegmentUpdater(Configuration conf, SegmentUpdaterProvider provider, OpalMetrics metrics) {
+  public SegmentUpdater(Configuration conf, SegmentUpdaterProvider provider, GrigioMetrics metrics) {
     _conf = conf;
     _metrics = metrics;
     _topicPrefix = conf.getString(SegmentUpdaterConfig.INPUT_TOPIC_PREFIX,
@@ -131,10 +131,10 @@ public class SegmentUpdater implements SegmentDeletionListener {
         long startTime = System.currentTimeMillis();
         long loopStartTime = startTime;
         final List<QueueConsumerRecord<String, LogCoordinatorMessage>> records = _consumer.getRequests(_updateSleepMs, TimeUnit.MILLISECONDS);
-        _metrics.addTimedValueMs(OpalTimer.FETCH_MSG_FROM_CONSUMER_TIME, System.currentTimeMillis() - startTime);
+        _metrics.addTimedValueMs(GrigioTimer.FETCH_MSG_FROM_CONSUMER_TIME, System.currentTimeMillis() - startTime);
         final Map<String, TableUpdateLogs> tableSegmentToUpdateLogs = new HashMap<>();
         int eventCount = records.size();
-        _metrics.addMeteredGlobalValue(OpalMeter.MESSAGE_FETCH_PER_ROUND, eventCount);
+        _metrics.addMeteredGlobalValue(GrigioMeter.MESSAGE_FETCH_PER_ROUND, eventCount);
 
         // organize the update logs by {tableName: {segmentName: {list of updatelogs}}}
         records.iterator().forEachRemaining(consumerRecord -> {
@@ -156,16 +156,16 @@ public class SegmentUpdater implements SegmentDeletionListener {
           } else {
             LOGGER.debug("got messages for table {} not in this server", tableName);
           }
-          _metrics.addMeteredTableValue(tableName, OpalMeter.MESSAGE_FETCH_PER_ROUND, tableMessageCount);
+          _metrics.addMeteredTableValue(tableName, GrigioMeter.MESSAGE_FETCH_PER_ROUND, tableMessageCount);
         }
-        _metrics.addTimedValueMs(OpalTimer.UPDATE_LOCAL_LOG_FILE_TIME, timeToStoreUpdateLogs.get());
-        _metrics.addTimedValueMs(OpalTimer.UPDATE_DATAMANAGER_TIME, System.currentTimeMillis() - startTime);
+        _metrics.addTimedValueMs(GrigioTimer.UPDATE_LOCAL_LOG_FILE_TIME, timeToStoreUpdateLogs.get());
+        _metrics.addTimedValueMs(GrigioTimer.UPDATE_DATAMANAGER_TIME, System.currentTimeMillis() - startTime);
         if (eventCount == 0) {
           Uninterruptibles.sleepUninterruptibly(NO_MESSAGE_SLEEP_MS, TimeUnit.MILLISECONDS);
         } else {
           LOGGER.info("latest high water mark is {}", UpsertWaterMarkManager.getInstance().toString());
           _consumer.ackOffset();
-          _metrics.addTimedValueMs(OpalTimer.SEGMENT_UPDATER_LOOP_TIME, System.currentTimeMillis() - loopStartTime);
+          _metrics.addTimedValueMs(GrigioTimer.SEGMENT_UPDATER_LOOP_TIME, System.currentTimeMillis() - loopStartTime);
         }
       }
     } catch (Exception ex) {

@@ -28,7 +28,7 @@ import org.apache.pinot.core.data.manager.offline.ImmutableSegmentDataManager;
 import org.apache.pinot.core.indexsegment.immutable.ImmutableSegment;
 import org.apache.pinot.core.indexsegment.immutable.ImmutableSegmentLoader;
 import org.apache.pinot.core.segment.index.loader.IndexLoadingConfig;
-import org.apache.pinot.opal.common.storageProvider.UpdateLogStorageProvider;
+import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
 
 import javax.annotation.Nonnull;
 import java.io.File;

@@ -55,7 +55,7 @@
     <module>pinot-orc</module>
     <module>pinot-parquet</module>
     <module>pinot-connectors</module>
-    <module>pinot-opal</module>
+    <module>pinot-grigio</module>
   </modules>
 
   <licenses>
@@ -293,7 +293,7 @@
       </dependency>
       <dependency>
         <groupId>org.apache.pinot</groupId>
-        <artifactId>pinot-opal-common</artifactId>
+        <artifactId>pinot-grigio-common</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

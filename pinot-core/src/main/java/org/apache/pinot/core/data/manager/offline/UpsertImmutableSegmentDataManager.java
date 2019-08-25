@@ -25,7 +25,7 @@ import org.apache.pinot.common.config.TableNameBuilder;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.LLCSegmentName;
 import org.apache.pinot.core.indexsegment.immutable.ImmutableSegment;
-import org.apache.pinot.opal.common.storageProvider.UpdateLogEntry;
+import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
 
 import java.io.IOException;
 import java.util.List;

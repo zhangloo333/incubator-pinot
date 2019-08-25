@@ -331,10 +331,10 @@ public class CommonConstants {
     public static final String PREFIX_OF_CONFIG_OF_PINOT_CRYPTER = "crypter";
   }
 
-  public static class Opal {
-    // config for distributed opal components
+  public static class Grigio {
+    // config for distributed grigio components
     public static final String CONFIG_OF_METRICS_PREFIX_KEY = "metricsPrefix";
-    public static final String DEFAULT_METRICS_PREFIX = "pinot.opal.";
+    public static final String DEFAULT_METRICS_PREFIX = "pinot.grigio.";
 
     // config for server related components
     public static final String PINOT_UPSERT_SERVER_COMPONENT_PREFIX = "upsert.";

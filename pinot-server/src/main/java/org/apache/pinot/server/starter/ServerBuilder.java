@@ -31,10 +31,10 @@ import org.apache.pinot.core.query.executor.QueryExecutor;
 import org.apache.pinot.core.query.scheduler.QueryScheduler;
 import org.apache.pinot.core.query.scheduler.QuerySchedulerFactory;
 import org.apache.pinot.core.segment.updater.SegmentUpdater;
-import org.apache.pinot.opal.common.metrics.OpalMetrics;
-import org.apache.pinot.opal.common.storageProvider.UpdateLogStorageProvider;
-import org.apache.pinot.opal.servers.KeyCoordinatorProvider;
-import org.apache.pinot.opal.servers.SegmentUpdaterProvider;
+import org.apache.pinot.grigio.common.metrics.GrigioMetrics;
+import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
+import org.apache.pinot.grigio.servers.KeyCoordinatorProvider;
+import org.apache.pinot.grigio.servers.SegmentUpdaterProvider;
 import org.apache.pinot.server.conf.ServerConf;
 import org.apache.pinot.transport.netty.NettyServer;
 import org.apache.pinot.transport.netty.NettyTCPServer;
@@ -45,7 +45,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.LongAccumulator;
 
-import static org.apache.pinot.common.utils.CommonConstants.Opal.PINOT_UPSERT_SERVER_COMPONENT_PREFIX;
+import static org.apache.pinot.common.utils.CommonConstants.Grigio.PINOT_UPSERT_SERVER_COMPONENT_PREFIX;
 
 
 /**
@@ -57,7 +57,7 @@ public class ServerBuilder {
   private final ServerConf _serverConf;
   private final ZkHelixPropertyStore<ZNRecord> _propertyStore;
   private ServerMetrics _serverMetrics;
-  private OpalMetrics _opalMetrics;
+  private GrigioMetrics _grigioMetrics;
 
   private static final String PINOT_UPSERT_METRICS_PREFIX = "upsert.";
 
@@ -84,14 +84,14 @@ public class ServerBuilder {
     _serverMetrics = new ServerMetrics(_serverConf.getMetricsPrefix(), metricsRegistry, !_serverConf.emitTableLevelMetrics());
     _serverMetrics.initializeGlobalMeters();
 
-    maybeInitOpalMetrics(metricsRegistry);
+    maybeInitGrigioMetrics(metricsRegistry);
   }
 
-  private void maybeInitOpalMetrics(MetricsRegistry metricsRegistry) {
+  private void maybeInitGrigioMetrics(MetricsRegistry metricsRegistry) {
     if (_serverConf.isUpsertEnabled()) {
-      _opalMetrics = new OpalMetrics(_serverConf.getMetricsPrefix() + PINOT_UPSERT_SERVER_COMPONENT_PREFIX,
+      _grigioMetrics = new GrigioMetrics(_serverConf.getMetricsPrefix() + PINOT_UPSERT_SERVER_COMPONENT_PREFIX,
           metricsRegistry);
-      _opalMetrics.initializeGlobalMeters();
+      _grigioMetrics.initializeGlobalMeters();
     }
   }
 
@@ -145,15 +145,15 @@ public class ServerBuilder {
   }
 
   public KeyCoordinatorProvider buildKeyCoordinatorProvider() {
-    return new KeyCoordinatorProvider(_serverConf.getUpsertKcProviderConfig(), _serverConf.getPinotServerHostname(), _opalMetrics);
+    return new KeyCoordinatorProvider(_serverConf.getUpsertKcProviderConfig(), _serverConf.getPinotServerHostname(), _grigioMetrics);
   }
 
   public SegmentUpdaterProvider buildSegmentUpdaterProvider() {
-    return new SegmentUpdaterProvider(_serverConf.getUpsertSegmentUpdateProviderConfig(), _serverConf.getPinotServerHostname(), _opalMetrics);
+    return new SegmentUpdaterProvider(_serverConf.getUpsertSegmentUpdateProviderConfig(), _serverConf.getPinotServerHostname(), _grigioMetrics);
   }
 
   public SegmentUpdater buildSegmentUpdater(SegmentUpdaterProvider updateProvider) {
-    return new SegmentUpdater(_serverConf.getUpsertSegmentUpdaterConfig(), updateProvider, _opalMetrics);
+    return new SegmentUpdater(_serverConf.getUpsertSegmentUpdaterConfig(), updateProvider, _grigioMetrics);
   }
 
   public void initVirtualColumnStorageProvider() {

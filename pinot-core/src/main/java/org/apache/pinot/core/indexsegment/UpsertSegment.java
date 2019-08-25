@@ -18,7 +18,7 @@
  */
 package org.apache.pinot.core.indexsegment;
 
-import org.apache.pinot.opal.common.storageProvider.UpdateLogEntry;
+import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
 
 import java.io.IOException;
 import java.util.List;

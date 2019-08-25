@@ -67,7 +67,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.pinot</groupId>
-      <artifactId>pinot-opal-common</artifactId>
+      <artifactId>pinot-grigio-common</artifactId>
       <version>0.2.2.5.4-SNAPSHOT</version>
     </dependency>
     <dependency>

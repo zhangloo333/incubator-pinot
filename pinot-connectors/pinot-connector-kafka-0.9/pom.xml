@@ -39,13 +39,13 @@
     <dependency>
       <groupId>org.scala-lang</groupId>
       <artifactId>scala-library</artifactId>
-      <version>2.10.6</version>
+      <version>2.10.5</version>
     </dependency>
 
     <!-- Kafka  -->
     <dependency>
       <groupId>org.apache.kafka</groupId>
-      <artifactId>kafka_2.11</artifactId>
+      <artifactId>kafka_2.10</artifactId>
       <version>${kafka.lib.version}</version>
       <exclusions>
         <exclusion>

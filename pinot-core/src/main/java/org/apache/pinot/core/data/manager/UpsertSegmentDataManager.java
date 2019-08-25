@@ -18,7 +18,7 @@
  */
 package org.apache.pinot.core.data.manager;
 
-import org.apache.pinot.opal.common.storageProvider.UpdateLogEntry;
+import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
 
 import java.util.List;
 

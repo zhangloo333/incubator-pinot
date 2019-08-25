@@ -20,7 +20,7 @@ package org.apache.pinot.core.segment.virtualcolumn.mutable;
 
 import org.apache.pinot.core.io.reader.impl.ChunkReaderContext;
 import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnContext;
-import org.apache.pinot.opal.common.messages.LogEventType;
+import org.apache.pinot.grigio.common.messages.LogEventType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -65,7 +65,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.pinot</groupId>
-      <artifactId>pinot-opal-common</artifactId>
+      <artifactId>pinot-grigio-common</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
