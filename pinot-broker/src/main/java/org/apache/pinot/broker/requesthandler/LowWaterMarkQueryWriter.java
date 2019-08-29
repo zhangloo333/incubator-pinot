@@ -27,46 +27,48 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+// Add a lwm query to the filter query of a Pinot query for upsert enabled table.
+// Thread-Safe
 public class LowWaterMarkQueryWriter {
-  private static final String VIRTUAL_COLUMN_PARTITION = "$partition";
+  private static final Logger LOGGER = LoggerFactory.getLogger(LowWaterMarkQueryWriter.class);
   private static final String VALID_FROM = "$validFrom";
   private static final String VALID_UNTIL = "$validUntil";
+  // Normal Pinot query node uses positive IDs. So lwm query node ids are all negative.
   private static final int QUERY_ID_BASE = -1000;
 
   /**
-   * For upsert enabled tables, augment the realtime query with low water mark constraints in its filter query.
+   * For upsert enabled tables, augment the realtime query with low water mark constraints in its filter query of the
+   * form
+   *   ($validFrom <= lwm and $validFrom > -1) AND (lwm < $validUtil OR $validUtil = -1)
+   *
    * @param realtimeBrokerRequest
    * @param lowWaterMarks
    */
   public static void addLowWaterMarkToQuery(BrokerRequest realtimeBrokerRequest, Map<Integer, Long> lowWaterMarks) {
     if (lowWaterMarks == null || lowWaterMarks.size() == 0) {
+      LOGGER.warn("No low water mark info found for query: {}", realtimeBrokerRequest);
       return;
     }
-    // 1. Build the low water mark query of the form for a table with partitions 0,1,..,n assuming -1 is used as
-    // unitialized marker.
-    // ($partition == 0 AND ($validFrom <= lwm_0 and $validFrom > -1) AND (lwm_0 < $validUtil OR $validUtil = -1))
-    //  ... OR
-    // ($partition == n AND ($ValidFrom <= lwm_n and $validFrom > -1) AND (lwm_n < $validUtil OR $validUtil = -1))
-    FilterQuery lwmQuery = new FilterQuery();
-    // Set an unique id range for the augmented query.
-    int queryIdBase = QUERY_ID_BASE;
-    lwmQuery.setId(queryIdBase--);
-    lwmQuery.setOperator(FilterOperator.OR);
-    List<Integer> subQids = new ArrayList<>();
-    for (Map.Entry<Integer, Long> partitionLWM : lowWaterMarks.entrySet()) {
-      FilterQuery singlePartitionQuery = addSinglePartitionLowWaterMark(queryIdBase, realtimeBrokerRequest,
-          partitionLWM.getKey(), partitionLWM.getValue());
-      queryIdBase = singlePartitionQuery.getId() - 1;
-      subQids.add(singlePartitionQuery.getId());
-    }
-    lwmQuery.setNestedFilterQueryIds(subQids);
+
+    // Choose the min lwm among all partitions.
+    long minLwm = Collections.min(lowWaterMarks.values());
+
+    // 1. Build the low water mark query of the form for a table assuming lwm is the min LWM and -1 is used as
+    // uninitialized marker.
+    // ($validFrom <= lwm and $validFrom > -1) AND (lwm < $validUtil OR $validUtil = -1)
+    // -1 is used instead of Long.MAXVALUE because Pinot does not handle long arithmetic correctly.
+    FilterQuery lwmQuery = addSinglePartitionLowWaterMark(QUERY_ID_BASE - 1, realtimeBrokerRequest, minLwm);
 
     // 2. Attach low water mark filter to the current filters.
     FilterQuery currentFilterQuery = realtimeBrokerRequest.getFilterQuery();
     if (currentFilterQuery != null) {
+      // Make an AND query of lwmQuery and the existing query.
       FilterQuery andFilterQuery = new FilterQuery();
-      andFilterQuery.setId(queryIdBase--);
+      // Make sure we do not reuse any query id in lwmQuerys.
+      andFilterQuery.setId(QUERY_ID_BASE);
       andFilterQuery.setOperator(FilterOperator.AND);
       List<Integer> nestedFilterQueryIds = new ArrayList<>(2);
       nestedFilterQueryIds.add(currentFilterQuery.getId());
@@ -87,18 +89,15 @@ public class LowWaterMarkQueryWriter {
    *
    * @param queryIdBase The starting id that will be assigned to the first query created in ths method.
    * @param realtimeBrokerRequest
-   * @param partition
    * @param lwm low water mark.
    * @return a filter query corresponding to the low water mark constraint of a single partition. The general form is:
-   *         Partition == n AND $ValidFrom <= lwm_n AND (lwm_n < $validUtil OR $validUtil = -1)
+   *         ($ValidFrom <= lwm && $validFrom > -1)  AND (lwm < $validUtil OR $validUtil = -1)
    */
-  private static FilterQuery addSinglePartitionLowWaterMark(int queryIdBase, BrokerRequest realtimeBrokerRequest, int partition,
+  private static FilterQuery addSinglePartitionLowWaterMark(int queryIdBase, BrokerRequest realtimeBrokerRequest,
       Long lwm) {
-
-    // Partition filter query: i.e., Partition == n;
-    FilterQuery partitionFilterQuery = getLeafFilterQuery(VIRTUAL_COLUMN_PARTITION, queryIdBase--, String.valueOf(partition), FilterOperator.EQUALITY, realtimeBrokerRequest);
-    // ValidFrom Query.
+    // ValidFromQuery: ($ValidFrom <= lwm && $validFrom > -1)
     FilterQuery validFromFilterQuery = new FilterQuery();
+    // Important: Always decrement queryIdBase value after use to avoid id conflict.
     validFromFilterQuery.setId(queryIdBase--);
     validFromFilterQuery.setOperator(FilterOperator.AND);
     FilterQuery validFromP1 = getLeafFilterQuery(VALID_FROM, queryIdBase--, "(*\t\t" + lwm + "]", FilterOperator.RANGE, realtimeBrokerRequest);
@@ -108,7 +107,7 @@ public class LowWaterMarkQueryWriter {
     nestedQueriesIdForValidFrom.add(validFromP2.getId());
     validFromFilterQuery.setNestedFilterQueryIds(nestedQueriesIdForValidFrom);
 
-    // ValidUtilQuery.
+    // ValidUtilQuery: (lwm < $validUtil OR $validUtil = -1)
     FilterQuery validUtilFilterQuery = new FilterQuery();
     validUtilFilterQuery.setId(queryIdBase--);
     validUtilFilterQuery.setOperator(FilterOperator.OR);
@@ -120,21 +119,20 @@ public class LowWaterMarkQueryWriter {
     nestedQueriesIdForValidUtil.add(validUtilP2.getId());
     validUtilFilterQuery.setNestedFilterQueryIds(nestedQueriesIdForValidUtil);
 
-    // Top level query
-    FilterQuery singlePartitionLWMQuery = new FilterQuery();
-    singlePartitionLWMQuery.setId(queryIdBase--);
-    singlePartitionLWMQuery.setOperator(FilterOperator.AND);
+    // Top level query: ValidFromQuery AND ValidUtilQuery
+    FilterQuery lwmQuery = new FilterQuery();
+    lwmQuery.setId(queryIdBase--);
+    lwmQuery.setOperator(FilterOperator.AND);
     List<Integer> nestQids = new ArrayList<>();
-    nestQids.add(partitionFilterQuery.getId());
     nestQids.add(validFromFilterQuery.getId());
     nestQids.add(validUtilFilterQuery.getId());
-    singlePartitionLWMQuery.setNestedFilterQueryIds(nestQids);
+    lwmQuery.setNestedFilterQueryIds(nestQids);
 
     // Add all the new created queries to the query map.
-    realtimeBrokerRequest.getFilterSubQueryMap().putToFilterQueryMap(singlePartitionLWMQuery.getId(), singlePartitionLWMQuery);
+    realtimeBrokerRequest.getFilterSubQueryMap().putToFilterQueryMap(lwmQuery.getId(), lwmQuery);
     realtimeBrokerRequest.getFilterSubQueryMap().putToFilterQueryMap(validFromFilterQuery.getId(), validFromFilterQuery);
     realtimeBrokerRequest.getFilterSubQueryMap().putToFilterQueryMap(validUtilFilterQuery.getId(), validUtilFilterQuery);
-    return singlePartitionLWMQuery;
+    return lwmQuery;
   }
 
   private static FilterQuery getLeafFilterQuery(String column, int id, String value, FilterOperator operator,

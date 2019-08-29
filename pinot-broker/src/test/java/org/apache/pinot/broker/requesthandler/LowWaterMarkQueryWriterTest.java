@@ -32,7 +32,7 @@ import java.util.Map;
 
 public class LowWaterMarkQueryWriterTest {
     @Test
-    public void testRewriteQueryWithoutExistingFilters() {
+    public void testRewriteQueryWithoutExistingFilters() throws Exception{
         Pql2Compiler pql2Compiler = new Pql2Compiler();
         BrokerRequest req = pql2Compiler.compileToBrokerRequest("SELECT * FROM T");
         Assert.assertFalse(req.isSetFilterQuery());
@@ -46,23 +46,17 @@ public class LowWaterMarkQueryWriterTest {
         } catch (TException e)   {
             Assert.fail("Query after low water mark query is not valid: ", e);
         }
-        // Verify there are in total 13 filter query nodes in the filter query tree.
+        // Verify there are in total 7 filter query nodes in the filter query tree.
         Map<Integer,FilterQuery> filterSubQueryMap = req.getFilterSubQueryMap().getFilterQueryMap();
-        Assert.assertEquals(filterSubQueryMap.size(), 17);
-        // 0. Verify there are one top level filter of operator OR with two sub filter queries.
-        verifyNoneTerminalFilterQuery(req.getFilterQuery(), FilterOperator.OR, 2);
+        Assert.assertEquals(filterSubQueryMap.size(), 7);
 
-        // Verify the queries for both partitions
-        Integer p1QueryId = req.getFilterQuery().getNestedFilterQueryIds().get(0);
-        Integer p2QueryId = req.getFilterQuery().getNestedFilterQueryIds().get(1);
-        // 1. Verify the first partition's filter query.
-        FilterQuery partition1 = filterSubQueryMap.get(p1QueryId);
-        verifyNoneTerminalFilterQuery(partition1, FilterOperator.AND, 3);
-        FilterQuery partition1NumberQuery = filterSubQueryMap.get(partition1.getNestedFilterQueryIds().get(0));
-        FilterQuery validFrom1Query = filterSubQueryMap.get(partition1.getNestedFilterQueryIds().get(1));
-        FilterQuery validTo1Query = filterSubQueryMap.get(partition1.getNestedFilterQueryIds().get(2));
+        Integer lwmQueryId = req.getFilterQuery().getId();
+        // 1. Verify the low water mark query.
+        FilterQuery lwmQuery = filterSubQueryMap.get(lwmQueryId);
+        verifyNoneTerminalFilterQuery(lwmQuery, FilterOperator.AND, 2);
+        FilterQuery validFrom1Query = filterSubQueryMap.get(lwmQuery.getNestedFilterQueryIds().get(0));
+        FilterQuery validTo1Query = filterSubQueryMap.get(lwmQuery.getNestedFilterQueryIds().get(1));
 
-        verifyTerminalFilterQuery(partition1NumberQuery, "$partition", "0", FilterOperator.EQUALITY);
         // Verify the subtree (i.e., an AND with two nodes) for the $validFrom column.
         verifyNoneTerminalFilterQuery(validFrom1Query, FilterOperator.AND, 2);
         verifyTerminalFilterQuery(filterSubQueryMap.get(validFrom1Query.getNestedFilterQueryIds().get(0)),
@@ -75,27 +69,6 @@ public class LowWaterMarkQueryWriterTest {
         verifyTerminalFilterQuery(filterSubQueryMap.get(validTo1Query.getNestedFilterQueryIds().get(0)),
             "$validUntil", "(10\t\t*)", FilterOperator.RANGE);
         verifyTerminalFilterQuery(filterSubQueryMap.get(validTo1Query.getNestedFilterQueryIds().get(1)),
-            "$validUntil", "-1", FilterOperator.EQUALITY);
-        // 2. Verify the second partition's filter query.
-        FilterQuery partition2 = filterSubQueryMap.get(p2QueryId);
-        verifyNoneTerminalFilterQuery(partition2, FilterOperator.AND, 3);
-        FilterQuery partition2NumberQuery = filterSubQueryMap.get(partition2.getNestedFilterQueryIds().get(0));
-        FilterQuery validFrom2Query = filterSubQueryMap.get(partition2.getNestedFilterQueryIds().get(1));
-        FilterQuery validTo2Query = filterSubQueryMap.get(partition2.getNestedFilterQueryIds().get(2));
-
-        verifyTerminalFilterQuery(partition2NumberQuery, "$partition", "1", FilterOperator.EQUALITY);
-        // Verify the subtree (i.e., an AND with two nodes) for the $validFrom column.
-        verifyNoneTerminalFilterQuery(validFrom1Query, FilterOperator.AND, 2);
-        verifyTerminalFilterQuery(filterSubQueryMap.get(validFrom2Query.getNestedFilterQueryIds().get(0)),
-            "$validFrom", "(*\t\t20]", FilterOperator.RANGE);
-        verifyTerminalFilterQuery(filterSubQueryMap.get(validFrom2Query.getNestedFilterQueryIds().get(1)),
-            "$validFrom", "(-1\t\t*)", FilterOperator.RANGE);
-
-        // Verify the subtree (i.e., an OR with two nodes) for the $validutil column.
-        verifyNoneTerminalFilterQuery(validTo2Query, FilterOperator.OR, 2);
-        verifyTerminalFilterQuery(filterSubQueryMap.get(validTo2Query.getNestedFilterQueryIds().get(0)),
-            "$validUntil", "(20\t\t*)", FilterOperator.RANGE);
-        verifyTerminalFilterQuery(filterSubQueryMap.get(validTo2Query.getNestedFilterQueryIds().get(1)),
             "$validUntil", "-1", FilterOperator.EQUALITY);
     }
 
@@ -114,27 +87,21 @@ public class LowWaterMarkQueryWriterTest {
         } catch (TException e) {
             Assert.fail("Query after low water mark query is not valid: ", e);
         }
-        // Verify there are in total 15 filter query nodes in the filter query tree.
+        // Verify there are in total 9 filter query nodes in the filter query tree.
         Map<Integer,FilterQuery> filterSubQueryMap = req.getFilterSubQueryMap().getFilterQueryMap();
-        Assert.assertEquals(filterSubQueryMap.size(), 19);
+        Assert.assertEquals(filterSubQueryMap.size(), 9);
         // 0. Verify there are one top level filter of operator OR with two sub filter queries.
         FilterQuery rootFilterQuery = req.getFilterQuery();
         verifyNoneTerminalFilterQuery(rootFilterQuery, FilterOperator.AND, 2);
-        // 1. Verify the existing filter query is not affected.
+        // 1. Verify the existing filter query A < 4 is not affected.
         verifyTerminalFilterQuery(filterSubQueryMap.get(rootFilterQuery.getNestedFilterQueryIds().get(0)), "A", "(*\t\t4)", FilterOperator.RANGE);
 
         FilterQuery lowWaterMarkQuery = filterSubQueryMap.get(rootFilterQuery.getNestedFilterQueryIds().get(1));
-        // Verify the queries for both partitions
-        Integer p1QueryId = lowWaterMarkQuery.getNestedFilterQueryIds().get(0);
-        Integer p2QueryId = lowWaterMarkQuery.getNestedFilterQueryIds().get(1);
-        // 2. Verify the first partition's filter query.
-        FilterQuery partition1 = filterSubQueryMap.get(p1QueryId);
-        verifyNoneTerminalFilterQuery(partition1, FilterOperator.AND, 3);
-        FilterQuery partition1NumberQuery = filterSubQueryMap.get(partition1.getNestedFilterQueryIds().get(0));
-        FilterQuery validFrom1Query = filterSubQueryMap.get(partition1.getNestedFilterQueryIds().get(1));
-        FilterQuery validTo1Query = filterSubQueryMap.get(partition1.getNestedFilterQueryIds().get(2));
+        // Verify the lwm query
+        verifyNoneTerminalFilterQuery(lowWaterMarkQuery, FilterOperator.AND, 2);
+        FilterQuery validFrom1Query = filterSubQueryMap.get(lowWaterMarkQuery.getNestedFilterQueryIds().get(0));
+        FilterQuery validTo1Query = filterSubQueryMap.get(lowWaterMarkQuery.getNestedFilterQueryIds().get(1));
 
-        verifyTerminalFilterQuery(partition1NumberQuery, "$partition", "0", FilterOperator.EQUALITY);
         // Verify the subtree (i.e., an AND with two nodes) for the $validFrom column.
         verifyNoneTerminalFilterQuery(validFrom1Query, FilterOperator.AND, 2);
         verifyTerminalFilterQuery(filterSubQueryMap.get(validFrom1Query.getNestedFilterQueryIds().get(0)),
@@ -147,27 +114,6 @@ public class LowWaterMarkQueryWriterTest {
         verifyTerminalFilterQuery(filterSubQueryMap.get(validTo1Query.getNestedFilterQueryIds().get(0)),
             "$validUntil", "(10\t\t*)", FilterOperator.RANGE);
         verifyTerminalFilterQuery(filterSubQueryMap.get(validTo1Query.getNestedFilterQueryIds().get(1)),
-            "$validUntil", "-1", FilterOperator.EQUALITY);
-        // 3. Verify the second partition's filter query.
-        FilterQuery partition2 = filterSubQueryMap.get(p2QueryId);
-        verifyNoneTerminalFilterQuery(partition2, FilterOperator.AND, 3);
-        FilterQuery partition2NumberQuery = filterSubQueryMap.get(partition2.getNestedFilterQueryIds().get(0));
-        FilterQuery validFrom2Query = filterSubQueryMap.get(partition2.getNestedFilterQueryIds().get(1));
-        FilterQuery validTo2Query = filterSubQueryMap.get(partition2.getNestedFilterQueryIds().get(2));
-
-        verifyTerminalFilterQuery(partition2NumberQuery, "$partition", "1", FilterOperator.EQUALITY);
-        // Verify the subtree (i.e., an AND with two nodes) for the $validFrom column.
-        verifyNoneTerminalFilterQuery(validFrom1Query, FilterOperator.AND, 2);
-        verifyTerminalFilterQuery(filterSubQueryMap.get(validFrom2Query.getNestedFilterQueryIds().get(0)),
-            "$validFrom", "(*\t\t20]", FilterOperator.RANGE);
-        verifyTerminalFilterQuery(filterSubQueryMap.get(validFrom2Query.getNestedFilterQueryIds().get(1)),
-            "$validFrom", "(-1\t\t*)", FilterOperator.RANGE);
-
-        // Verify the subtree (i.e., an OR with two nodes) for the $validutil column.
-        verifyNoneTerminalFilterQuery(validTo2Query, FilterOperator.OR, 2);
-        verifyTerminalFilterQuery(filterSubQueryMap.get(validTo2Query.getNestedFilterQueryIds().get(0)),
-            "$validUntil", "(20\t\t*)", FilterOperator.RANGE);
-        verifyTerminalFilterQuery(filterSubQueryMap.get(validTo2Query.getNestedFilterQueryIds().get(1)),
             "$validUntil", "-1", FilterOperator.EQUALITY);
     }
 
