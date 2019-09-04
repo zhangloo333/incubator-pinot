@@ -18,6 +18,8 @@
  */
 package org.apache.pinot.grigio.keyCoordinator.helix;
 
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.helix.AccessOption;
 import org.apache.helix.HelixManager;
 import org.apache.helix.ZNRecord;
@@ -27,35 +29,92 @@ import org.slf4j.LoggerFactory;
 
 
 /**
- * Manager for version numbers. This handles getting/setting version produced from/to zookeeper
+ * Manager for version numbers. This handles getting/setting version produced/consumed from/to zookeeper
  * property store. Utilizes cache built in ZkHelixPropertyStore to reduce load on zookeeper.
  */
 public class KeyCoordinatorVersionManager {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(KeyCoordinatorVersionManager.class);
 
-  private static final String VERSION_PRODUCED_ZN_NAME = "VERSION_PRODUCED";
+  private static final String VERSION_PRODUCED_ZN_PATH = "/VERSION_PRODUCED";
   private static final String VERSION_PRODUCED_KEY = "VERSION_PRODUCED";
+  private static final String VERSION_CONSUMED_ZN_PATH = "/VERSION_CONSUMED";
 
   private final ZkHelixPropertyStore<ZNRecord> _propertyStore;
+  private final String _instanceName;
 
   public KeyCoordinatorVersionManager(HelixManager helixManager) {
     _propertyStore = helixManager.getHelixPropertyStore();
+    _instanceName = helixManager.getInstanceName();
   }
 
-  public synchronized long getVersionProducedFromPropertyStore() {
-    ZNRecord record = _propertyStore.get(VERSION_PRODUCED_ZN_NAME, null, AccessOption.PERSISTENT);
+  /**
+   * Get version produced for the key coordinator cluster.
+   *
+   * There is only one version produced for the whole key coordinator cluster.
+   */
+  public long getVersionProducedFromPropertyStore() {
+    ZNRecord record = _propertyStore.get(VERSION_PRODUCED_ZN_PATH, null, AccessOption.PERSISTENT);
+    if (record == null) {
+      // new cluster
+      return 0L;
+    }
     return Long.parseLong(record.getSimpleField(VERSION_PRODUCED_KEY));
   }
 
-  public synchronized void setVersionProducedToPropertyStore(long versionProduced) {
-    ZNRecord record = getZNRecordForVersionProduced(versionProduced);
-    _propertyStore.set(VERSION_PRODUCED_ZN_NAME, record, AccessOption.PERSISTENT);
+  /**
+   * Set version produced for the key coordinator cluster.
+   *
+   * There is only one version produced for the whole key coordinator cluster.
+   *
+   * @return true if the version produced is saved to the property store successfully, false otherwise.
+   */
+  public boolean setVersionProducedToPropertyStore(long versionProduced) {
+    ZNRecord record = new ZNRecord(VERSION_PRODUCED_ZN_PATH);
+    record.setLongField(VERSION_PRODUCED_KEY, versionProduced);
+    return _propertyStore.set(VERSION_PRODUCED_ZN_PATH, record, AccessOption.PERSISTENT);
   }
 
-  private ZNRecord getZNRecordForVersionProduced(long versionProduced) {
-    ZNRecord record = new ZNRecord(VERSION_PRODUCED_ZN_NAME);
-    record.setLongField(VERSION_PRODUCED_KEY, versionProduced);
-    return record;
+  /**
+   * Get version consumed for the current key coordinator instance.
+   *
+   * There is a map of version consumed for each key coordinator instance, with the partition as key and version as value.
+   */
+  public Map<Integer, Long> getVersionConsumedFromPropertyStore() {
+    Map<Integer, Long> versionConsumed = new HashMap<>();
+    ZNRecord record = _propertyStore.get(VERSION_CONSUMED_ZN_PATH, null, AccessOption.PERSISTENT);
+    if (record == null) {
+      // new cluster
+      return versionConsumed;
+    }
+    Map<String, String> versionConsumedStr = record.getMapField(_instanceName);
+    if (versionConsumedStr == null) {
+      // new instance
+      return versionConsumed;
+    }
+    for (Map.Entry<String, String> entry : versionConsumedStr.entrySet()) {
+      versionConsumed.put(Integer.parseInt(entry.getKey()), Long.parseLong(entry.getValue()));
+    }
+    return versionConsumed;
+  }
+
+  /**
+   * Set the version consumed for the current key coordinator instance.
+   *
+   * There is a map of version consumed for each key coordinator instance, with the partition as key and version as value.
+   *
+   * @return true if the version consumed is saved to the property store successfully, false otherwise.
+   */
+  public boolean setVersionConsumedToPropertyStore(Map<Integer, Long> versionConsumed) {
+    ZNRecord record = _propertyStore.get(VERSION_CONSUMED_ZN_PATH, null, AccessOption.PERSISTENT);
+    if (record == null) {
+      record = new ZNRecord(VERSION_CONSUMED_ZN_PATH);
+    }
+    Map<String, String> versionConsumedStr = new HashMap<>();
+    for (Map.Entry<Integer, Long> entry : versionConsumed.entrySet()) {
+      versionConsumedStr.put(entry.getKey().toString(), entry.getValue().toString());
+    }
+    record.setMapField(_instanceName, versionConsumedStr);
+    return _propertyStore.set(VERSION_CONSUMED_ZN_PATH, record, AccessOption.PERSISTENT);
   }
 }

@@ -28,34 +28,83 @@ import static org.testng.Assert.*;
 public class KeyCoordinatorQueueMsgTest {
 
   private KeyCoordinatorQueueMsg msg;
+  private KeyCoordinatorQueueMsg versionMsg;
   private String key = "abc";
   private byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8);
   private String segmentName = "table_name__15__9__20190718T1930Z";
   private long offset = 1000;
   private long timestamp = 1000;
+  private long version = 100;
 
   @BeforeClass
   public void setup() {
     msg = new KeyCoordinatorQueueMsg(keyBytes, segmentName, offset, timestamp);
+    versionMsg = new KeyCoordinatorQueueMsg(version);
+  }
+
+  @Test
+  public void testIsVersionMessage() {
+    assertFalse(msg.isVersionMessage());
+    assertTrue(versionMsg.isVersionMessage());
   }
 
   @Test
   public void testGetKey() {
-    assertEquals(keyBytes, msg.getKey());
+    assertEquals(msg.getKey(), keyBytes);
   }
 
   @Test
-  public void testGetContext() {
-    assertEquals(new KeyCoordinatorMessageContext(segmentName, offset, timestamp), msg.getContext());
+  public void testGetSegmentName() {
+    assertEquals(msg.getSegmentName(), segmentName);
+  }
+
+  @Test
+  public void testGetTimestamp() {
+    assertEquals(msg.getTimestamp(), timestamp);
+  }
+
+  @Test
+  public void testGetKafkaOffset() {
+    assertEquals(msg.getKafkaOffset(), offset);
+  }
+
+  @Test(expectedExceptions = IllegalStateException.class)
+  public void testGetVersionFails() {
+    msg.getVersion();
   }
 
   @Test
   public void testGetPinotTable() {
-    assertEquals("table_name", msg.getPinotTableName());
+    assertEquals(msg.getPinotTableName(), "table_name");
+  }
+
+  @Test(expectedExceptions = IllegalStateException.class)
+  public void testGetKeyFails() {
+    versionMsg.getKey();
+  }
+
+  @Test(expectedExceptions = IllegalStateException.class)
+  public void testGetSegmentNameFails() {
+    versionMsg.getSegmentName();
+  }
+
+  @Test(expectedExceptions = IllegalStateException.class)
+  public void testGetTimestampFails() {
+    versionMsg.getTimestamp();
+  }
+
+  @Test(expectedExceptions = IllegalStateException.class)
+  public void testGetKafkaOffsetFails() {
+    versionMsg.getKafkaOffset();
   }
 
   @Test
   public void testGetVersion() {
-    assertFalse(msg.isVersionMessage());
+    assertEquals(version, versionMsg.getVersion());
+  }
+
+  @Test(expectedExceptions = IllegalStateException.class)
+  public void testGetPinotTableFails() {
+    versionMsg.getPinotTableName();
   }
 }

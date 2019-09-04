@@ -56,7 +56,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -98,7 +97,7 @@ public class DistributedKeyCoordinatorCore {
   protected long _versionMessageIntervalMs;
   protected Timer _versionMessageTimer;
   protected TimerTask _versionMessageProduceTask;
-  protected List<Long> _currentVersionConsumed;
+  protected Map<Integer, Long> _currentVersionConsumed;
 
   protected volatile State _state = State.SHUTDOWN;
 
@@ -160,9 +159,7 @@ public class DistributedKeyCoordinatorCore {
     _keyCoordinatorVersionManager =
         new KeyCoordinatorVersionManager(_keyCoordinatorClusterHelixManager.getControllerHelixManager());
 
-    // todo: handle key coordinator restart
-    _currentVersionConsumed = new ArrayList<>(Collections.nCopies(conf.getKeyCoordinatorMessagePartitionCount(), 0L));
-
+    _currentVersionConsumed = _keyCoordinatorVersionManager.getVersionConsumedFromPropertyStore();
     _state = State.INIT;
   }
 
@@ -176,27 +173,29 @@ public class DistributedKeyCoordinatorCore {
   }
 
   private void produceVersionMessage() {
-    if (_state == State.RUNNING) {
-      if (_keyCoordinatorLeadershipManager.isLeader()) {
-        long versionProduced = _keyCoordinatorVersionManager.getVersionProducedFromPropertyStore();
-        long versionToProduce = versionProduced + 1;
-        LOGGER.info("Producing version messages to all partitions with version {}", versionToProduce);
-        try {
-          // produce to all partitions
-          for (int partition = 0; partition < _conf.getKeyCoordinatorMessagePartitionCount(); partition++) {
-            ProduceTask<Integer, KeyCoordinatorQueueMsg> produceTask =
-                new ProduceTask<>(_conf.getKeyCoordinatorMessageTopic(), partition,
-                    new KeyCoordinatorQueueMsg(versionToProduce));
-            _versionMessageKafkaProducer.produce(produceTask);
-          }
-          // todo: make producing version messages and setting versions in property store atomic
-          _keyCoordinatorVersionManager.setVersionProducedToPropertyStore(versionToProduce);
-        } catch (Exception ex) {
-          LOGGER.error("Failed to produce version message", ex);
-        }
-      } else {
-        LOGGER.debug("Not controller leader, skip producing version messages");
+    if (_state != State.RUNNING) {
+      LOGGER.info("Key coordinator not running, skip producing version messages");
+      return;
+    }
+    if (!_keyCoordinatorLeadershipManager.isLeader()) {
+      LOGGER.debug("Not controller leader, skip producing version messages");
+      return;
+    }
+    try {
+      long versionProduced = _keyCoordinatorVersionManager.getVersionProducedFromPropertyStore();
+      long versionToProduce = versionProduced + 1;
+      LOGGER.info("Producing version messages to all partitions with version {}", versionToProduce);
+      // produce to all partitions
+      for (int partition = 0; partition < _conf.getKeyCoordinatorMessagePartitionCount(); partition++) {
+        ProduceTask<Integer, KeyCoordinatorQueueMsg> produceTask =
+            new ProduceTask<>(_conf.getKeyCoordinatorMessageTopic(), partition,
+                new KeyCoordinatorQueueMsg(versionToProduce));
+        _versionMessageKafkaProducer.produce(produceTask);
       }
+      // todo: make producing version messages and setting versions to property store as one transaction
+      _keyCoordinatorVersionManager.setVersionProducedToPropertyStore(versionToProduce);
+    } catch (Exception ex) {
+      LOGGER.error("Failed to produce version message", ex);
     }
   }
 
@@ -241,8 +240,9 @@ public class DistributedKeyCoordinatorCore {
 
         if (messages.size() > 0) {
           processMessages(messages);
-
+          // todo: make ackOffset and setVersionConsumed as one transaction
           _inputKafkaConsumer.ackOffset(messageAndOffset.getOffsetInfo());
+          _keyCoordinatorVersionManager.setVersionConsumedToPropertyStore(_currentVersionConsumed);
           LOGGER.info("kc message processed {} messages in this loop for {} ms", messages.size(),
               System.currentTimeMillis() - start);
         } else {
@@ -306,11 +306,26 @@ public class DistributedKeyCoordinatorCore {
    */
   private void processMessages(List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> messages) {
     long start = System.currentTimeMillis();
-    Map<String, List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>>> tableMsgMap = new HashMap<>();
+    Map<String, List<MessageWithPartitionAndVersion>> tableMsgMap = new HashMap<>();
     for (QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg> msg: messages) {
-      tableMsgMap.computeIfAbsent(msg.getRecord().getPinotTableName(), t -> new ArrayList<>()).add(msg);
+      if (msg.getRecord().isVersionMessage()) {
+        // update _currentVersionConsumed for each version message
+        _currentVersionConsumed.put(msg.getPartition(), msg.getRecord().getVersion());
+      } else {
+        // filter out version messages, attach the current version (and partition) to each regular messages
+        tableMsgMap.computeIfAbsent(msg.getRecord().getPinotTableName(), t -> new ArrayList<>()).add(
+            new MessageWithPartitionAndVersion(
+                msg.getRecord().getKey(),
+                msg.getRecord().getSegmentName(),
+                msg.getRecord().getKafkaOffset(),
+                msg.getRecord().getTimestamp(),
+                msg.getPartition(),
+                _currentVersionConsumed.getOrDefault(msg.getPartition(), 0L)
+            )
+        );
+      }
     }
-    for (Map.Entry<String, List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>>> perTableUpdates: tableMsgMap.entrySet()) {
+    for (Map.Entry<String, List<MessageWithPartitionAndVersion>> perTableUpdates: tableMsgMap.entrySet()) {
       processMessagesForTable(perTableUpdates.getKey(), perTableUpdates.getValue());
     }
     _metrics.addTimedValueMs(GrigioTimer.MESSAGE_PROCESS_THREAD_PROCESS_DELAY, System.currentTimeMillis() - start);
@@ -321,7 +336,7 @@ public class DistributedKeyCoordinatorCore {
    * @param tableName the name of the table we are processing (with type)
    * @param msgList the list of message associated with it
    */
-  private void processMessagesForTable(String tableName, List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> msgList) {
+  private void processMessagesForTable(String tableName, List<MessageWithPartitionAndVersion> msgList) {
     try {
       long start = System.currentTimeMillis();
       if (msgList == null || msgList.size() == 0) {
@@ -329,7 +344,6 @@ public class DistributedKeyCoordinatorCore {
         return;
       }
       List<ProduceTask<Integer, LogCoordinatorMessage>> tasks = new ArrayList<>();
-
       Map<ByteArrayWrapper, KeyCoordinatorMessageContext> primaryKeyToValueMap = fetchDataFromKVStore(tableName, msgList);
       processMessageUpdates(tableName, msgList, primaryKeyToValueMap, tasks);
       List<ProduceTask<Integer, LogCoordinatorMessage>> failedTasks = sendMessagesToLogCoordinator(tasks, 10, TimeUnit.SECONDS);
@@ -366,14 +380,14 @@ public class DistributedKeyCoordinatorCore {
    * @throws IOException
    */
   private Map<ByteArrayWrapper, KeyCoordinatorMessageContext> fetchDataFromKVStore(String tableName,
-                                                                                   List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> msgList)
+      List<MessageWithPartitionAndVersion> msgList)
       throws IOException {
     long start = System.currentTimeMillis();
     KeyValueStoreTable<ByteArrayWrapper, KeyCoordinatorMessageContext> table = _keyValueStoreDB.getTable(tableName);
     // get a set of unique primary key and retrieve its corresponding value in kv store
     Set<ByteArrayWrapper> primaryKeys = msgList.stream()
-        .filter(msg -> msg.getRecord().getKey() != null && msg.getRecord().getKey().length > 0)
-        .map(msg -> new ByteArrayWrapper(msg.getRecord().getKey()))
+        .filter(msg -> msg.getKey() != null && msg.getKey().length > 0)
+        .map(msg -> new ByteArrayWrapper(msg.getKey()))
         .collect(Collectors.toCollection(HashSet::new));
     Map<ByteArrayWrapper, KeyCoordinatorMessageContext> primaryKeyToValueMap = new HashMap<>(table.multiGet(new ArrayList<>(primaryKeys)));
     _metrics.setValueOfGlobalGauge(GrigioGauge.FETCH_MSG_FROM_KV_COUNT, primaryKeyToValueMap.size());
@@ -391,17 +405,13 @@ public class DistributedKeyCoordinatorCore {
    *                             reflect the new state after these updates are done
    * @param tasks the generated producer task to be sent to segment update entry queue (kafka topic)
    */
-  private void processMessageUpdates(String tableName, List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> msgList,
+  private void processMessageUpdates(String tableName, List<MessageWithPartitionAndVersion> msgList,
                                      Map<ByteArrayWrapper, KeyCoordinatorMessageContext> primaryKeyToValueMap,
                                      List<ProduceTask<Integer, LogCoordinatorMessage>> tasks) {
     long start = System.currentTimeMillis();
-    for (QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg> msg: msgList) {
-      if (msg.getRecord().isVersionMessage()) {
-        _currentVersionConsumed.set(msg.getPartition(), msg.getRecord().getVersion());
-        continue;
-      }
-      KeyCoordinatorMessageContext currentContext = msg.getRecord().getContext();
-      ByteArrayWrapper key = new ByteArrayWrapper(msg.getRecord().getKey());
+    for (MessageWithPartitionAndVersion msg: msgList) {
+      KeyCoordinatorMessageContext currentContext = msg.getContext();
+      ByteArrayWrapper key = new ByteArrayWrapper(msg.getKey());
       if (primaryKeyToValueMap.containsKey(key)) {
         // key conflicts, should resolve which one to delete
         KeyCoordinatorMessageContext oldContext = primaryKeyToValueMap.get(key);
@@ -410,13 +420,13 @@ public class DistributedKeyCoordinatorCore {
           if (_messageResolveStrategy.shouldDeleteFirstMessage(oldContext, currentContext)) {
             // the existing message we have is older than the message we just processed, create delete for it
             tasks.add(createMessageToLogCoordinator(tableName, oldContext.getSegmentName(), oldContext.getKafkaOffset(),
-                _currentVersionConsumed.get(msg.getPartition()), LogEventType.DELETE, msg.getPartition()));
+                msg.getVersion(), LogEventType.DELETE, msg.getPartition()));
             // update the local cache to the latest message, so message within the same batch can override each other
             primaryKeyToValueMap.put(key, currentContext);
           } else {
             // the new message is older than the existing message
             tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
-                _currentVersionConsumed.get(msg.getPartition()), LogEventType.DELETE, msg.getPartition()));
+                msg.getVersion(), LogEventType.DELETE, msg.getPartition()));
           }
         }
       } else {
@@ -425,7 +435,7 @@ public class DistributedKeyCoordinatorCore {
       }
       // always create a insert event for validFrom if is not a duplicated input
       tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
-          _currentVersionConsumed.get(msg.getPartition()), LogEventType.INSERT, msg.getPartition()));
+          msg.getVersion(), LogEventType.INSERT, msg.getPartition()));
     }
     _metrics.addTimedValueMs(GrigioTimer.PROCESS_MSG_UPDATE, System.currentTimeMillis() - start);
     LOGGER.info("processed all messages in {} ms", System.currentTimeMillis() - start);
@@ -518,6 +528,44 @@ public class DistributedKeyCoordinatorCore {
 
     public OffsetInfo getOffsetInfo() {
       return _offsetInfo;
+    }
+  }
+
+  /**
+   * Partially processed ingestion upsert messages, with partition and version added
+   */
+  private static class MessageWithPartitionAndVersion {
+    private final byte[] _key;
+    private final String _segmentName;
+    private final long _kafkaOffset;
+    private final long _timestamp;
+    private final int _partition;
+    private final long _version;
+
+    public MessageWithPartitionAndVersion(byte[] key, String segmentName, long kafkaOffset, long timestamp,
+        int partition, long version) {
+      _key = key;
+      _segmentName = segmentName;
+      _kafkaOffset = kafkaOffset;
+      _timestamp = timestamp;
+      _partition = partition;
+      _version = version;
+    }
+
+    public byte[] getKey() {
+      return _key;
+    }
+
+    public int getPartition() {
+      return _partition;
+    }
+
+    public long getVersion() {
+      return _version;
+    }
+
+    public KeyCoordinatorMessageContext getContext() {
+      return new KeyCoordinatorMessageContext(_segmentName, _timestamp, _kafkaOffset);
     }
   }
 }

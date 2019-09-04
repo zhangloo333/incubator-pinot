@@ -22,7 +22,10 @@ import com.google.common.base.Preconditions;
 import org.apache.pinot.common.utils.LLCSegmentName;
 
 import java.io.Serializable;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * class used for the message pass from server to key coordinator
@@ -92,7 +95,23 @@ public class KeyCoordinatorQueueMsg implements Serializable {
   }
 
   public boolean isVersionMessage() {
-    return _version > VERSION_PLACEHOLDER;
+    return isValidVersion(_version);
+  }
+
+  // used by deserializer
+  public static boolean isValidVersion(long version) {
+    return version > VERSION_PLACEHOLDER;
+  }
+
+  // used by serializer
+  public Map<String, Object> getDataForSerializer() {
+    Map<String, Object> data = new HashMap<>();
+    data.put("primaryKey", ByteBuffer.wrap(_key));
+    data.put("segmentName", _segmentName);
+    data.put("kafkaOffset", _kafkaOffset);
+    data.put("timestamp", _timestamp);
+    data.put("version", _version);
+    return data;
   }
 
   @Override
@@ -104,14 +123,11 @@ public class KeyCoordinatorQueueMsg implements Serializable {
         + " version: " + _version;
   }
 
-  public KeyCoordinatorMessageContext getContext() {
-    return new KeyCoordinatorMessageContext(_segmentName, _timestamp, _kafkaOffset);
-  }
-
   /**
    * get table name without type info
    */
   public String getPinotTableName() {
+    Preconditions.checkState(!isVersionMessage(), "Cannot get Pinot table name from a version message");
     return new LLCSegmentName(_segmentName).getTableName();
   }
 }
