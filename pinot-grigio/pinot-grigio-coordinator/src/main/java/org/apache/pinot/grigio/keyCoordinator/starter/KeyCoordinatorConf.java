@@ -21,6 +21,7 @@ package org.apache.pinot.grigio.keyCoordinator.starter;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.PropertiesConfiguration;
+import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.grigio.common.config.CommonConfig;
 
 import java.io.File;
@@ -125,5 +126,9 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
 
   public int getKeyCoordinatorMessagePartitionCount() {
     return this.getInt(KC_MESSAGE_PARTITION_COUNT);
+  }
+
+  public String getMetricsPrefix() {
+    return getString(CommonConstants.Grigio.CONFIG_OF_METRICS_PREFIX_KEY, CommonConstants.Grigio.DEFAULT_METRICS_PREFIX);
   }
 }

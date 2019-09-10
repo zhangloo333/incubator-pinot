@@ -20,33 +20,42 @@ package org.apache.pinot.grigio.common.metrics;
 
 import org.apache.pinot.common.Utils;
 import org.apache.pinot.common.metrics.AbstractMetrics;
+import org.apache.pinot.grigio.common.metrics.GrigioMetrics.MetricsType;
+
 
 public enum GrigioGauge implements AbstractMetrics.Gauge {
 
-  MESSAGES("messages");
+  // key coordinator related metrics
+  MESSAGE_PROCESS_QUEUE_SIZE("messages", MetricsType.KC_ONLY),
+  FETCH_MSG_FROM_KV_COUNT("messages", MetricsType.KC_ONLY)
+  ;
 
+  private final String _gaugeName;
+  private final String _unit;
+  private final MetricsType _type;
 
-  private final String gaugeName;
-  private final String unit;
-
-  GrigioGauge(String unit) {
-    this.unit = unit;
-    this.gaugeName = Utils.toCamelCase(name().toLowerCase());
+  GrigioGauge(String unit, MetricsType type) {
+    this._unit = unit;
+    this._gaugeName = Utils.toCamelCase(name().toLowerCase());
+    this._type = type;
   }
-
 
   @Override
   public String getGaugeName() {
-    return gaugeName;
+    return _gaugeName;
   }
 
   @Override
   public String getUnit() {
-    return unit;
+    return _unit;
   }
 
   @Override
   public boolean isGlobal() {
     return true;
+  }
+
+  public MetricsType getType() {
+    return _type;
   }
 }

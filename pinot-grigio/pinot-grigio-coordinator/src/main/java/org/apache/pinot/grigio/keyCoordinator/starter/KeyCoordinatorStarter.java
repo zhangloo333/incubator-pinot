@@ -25,13 +25,13 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.pinot.common.metrics.MetricsHelper;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.grigio.common.config.CommonConfig;
-import org.apache.pinot.grigio.common.metrics.GrigioMetrics;
 import org.apache.pinot.grigio.common.rpcQueue.KeyCoordinatorQueueConsumer;
 import org.apache.pinot.grigio.common.rpcQueue.KeyCoordinatorQueueProducer;
 import org.apache.pinot.grigio.common.rpcQueue.LogCoordinatorQueueProducer;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
 import org.apache.pinot.grigio.common.updateStrategy.MessageResolveStrategy;
 import org.apache.pinot.grigio.common.updateStrategy.MessageTimeResolveStrategy;
+import org.apache.pinot.grigio.keyCoordinator.GrigioKeyCoordinatorMetrics;
 import org.apache.pinot.grigio.keyCoordinator.api.KeyCoordinatorApiApplication;
 import org.apache.pinot.grigio.keyCoordinator.helix.KeyCoordinatorClusterHelixManager;
 import org.apache.pinot.grigio.keyCoordinator.helix.State;
@@ -46,7 +46,7 @@ public class KeyCoordinatorStarter {
   private static final Logger LOGGER = LoggerFactory.getLogger(KeyCoordinatorStarter.class);
 
   private KeyCoordinatorConf _keyCoordinatorConf;
-  private GrigioMetrics _metrics;
+  private GrigioKeyCoordinatorMetrics _metrics;
   private KeyCoordinatorQueueConsumer _consumer;
   private LogCoordinatorQueueProducer _producer;
   private KeyCoordinatorQueueProducer _versionMessageProducer;
@@ -58,11 +58,9 @@ public class KeyCoordinatorStarter {
   private String _instanceId;
   private KeyCoordinatorClusterHelixManager _keyCoordinatorClusterHelixManager;
 
-  private static final String KEY_COORDINATOR_PREFIX = "pinot.kc.";
-
   public KeyCoordinatorStarter(KeyCoordinatorConf conf) throws Exception {
     _keyCoordinatorConf = conf;
-    initMetrics(_keyCoordinatorConf.getMetricsConf());
+    initMetrics(_keyCoordinatorConf.getMetricsConf(), _keyCoordinatorConf.getMetricsPrefix());
     _hostName = conf.getString(KeyCoordinatorConf.HOST_NAME);
     Preconditions.checkState(StringUtils.isNotEmpty(_hostName), "expect host name in configuration");
     _port = conf.getPort();
@@ -84,11 +82,11 @@ public class KeyCoordinatorStarter {
     _application = new KeyCoordinatorApiApplication(this);
   }
 
-  private void initMetrics(Configuration conf) {
+  private void initMetrics(Configuration conf, String prefix) {
     MetricsHelper.initializeMetrics(conf);
     MetricsRegistry registry = new MetricsRegistry();
     MetricsHelper.registerMetricsRegistry(registry);
-    _metrics = new GrigioMetrics(KEY_COORDINATOR_PREFIX, registry);
+    _metrics = new GrigioKeyCoordinatorMetrics(prefix, registry);
     _metrics.initializeGlobalMeters();
   }
 
@@ -125,7 +123,7 @@ public class KeyCoordinatorStarter {
     LOGGER.info("starting key coordinator instance");
     _keyCoordinatorCore
         .init(_keyCoordinatorConf, _producer, _consumer, _versionMessageProducer, _messageResolveStrategy,
-            _keyCoordinatorClusterHelixManager);
+            _keyCoordinatorClusterHelixManager, _metrics);
     LOGGER.info("finished init key coordinator instance, starting loop");
     _keyCoordinatorCore.start();
     LOGGER.info("starting web service");

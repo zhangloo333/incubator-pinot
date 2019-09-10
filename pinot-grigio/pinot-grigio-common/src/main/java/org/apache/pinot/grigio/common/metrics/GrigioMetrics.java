@@ -21,9 +21,11 @@ package org.apache.pinot.grigio.common.metrics;
 import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.pinot.common.metrics.AbstractMetrics;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-public class GrigioMetrics extends AbstractMetrics<AbstractMetrics.QueryPhase, GrigioMeter, GrigioGauge, GrigioTimer> {
+public abstract class GrigioMetrics extends AbstractMetrics<AbstractMetrics.QueryPhase, GrigioMeter, GrigioGauge, GrigioTimer> {
 
   public GrigioMetrics(String prefix, MetricsRegistry metricsRegistry) {
     super(prefix, metricsRegistry, GrigioMetrics.class);
@@ -34,21 +36,45 @@ public class GrigioMetrics extends AbstractMetrics<AbstractMetrics.QueryPhase, G
     return new QueryPhase[0];
   }
 
-  @Override
-  protected GrigioMeter[] getMeters() {
-    return GrigioMeter.values();
-  }
-
-  @Override
-  protected GrigioGauge[] getGauges() {
-    return GrigioGauge.values();
-  }
-
   public void addTimedValueMs(GrigioTimer timer, long duration) {
     addTimedValue(timer, duration, TimeUnit.MILLISECONDS);
   }
 
   public void addTimedTableValueMs(String table, GrigioTimer timer, long duration) {
     addTimedTableValue(table, timer, duration, TimeUnit.MILLISECONDS);
+  }
+
+  protected static GrigioMeter[] filterMeterByTypes(MetricsType... types) {
+    GrigioMeter[] meters = GrigioMeter.values();
+    List<GrigioMeter> matchedMeters = new ArrayList<>();
+    for (GrigioMeter meter : meters) {
+      for (MetricsType type : types) {
+        if (meter.getType() == type) {
+          matchedMeters.add(meter);
+          break;
+        }
+      }
+    }
+    return matchedMeters.toArray(new GrigioMeter[]{});
+  }
+
+  protected static GrigioGauge[] filterGaugeByTypes(MetricsType... types) {
+    GrigioGauge[] gauges = GrigioGauge.values();
+    List<GrigioGauge> matchedGauges = new ArrayList<>();
+    for (GrigioGauge gauge: gauges) {
+      for (MetricsType type : types) {
+        if (gauge.getType() == type) {
+          matchedGauges.add(gauge);
+          break;
+        }
+      }
+    }
+    return matchedGauges.toArray(new GrigioGauge[]{});
+  }
+
+  public enum MetricsType {
+    SERVER_ONLY,
+    KC_ONLY,
+    BOTH
   }
 }

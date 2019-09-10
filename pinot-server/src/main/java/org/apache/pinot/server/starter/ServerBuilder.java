@@ -33,6 +33,7 @@ import org.apache.pinot.core.query.scheduler.QuerySchedulerFactory;
 import org.apache.pinot.core.segment.updater.SegmentUpdater;
 import org.apache.pinot.grigio.common.metrics.GrigioMetrics;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
+import org.apache.pinot.grigio.servers.GrigioServerMetrics;
 import org.apache.pinot.grigio.servers.KeyCoordinatorProvider;
 import org.apache.pinot.grigio.servers.SegmentUpdaterProvider;
 import org.apache.pinot.server.conf.ServerConf;
@@ -89,7 +90,7 @@ public class ServerBuilder {
 
   private void maybeInitGrigioMetrics(MetricsRegistry metricsRegistry) {
     if (_serverConf.isUpsertEnabled()) {
-      _grigioMetrics = new GrigioMetrics(_serverConf.getMetricsPrefix() + PINOT_UPSERT_SERVER_COMPONENT_PREFIX,
+      _grigioMetrics = new GrigioServerMetrics(_serverConf.getMetricsPrefix() + PINOT_UPSERT_SERVER_COMPONENT_PREFIX,
           metricsRegistry);
       _grigioMetrics.initializeGlobalMeters();
     }

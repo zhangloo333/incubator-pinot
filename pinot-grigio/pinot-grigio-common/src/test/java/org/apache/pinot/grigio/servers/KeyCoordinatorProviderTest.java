@@ -20,7 +20,7 @@ package org.apache.pinot.grigio.servers;
 
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.PropertiesConfiguration;
-import org.apache.pinot.grigio.common.metrics.MockGrigioMetrics;
+import org.apache.pinot.grigio.common.metrics.MockGrigioServerMetrics;
 import org.apache.pinot.grigio.common.metrics.GrigioMetrics;
 import org.apache.pinot.grigio.common.rpcQueue.ProduceTask;
 import org.apache.pinot.grigio.common.rpcQueue.QueueProducer;
@@ -46,7 +46,7 @@ public class KeyCoordinatorProviderTest {
 
   @Test
   public void testCreteProducer() {
-    KeyCoordinatorProvider provider = new KeyCoordinatorProvider(conf, "host_name_sample", new MockGrigioMetrics());
+    KeyCoordinatorProvider provider = new KeyCoordinatorProvider(conf, "host_name_sample", new MockGrigioServerMetrics());
 
     MockProducer producer1 = (MockProducer) provider.getCachedProducer("table1");
     MockProducer producer2 = (MockProducer) provider.getCachedProducer("table2");
@@ -62,7 +62,7 @@ public class KeyCoordinatorProviderTest {
 
   @Test
   public void testClose() {
-    KeyCoordinatorProvider provider = new KeyCoordinatorProvider(conf, "host_name_sample", new MockGrigioMetrics());
+    KeyCoordinatorProvider provider = new KeyCoordinatorProvider(conf, "host_name_sample", new MockGrigioServerMetrics());
     MockProducer producer1 = (MockProducer) provider.getCachedProducer("table1");
     MockProducer producer2 = (MockProducer) provider.getCachedProducer("table2");
     // verify close logic

@@ -28,6 +28,10 @@ import org.apache.pinot.grigio.common.keyValueStore.ByteArrayWrapper;
 import org.apache.pinot.grigio.common.keyValueStore.KeyValueStoreDB;
 import org.apache.pinot.grigio.common.keyValueStore.KeyValueStoreTable;
 import org.apache.pinot.grigio.common.keyValueStore.RocksDBKeyValueStoreDB;
+import org.apache.pinot.grigio.common.rpcQueue.ProduceTask;
+import org.apache.pinot.grigio.common.rpcQueue.QueueConsumerRecord;
+import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
+import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
 import org.apache.pinot.grigio.common.messages.KeyCoordinatorMessageContext;
 import org.apache.pinot.grigio.common.messages.KeyCoordinatorQueueMsg;
 import org.apache.pinot.grigio.common.messages.LogCoordinatorMessage;
@@ -35,16 +39,16 @@ import org.apache.pinot.grigio.common.messages.LogEventType;
 import org.apache.pinot.grigio.common.rpcQueue.KeyCoordinatorQueueConsumer;
 import org.apache.pinot.grigio.common.rpcQueue.KeyCoordinatorQueueProducer;
 import org.apache.pinot.grigio.common.rpcQueue.LogCoordinatorQueueProducer;
-import org.apache.pinot.grigio.common.rpcQueue.ProduceTask;
-import org.apache.pinot.grigio.common.rpcQueue.QueueConsumerRecord;
-import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
-import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
 import org.apache.pinot.grigio.common.updateStrategy.MessageResolveStrategy;
 import org.apache.pinot.grigio.common.utils.CommonUtils;
 import org.apache.pinot.grigio.common.utils.PartitionIdMapper;
+import org.apache.pinot.grigio.common.metrics.GrigioGauge;
+import org.apache.pinot.grigio.common.metrics.GrigioMeter;
+import org.apache.pinot.grigio.common.metrics.GrigioTimer;
 import org.apache.pinot.grigio.keyCoordinator.helix.KeyCoordinatorClusterHelixManager;
 import org.apache.pinot.grigio.keyCoordinator.helix.KeyCoordinatorLeadershipManager;
 import org.apache.pinot.grigio.keyCoordinator.helix.KeyCoordinatorVersionManager;
+import org.apache.pinot.grigio.keyCoordinator.GrigioKeyCoordinatorMetrics;
 import org.apache.pinot.grigio.keyCoordinator.helix.State;
 import org.apache.pinot.grigio.keyCoordinator.starter.KeyCoordinatorConf;
 import org.slf4j.Logger;
@@ -87,6 +91,7 @@ public class DistributedKeyCoordinatorCore {
   protected KeyCoordinatorClusterHelixManager _keyCoordinatorClusterHelixManager;
   protected KeyCoordinatorLeadershipManager _keyCoordinatorLeadershipManager;
   protected KeyCoordinatorVersionManager _keyCoordinatorVersionManager;
+  protected GrigioKeyCoordinatorMetrics _metrics;
   protected int _fetchMsgDelayMs;
   protected int _fetchMsgMaxDelayMs;
   protected int _fetchMsgMaxCount;
@@ -101,10 +106,11 @@ public class DistributedKeyCoordinatorCore {
 
   public void init(KeyCoordinatorConf conf, LogCoordinatorQueueProducer keyCoordinatorProducer,
                    KeyCoordinatorQueueConsumer keyCoordinatorConsumer, KeyCoordinatorQueueProducer versionMessageKafkaProducer,
-                   MessageResolveStrategy messageResolveStrategy, KeyCoordinatorClusterHelixManager keyCoordinatorClusterHelixManager) {
+                   MessageResolveStrategy messageResolveStrategy,
+                   KeyCoordinatorClusterHelixManager keyCoordinatorClusterHelixManager, GrigioKeyCoordinatorMetrics metrics) {
     init(conf, keyCoordinatorProducer, keyCoordinatorConsumer, versionMessageKafkaProducer, messageResolveStrategy,
         getKeyValueStore(conf.subset(KeyCoordinatorConf.KEY_COORDINATOR_KV_STORE)), Executors.newSingleThreadExecutor(),
-        Executors.newSingleThreadExecutor(), UpdateLogStorageProvider.getInstance(), keyCoordinatorClusterHelixManager);
+        Executors.newSingleThreadExecutor(), UpdateLogStorageProvider.getInstance(), keyCoordinatorClusterHelixManager, metrics);
   }
 
   @VisibleForTesting
@@ -114,7 +120,7 @@ public class DistributedKeyCoordinatorCore {
                    MessageResolveStrategy messageResolveStrategy,
                    KeyValueStoreDB<ByteArrayWrapper, KeyCoordinatorMessageContext> keyValueStoreDB,
                    ExecutorService coreThread, ExecutorService consumerThread, UpdateLogStorageProvider storageProvider,
-                   KeyCoordinatorClusterHelixManager keyCoordinatorClusterHelixManager) {
+                   KeyCoordinatorClusterHelixManager keyCoordinatorClusterHelixManager, GrigioKeyCoordinatorMetrics metrics) {
     CommonUtils.printConfiguration(conf, "distributed key coordinator core");
     Preconditions.checkState(_state == State.SHUTDOWN, "can only init if it is not running yet");
     _conf = conf;
@@ -125,12 +131,11 @@ public class DistributedKeyCoordinatorCore {
     _keyValueStoreDB = keyValueStoreDB;
     _messageProcessThread = coreThread;
     _partitionIdMapper = new PartitionIdMapper();
-
     _consumerThread = consumerThread;
     _consumerRecordBlockingQueue = new ArrayBlockingQueue<>(_conf.getConsumerBlockingQueueSize());
-
     _storageProvider = storageProvider;
     _keyCoordinatorClusterHelixManager = keyCoordinatorClusterHelixManager;
+    _metrics = metrics;
 
     _fetchMsgDelayMs = conf.getInt(KeyCoordinatorConf.FETCH_MSG_DELAY_MS,
         KeyCoordinatorConf.FETCH_MSG_DELAY_MS_DEFAULT);
@@ -198,6 +203,7 @@ public class DistributedKeyCoordinatorCore {
   private void consumerIngestLoop() {
     while (_state == State.RUNNING) {
       try {
+        _metrics.setValueOfGlobalGauge(GrigioGauge.MESSAGE_PROCESS_QUEUE_SIZE, _consumerRecordBlockingQueue.size());
         List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> records = _inputKafkaConsumer.getRequests(_fetchMsgMaxDelayMs,
             TimeUnit.MILLISECONDS);
         if (records.size() == 0) {
@@ -230,9 +236,12 @@ public class DistributedKeyCoordinatorCore {
         List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> messages = messageAndOffset.getMessages();
         deadline = System.currentTimeMillis() + _fetchMsgMaxDelayMs;
 
+        _metrics.addMeteredGlobalValue(GrigioMeter.MESSAGE_PROCESS_THREAD_FETCH_COUNT, messages.size());
+        _metrics.addTimedValueMs(GrigioTimer.MESSAGE_PROCESS_THREAD_FETCH_DELAY, System.currentTimeMillis() - start);
+
         if (messages.size() > 0) {
-          LOGGER.info("fetch {} messages in {} ms", messages.size(), System.currentTimeMillis() - start);
           processMessages(messages);
+
           _inputKafkaConsumer.ackOffset(messageAndOffset.getOffsetInfo());
           LOGGER.info("kc message processed {} messages in this loop for {} ms", messages.size(),
               System.currentTimeMillis() - start);
@@ -249,6 +258,12 @@ public class DistributedKeyCoordinatorCore {
     LOGGER.info("existing key coordinator core /procthread");
   }
 
+  /**
+   * get a list of messages read by the consumer ingestion thread
+   * @param queue the blocking queue shared with the ingestion thread
+   * @param deadline at which time we should stop the ingestion and return it to caller with the data we have
+   * @return list of messages to be processed
+   */
   private MessageAndOffset<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> getMessagesFromQueue(
       BlockingQueue<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> queue, long deadline) {
     List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> buffer = new ArrayList<>(_fetchMsgMaxCount * 2);
@@ -285,7 +300,12 @@ public class DistributedKeyCoordinatorCore {
     return _state;
   }
 
+  /**
+   * process a list of update logs (update kv, send to downstream kafka, etc)
+   * @param messages list of the segment ingestion event for us to use in updates
+   */
   private void processMessages(List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> messages) {
+    long start = System.currentTimeMillis();
     Map<String, List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>>> tableMsgMap = new HashMap<>();
     for (QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg> msg: messages) {
       tableMsgMap.computeIfAbsent(msg.getRecord().getPinotTableName(), t -> new ArrayList<>()).add(msg);
@@ -293,8 +313,14 @@ public class DistributedKeyCoordinatorCore {
     for (Map.Entry<String, List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>>> perTableUpdates: tableMsgMap.entrySet()) {
       processMessagesForTable(perTableUpdates.getKey(), perTableUpdates.getValue());
     }
+    _metrics.addTimedValueMs(GrigioTimer.MESSAGE_PROCESS_THREAD_PROCESS_DELAY, System.currentTimeMillis() - start);
   }
 
+  /**
+   * process update for a specific table
+   * @param tableName the name of the table we are processing (with type)
+   * @param msgList the list of message associated with it
+   */
   private void processMessagesForTable(String tableName, List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> msgList) {
     try {
       long start = System.currentTimeMillis();
@@ -302,55 +328,17 @@ public class DistributedKeyCoordinatorCore {
         LOGGER.warn("trying to process topic message with empty list {}", tableName);
         return;
       }
-      KeyValueStoreTable<ByteArrayWrapper, KeyCoordinatorMessageContext> table = _keyValueStoreDB.getTable(tableName);
-
       List<ProduceTask<Integer, LogCoordinatorMessage>> tasks = new ArrayList<>();
-      // get a set of unique primary key and retrieve its corresponding value in kv store
-      Set<ByteArrayWrapper> primaryKeys = msgList.stream().map(msg -> new ByteArrayWrapper(msg.getRecord().getKey()))
-          .collect(Collectors.toCollection(HashSet::new));
-      Map<ByteArrayWrapper, KeyCoordinatorMessageContext> primaryKeyToValueMap = new HashMap<>(table.multiGet(new ArrayList<>(primaryKeys)));
-      LOGGER.info("input keys got {} results from kv store in {} ms", primaryKeyToValueMap.size(), System.currentTimeMillis() - start);
-      start = System.currentTimeMillis();
 
-      for (QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg> msg: msgList) {
-        if (msg.getRecord().isVersionMessage()) {
-          _currentVersionConsumed.set(msg.getPartition(), msg.getRecord().getVersion());
-          continue;
-        }
-        KeyCoordinatorMessageContext currentContext = msg.getRecord().getContext();
-        ByteArrayWrapper key = new ByteArrayWrapper(msg.getRecord().getKey());
-        if (primaryKeyToValueMap.containsKey(key)) {
-          // key conflicts, should resolve which one to delete
-          KeyCoordinatorMessageContext oldContext = primaryKeyToValueMap.get(key);
-          if (!oldContext.equals(currentContext)) {
-            // message are equals, it is from another replica and should skip
-            if (_messageResolveStrategy.shouldDeleteFirstMessage(oldContext, currentContext)) {
-              // the existing message we have is older than the message we just processed, create delete for it
-              tasks.add(createMessageToLogCoordinator(tableName, oldContext.getSegmentName(), oldContext.getKafkaOffset(),
-                  _currentVersionConsumed.get(msg.getPartition()), LogEventType.DELETE, msg.getPartition()));
-              // update the local cache to the latest message, so message within the same batch can override each other
-              primaryKeyToValueMap.put(key, currentContext);
-            } else {
-              // the new message is older than the existing message
-              tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
-                  _currentVersionConsumed.get(msg.getPartition()), LogEventType.DELETE, msg.getPartition()));
-            }
-          }
-        } else {
-          // no key in the existing map, adding this key to the running set
-          primaryKeyToValueMap.put(key, currentContext);
-        }
-        // always create a insert event for validFrom if is not a duplicated input
-        tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
-            _currentVersionConsumed.get(msg.getPartition()), LogEventType.INSERT, msg.getPartition()));
-      }
-      LOGGER.info("processed all messages in {} ms", System.currentTimeMillis() - start);
+      Map<ByteArrayWrapper, KeyCoordinatorMessageContext> primaryKeyToValueMap = fetchDataFromKVStore(tableName, msgList);
+      processMessageUpdates(tableName, msgList, primaryKeyToValueMap, tasks);
       List<ProduceTask<Integer, LogCoordinatorMessage>> failedTasks = sendMessagesToLogCoordinator(tasks, 10, TimeUnit.SECONDS);
       if (failedTasks.size() > 0) {
         LOGGER.error("send to producer failed: {}", failedTasks.size());
       }
       storeMessageToLocal(tableName, tasks);
-      storeMessageToKVStore(table, primaryKeyToValueMap);
+      storeMessageToKVStore(tableName, primaryKeyToValueMap);
+      _metrics.addTimedTableValueMs(tableName, GrigioTimer.MESSAGE_PROCESS_THREAD_PROCESS_DELAY, System.currentTimeMillis() - start);
     } catch (IOException e) {
       throw new RuntimeException("failed to interact with rocksdb", e);
     } catch (RuntimeException e) {
@@ -358,8 +346,11 @@ public class DistributedKeyCoordinatorCore {
     }
   }
 
-  // partition is the partition number of the ingestion upsert event. Note that the partition of records with primary
-  // key will be the same across ingestion upsert event and segment update event topics.
+  /**
+   * create a message to be sent to output kafka topic based on a list of metadata
+   * partition is the partition number of the ingestion upsert event. Note that the partition of records with primary
+   * key will be the same across ingestion upsert event and segment update event topics.
+   */
   private ProduceTask<Integer, LogCoordinatorMessage> createMessageToLogCoordinator(String tableName, String segmentName,
                                                                                     long oldKafkaOffset, long value,
                                                                                     LogEventType eventType, int partition) {
@@ -367,6 +358,82 @@ public class DistributedKeyCoordinatorCore {
             partition, new LogCoordinatorMessage(segmentName, oldKafkaOffset, value, eventType));
   }
 
+  /**
+   * fetch all available data from kv from the primary key associated with the messages in the given message list
+   * @param tableName the name of table we are processing
+   * @param msgList list of ingestion update messages
+   * @return map of primary key and their associated state in key-value store
+   * @throws IOException
+   */
+  private Map<ByteArrayWrapper, KeyCoordinatorMessageContext> fetchDataFromKVStore(String tableName,
+                                                                                   List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> msgList)
+      throws IOException {
+    long start = System.currentTimeMillis();
+    KeyValueStoreTable<ByteArrayWrapper, KeyCoordinatorMessageContext> table = _keyValueStoreDB.getTable(tableName);
+    // get a set of unique primary key and retrieve its corresponding value in kv store
+    Set<ByteArrayWrapper> primaryKeys = msgList.stream()
+        .filter(msg -> msg.getRecord().getKey() != null && msg.getRecord().getKey().length > 0)
+        .map(msg -> new ByteArrayWrapper(msg.getRecord().getKey()))
+        .collect(Collectors.toCollection(HashSet::new));
+    Map<ByteArrayWrapper, KeyCoordinatorMessageContext> primaryKeyToValueMap = new HashMap<>(table.multiGet(new ArrayList<>(primaryKeys)));
+    _metrics.setValueOfGlobalGauge(GrigioGauge.FETCH_MSG_FROM_KV_COUNT, primaryKeyToValueMap.size());
+    _metrics.addTimedValueMs(GrigioTimer.FETCH_MSG_FROM_KV_DELAY, System.currentTimeMillis() - start);
+    _metrics.addTimedTableValueMs(tableName, GrigioTimer.FETCH_MSG_FROM_KV_DELAY, System.currentTimeMillis() - start);
+    LOGGER.info("input keys got {} results from kv store in {} ms", primaryKeyToValueMap.size(), System.currentTimeMillis() - start);
+    return primaryKeyToValueMap;
+  }
+
+  /**
+   * process whether a list of messages should be treated as update based on the existing data from kv store
+   * @param tableName the name of the table
+   * @param msgList a list of ingestion update messages to be processed
+   * @param primaryKeyToValueMap the current kv store state associated with this list of messages, will be updated to
+   *                             reflect the new state after these updates are done
+   * @param tasks the generated producer task to be sent to segment update entry queue (kafka topic)
+   */
+  private void processMessageUpdates(String tableName, List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> msgList,
+                                     Map<ByteArrayWrapper, KeyCoordinatorMessageContext> primaryKeyToValueMap,
+                                     List<ProduceTask<Integer, LogCoordinatorMessage>> tasks) {
+    long start = System.currentTimeMillis();
+    for (QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg> msg: msgList) {
+      if (msg.getRecord().isVersionMessage()) {
+        _currentVersionConsumed.set(msg.getPartition(), msg.getRecord().getVersion());
+        continue;
+      }
+      KeyCoordinatorMessageContext currentContext = msg.getRecord().getContext();
+      ByteArrayWrapper key = new ByteArrayWrapper(msg.getRecord().getKey());
+      if (primaryKeyToValueMap.containsKey(key)) {
+        // key conflicts, should resolve which one to delete
+        KeyCoordinatorMessageContext oldContext = primaryKeyToValueMap.get(key);
+        if (!oldContext.equals(currentContext)) {
+          // message are equals, it is from another replica and should skip
+          if (_messageResolveStrategy.shouldDeleteFirstMessage(oldContext, currentContext)) {
+            // the existing message we have is older than the message we just processed, create delete for it
+            tasks.add(createMessageToLogCoordinator(tableName, oldContext.getSegmentName(), oldContext.getKafkaOffset(),
+                _currentVersionConsumed.get(msg.getPartition()), LogEventType.DELETE, msg.getPartition()));
+            // update the local cache to the latest message, so message within the same batch can override each other
+            primaryKeyToValueMap.put(key, currentContext);
+          } else {
+            // the new message is older than the existing message
+            tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
+                _currentVersionConsumed.get(msg.getPartition()), LogEventType.DELETE, msg.getPartition()));
+          }
+        }
+      } else {
+        // no key in the existing map, adding this key to the running set
+        primaryKeyToValueMap.put(key, currentContext);
+      }
+      // always create a insert event for validFrom if is not a duplicated input
+      tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
+          _currentVersionConsumed.get(msg.getPartition()), LogEventType.INSERT, msg.getPartition()));
+    }
+    _metrics.addTimedValueMs(GrigioTimer.PROCESS_MSG_UPDATE, System.currentTimeMillis() - start);
+    LOGGER.info("processed all messages in {} ms", System.currentTimeMillis() - start);
+  }
+
+  /**
+   * send a list of update to downstream kafka topic
+   */
   private List<ProduceTask<Integer, LogCoordinatorMessage>> sendMessagesToLogCoordinator(
       List<ProduceTask<Integer, LogCoordinatorMessage>> tasks, long timeout, TimeUnit timeUnit) {
     long startTime = System.currentTimeMillis();
@@ -385,6 +452,7 @@ public class DistributedKeyCoordinatorCore {
     } catch (InterruptedException e) {
       throw new RuntimeException("encountered run time exception while waiting for the loop to finish");
     } finally {
+      _metrics.addTimedValueMs(GrigioTimer.SEND_MSG_TO_KAFKA, System.currentTimeMillis() - startTime);
       LOGGER.info("send to producer take {} ms", System.currentTimeMillis() - startTime);
     }
   }
@@ -395,6 +463,12 @@ public class DistributedKeyCoordinatorCore {
     return keyValueStore;
   }
 
+  /**
+   * store updates to local update log file, organized by segments
+   * @param tableName
+   * @param tasks
+   * @throws IOException
+   */
   private void storeMessageToLocal(String tableName, List<ProduceTask<Integer, LogCoordinatorMessage>> tasks) throws IOException {
     long start = System.currentTimeMillis();
     Map<String, List<UpdateLogEntry>> segmentUpdateLogs = new HashMap<>();
@@ -407,15 +481,25 @@ public class DistributedKeyCoordinatorCore {
       _storageProvider.addSegment(tableName, segmentEntry.getKey());
       _storageProvider.addDataToFile(tableName, segmentEntry.getKey(), segmentEntry.getValue());
     }
+    long duration = System.currentTimeMillis() - start;
+    _metrics.addTimedValueMs(GrigioTimer.STORE_UPDATE_ON_DISK, duration);
+    _metrics.addTimedTableValueMs(tableName, GrigioTimer.STORE_UPDATE_ON_DISK, duration);
     LOGGER.info("stored all data to files in {} ms", System.currentTimeMillis() - start);
   }
 
-  private void storeMessageToKVStore(KeyValueStoreTable<ByteArrayWrapper, KeyCoordinatorMessageContext> table,
-                                     Map<ByteArrayWrapper, KeyCoordinatorMessageContext> primaryKeyToValueMap)
+  /**
+   * store updates to local kv store
+   * @param tableName the name of the table
+   * @param primaryKeyToValueMap the mapping between the primary-key and the their associated state
+   * @throws IOException
+   */
+  private void storeMessageToKVStore(String tableName, Map<ByteArrayWrapper, KeyCoordinatorMessageContext> primaryKeyToValueMap)
       throws IOException {
     long start = System.currentTimeMillis();
-      // update kv store
+    // update kv store
+    KeyValueStoreTable<ByteArrayWrapper, KeyCoordinatorMessageContext> table = _keyValueStoreDB.getTable(tableName);
     table.multiPut(primaryKeyToValueMap);
+    _metrics.addTimedValueMs(GrigioTimer.STORE_UPDATE_ON_KV, System.currentTimeMillis() - start);
     LOGGER.info("updated {} message to key value store in {} ms", primaryKeyToValueMap.size(), System.currentTimeMillis() - start);
   }
 

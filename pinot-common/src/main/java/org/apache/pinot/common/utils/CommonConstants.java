@@ -333,7 +333,7 @@ public class CommonConstants {
 
   public static class Grigio {
     // config for distributed grigio components
-    public static final String CONFIG_OF_METRICS_PREFIX_KEY = "metricsPrefix";
+    public static final String CONFIG_OF_METRICS_PREFIX_KEY = "metrics.prefix";
     public static final String DEFAULT_METRICS_PREFIX = "pinot.grigio.";
 
     // config for server related components

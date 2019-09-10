@@ -20,26 +20,39 @@ package org.apache.pinot.grigio.common.metrics;
 
 import org.apache.pinot.common.Utils;
 import org.apache.pinot.common.metrics.AbstractMetrics;
+import org.apache.pinot.grigio.common.metrics.GrigioMetrics.MetricsType;
 
 public enum GrigioTimer implements AbstractMetrics.Timer {
 
-  // comment metrics for kafka component
-  PRODUCER_LAG(),
-  FLUSH_LAG(),
-  COMMIT_OFFSET_LAG(),
-  FETCH_MESSAGE_LAG(),
+  // common metrics for kafka component used in upsert
+  PRODUCER_LAG(MetricsType.BOTH),
+  FLUSH_LAG(MetricsType.BOTH),
+  COMMIT_OFFSET_LAG(MetricsType.BOTH),
+  FETCH_MESSAGE_LAG(MetricsType.BOTH),
 
   // metrics for segment updater
-  FETCH_MSG_FROM_CONSUMER_TIME(),
-  UPDATE_DATAMANAGER_TIME(),
-  UPDATE_LOCAL_LOG_FILE_TIME(),
-  SEGMENT_UPDATER_LOOP_TIME()
+  FETCH_MSG_FROM_CONSUMER_TIME(MetricsType.SERVER_ONLY),
+  UPDATE_DATAMANAGER_TIME(MetricsType.SERVER_ONLY),
+  UPDATE_LOCAL_LOG_FILE_TIME(MetricsType.SERVER_ONLY),
+  SEGMENT_UPDATER_LOOP_TIME(MetricsType.SERVER_ONLY),
+
+  // metrics for key cooridantor
+  MESSAGE_PROCESS_THREAD_FETCH_DELAY(MetricsType.KC_ONLY),
+  MESSAGE_PROCESS_THREAD_PROCESS_DELAY(MetricsType.KC_ONLY),
+
+  FETCH_MSG_FROM_KV_DELAY(MetricsType.KC_ONLY),
+  PROCESS_MSG_UPDATE(MetricsType.KC_ONLY),
+  SEND_MSG_TO_KAFKA(MetricsType.KC_ONLY),
+  STORE_UPDATE_ON_KV(MetricsType.KC_ONLY),
+  STORE_UPDATE_ON_DISK(MetricsType.KC_ONLY),
   ;
 
   private final String _timerName;
+  private final MetricsType _type;
 
-  GrigioTimer() {
-    this._timerName = Utils.toCamelCase(name().toLowerCase());
+  GrigioTimer(MetricsType type) {
+    _timerName = Utils.toCamelCase(name().toLowerCase());
+    _type = type;
   }
 
   @Override
@@ -50,5 +63,9 @@ public enum GrigioTimer implements AbstractMetrics.Timer {
   @Override
   public boolean isGlobal() {
     return false;
+  }
+
+  public MetricsType getType() {
+    return _type;
   }
 }

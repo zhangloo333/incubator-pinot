@@ -20,39 +20,46 @@ package org.apache.pinot.grigio.common.metrics;
 
 import org.apache.pinot.common.Utils;
 import org.apache.pinot.common.metrics.AbstractMetrics;
+import org.apache.pinot.grigio.common.metrics.GrigioMetrics.MetricsType;
 
 public enum GrigioMeter implements AbstractMetrics.Meter {
-  INGESTION_COUNT("ingestion count"),
 
-  // consumer metrics
-  MESSAGE_INGEST_COUNT_PER_BATCH("message"),
+  // metrics for kafka consumer library used in upsert components (server, key coordinator)
+  MESSAGE_INGEST_COUNT_PER_BATCH("message", MetricsType.BOTH),
 
   // segment updater metrics
-  MESSAGE_FETCH_PER_ROUND("messages");
+  MESSAGE_FETCH_PER_ROUND("messages", MetricsType.SERVER_ONLY),
 
+  // key coordinator related metrics
+  MESSAGE_PROCESS_THREAD_FETCH_COUNT("messages", MetricsType.KC_ONLY)
   ;
 
+  private final String _meterName;
+  private final String _unit;
+  private final MetricsType _type;
 
-  private final String meterName;
-  private final String unit;
-
-  GrigioMeter(String unit) {
-    this.unit = unit;
-    this.meterName = Utils.toCamelCase(name().toLowerCase());
+  GrigioMeter(String unit, MetricsType type) {
+    this._unit = unit;
+    this._meterName = Utils.toCamelCase(name().toLowerCase());
+    this._type = type;
   }
 
   @Override
   public String getMeterName() {
-    return meterName;
+    return _meterName;
   }
 
   @Override
   public String getUnit() {
-    return unit;
+    return _unit;
   }
 
   @Override
   public boolean isGlobal() {
     return true;
+  }
+
+  public MetricsType getType() {
+    return _type;
   }
 }

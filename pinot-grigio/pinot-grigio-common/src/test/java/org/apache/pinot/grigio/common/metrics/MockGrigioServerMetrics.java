@@ -19,10 +19,11 @@
 package org.apache.pinot.grigio.common.metrics;
 
 import com.yammer.metrics.core.MetricsRegistry;
+import org.apache.pinot.grigio.servers.GrigioServerMetrics;
 
-public class MockGrigioMetrics extends GrigioMetrics {
+public class MockGrigioServerMetrics extends GrigioServerMetrics {
 
-  public MockGrigioMetrics() {
+  public MockGrigioServerMetrics() {
     super("", new MetricsRegistry());
   }
 }

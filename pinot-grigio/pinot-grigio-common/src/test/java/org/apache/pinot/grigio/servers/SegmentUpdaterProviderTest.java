@@ -20,7 +20,7 @@ package org.apache.pinot.grigio.servers;
 
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.PropertiesConfiguration;
-import org.apache.pinot.grigio.common.metrics.MockGrigioMetrics;
+import org.apache.pinot.grigio.common.metrics.MockGrigioServerMetrics;
 import org.apache.pinot.grigio.common.metrics.GrigioMetrics;
 import org.apache.pinot.grigio.common.rpcQueue.QueueConsumer;
 import org.apache.pinot.grigio.common.rpcQueue.QueueConsumerRecord;
@@ -46,7 +46,7 @@ public class SegmentUpdaterProviderTest {
 
   @Test
   public void testGetConsumer() {
-    SegmentUpdaterProvider provider = new SegmentUpdaterProvider(conf, "host_name_sample", new MockGrigioMetrics());
+    SegmentUpdaterProvider provider = new SegmentUpdaterProvider(conf, "host_name_sample", new MockGrigioServerMetrics());
     Configuration conf = ((MockConsumer) provider.getConsumer())._conf;
 
     Assert.assertEquals(conf.getString(HOSTNAME_KEY), "host_name_sample");
