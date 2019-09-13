@@ -18,10 +18,13 @@
  */
 package org.apache.pinot.grigio.keyCoordinator.starter;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.PropertiesConfiguration;
 import org.apache.pinot.common.utils.CommonConstants;
+import org.apache.pinot.common.utils.StringUtil;
 import org.apache.pinot.grigio.common.config.CommonConfig;
 
 import java.io.File;
@@ -117,7 +120,20 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
   }
 
   public String getZkStr() {
-    return this.getString(ZK_STR);
+    Object zkAddressObj = getProperty(ZK_STR);
+
+    // The set method converted comma separated string into ArrayList, so need to convert back to String here.
+    if (zkAddressObj instanceof ArrayList) {
+      List<String> zkAddressList = (ArrayList<String>) zkAddressObj;
+      String[] zkAddress = zkAddressList.toArray(new String[0]);
+      return StringUtil.join(",", zkAddress);
+    } else if (zkAddressObj instanceof String) {
+      return (String) zkAddressObj;
+    } else {
+      throw new RuntimeException(
+          "Unexpected data type for zkAddress PropertiesConfiguration, expecting String but got " + zkAddressObj
+              .getClass().getName());
+    }
   }
 
   public String getKeyCoordinatorMessageTopic() {
