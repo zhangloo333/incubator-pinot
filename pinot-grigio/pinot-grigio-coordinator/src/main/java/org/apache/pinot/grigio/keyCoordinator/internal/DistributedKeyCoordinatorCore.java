@@ -441,24 +441,38 @@ public class DistributedKeyCoordinatorCore {
     LOGGER.info("processed all messages in {} ms", System.currentTimeMillis() - start);
   }
 
+
   /**
-   * send a list of update to downstream kafka topic
+   * send the list of the message to downstream kafka topic
+   * @param tasks the list of the tasks we are going to produce to downstream kafka
+   * @param timeout how much time we wait for producer to send the messages
+   * @param timeUnit the timeunit for waiting for the producers
+   * @return a list of the tasks we failed to produce to downstream
    */
   private List<ProduceTask<Integer, LogCoordinatorMessage>> sendMessagesToLogCoordinator(
       List<ProduceTask<Integer, LogCoordinatorMessage>> tasks, long timeout, TimeUnit timeUnit) {
     long startTime = System.currentTimeMillis();
     // send all and wait for result, batch for better perf
     CountDownLatch countDownLatch = new CountDownLatch(tasks.size());
-    tasks.forEach(t -> t.setCountDownLatch(countDownLatch));
+    tasks.forEach(t -> t.setCallback(new ProduceTask.Callback() {
+      @Override
+      public void onSuccess() {
+        countDownLatch.countDown();
+      }
+      @Override
+      public void onFailure(Exception ex) {
+        countDownLatch.countDown();
+      }
+    }));
     _outputKafkaProducer.batchProduce(tasks);
     _outputKafkaProducer.flush();
     try {
-      boolean allFinished = countDownLatch.await(timeout, timeUnit);
-      if (allFinished) {
-        return new ArrayList<>();
-      } else {
-        return tasks.stream().filter(t -> !t.isSucceed()).collect(Collectors.toList());
-      }
+      countDownLatch.await(timeout, timeUnit);
+      // right now we only set up a metrics for recording produce fails
+      // TODO: design a better way to handle kafka failure
+      List<ProduceTask<Integer, LogCoordinatorMessage>> failedOrTimeoutTasks = tasks.stream().filter(t -> !t.isSucceed()).collect(Collectors.toList());
+      _metrics.addMeteredGlobalValue(GrigioMeter.MESSAGE_PRODUCE_FAILED_COUNT, failedOrTimeoutTasks.size());
+      return failedOrTimeoutTasks;
     } catch (InterruptedException e) {
       throw new RuntimeException("encountered run time exception while waiting for the loop to finish");
     } finally {

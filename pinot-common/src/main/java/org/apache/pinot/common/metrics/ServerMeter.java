@@ -59,7 +59,10 @@ public enum ServerMeter implements AbstractMetrics.Meter {
   NUM_SEGMENTS_MATCHED("numSegmentsMatched", false),
   NUM_MISSING_SEGMENTS("segments", false),
   RELOAD_FAILURES("segments", false),
-  REFRESH_FAILURES("segments", false);
+  REFRESH_FAILURES("segments", false),
+
+  // upsert related metrics
+  MESSAGE_PRODUCE_FAILED_COUNT("failedMessage", true);
 
   private final String meterName;
   private final String unit;

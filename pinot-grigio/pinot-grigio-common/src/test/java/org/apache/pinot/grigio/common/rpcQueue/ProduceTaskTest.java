@@ -22,7 +22,7 @@ import org.testng.Assert;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class ProduceTaskTest {
 
@@ -41,15 +41,30 @@ public class ProduceTaskTest {
   }
 
   @Test
-  public void testSetCountDownLatch() {
-    CountDownLatch latch = new CountDownLatch(2);
-    task.setCountDownLatch(latch);
+  public void testSetCallback() {
+
+    final AtomicInteger successCount = new AtomicInteger(0);
+    final AtomicInteger failureCount = new AtomicInteger(0);
+    ProduceTask.Callback callback = new ProduceTask.Callback() {
+      @Override
+      public void onSuccess() {
+        successCount.incrementAndGet();
+      }
+
+      @Override
+      public void onFailure(Exception ex) {
+        failureCount.incrementAndGet();
+      }
+    };
+    task.setCallback(callback);
     task.markComplete(new Object(), null);
-    Assert.assertEquals(latch.getCount(), 1);
+    Assert.assertEquals(successCount.get(), 1);
+    Assert.assertEquals(failureCount.get(), 0);
     task = new ProduceTask<>("key", "value");
-    task.setCountDownLatch(latch);
+    task.setCallback(callback);
     task.markComplete(null, new Exception());
-    Assert.assertEquals(latch.getCount(), 0);
+    Assert.assertEquals(successCount.get(), 1);
+    Assert.assertEquals(failureCount.get(), 1);
   }
 
   @Test

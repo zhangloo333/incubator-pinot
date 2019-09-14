@@ -25,6 +25,7 @@ import org.apache.pinot.common.data.Schema;
 import org.apache.pinot.common.data.TimeFieldSpec;
 import org.apache.pinot.common.metadata.instance.InstanceZKMetadata;
 import org.apache.pinot.common.metadata.segment.RealtimeSegmentZKMetadata;
+import org.apache.pinot.common.metrics.ServerMeter;
 import org.apache.pinot.common.metrics.ServerMetrics;
 import org.apache.pinot.core.data.GenericRow;
 import org.apache.pinot.core.data.manager.UpsertSegmentDataManager;
@@ -34,10 +35,10 @@ import org.apache.pinot.core.indexsegment.mutable.MutableUpsertSegmentImpl;
 import org.apache.pinot.core.realtime.impl.RealtimeSegmentConfig;
 import org.apache.pinot.core.segment.index.loader.IndexLoadingConfig;
 import org.apache.pinot.core.segment.updater.SegmentUpdater;
+import org.apache.pinot.grigio.common.messages.KeyCoordinatorQueueMsg;
 import org.apache.pinot.grigio.common.rpcQueue.ProduceTask;
 import org.apache.pinot.grigio.common.rpcQueue.QueueProducer;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
-import org.apache.pinot.grigio.common.messages.KeyCoordinatorQueueMsg;
 import org.apache.pinot.grigio.servers.KeyCoordinatorProvider;
 
 import java.io.IOException;
@@ -107,6 +108,19 @@ public class UpsertLLRealtimeSegmentDataManager extends LLRealtimeSegmentDataMan
     final long timestampMillis = getTimestampFromRow(row);
     ProduceTask<Integer, KeyCoordinatorQueueMsg> task = new ProduceTask<>(_streamPartitionId,
         new KeyCoordinatorQueueMsg(primaryKeyBytes, _segmentNameStr, timestampMillis, offset));
+    task.setCallback(new ProduceTask.Callback() {
+      @Override
+      public void onSuccess() {
+        // do nothing on success
+      }
+
+      @Override
+      public void onFailure(Exception ex) {
+        // right now we just log the error and not really doing anything
+        // TODO: retries/record logics
+        _serverMetrics.addMeteredGlobalValue(ServerMeter.MESSAGE_PRODUCE_FAILED_COUNT, 1);
+      }
+    });
     _keyCoordinatorQueueProducer.produce(task);
   }
 

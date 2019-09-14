@@ -18,13 +18,14 @@
  */
 package org.apache.pinot.grigio.common.rpcQueue;
 
-
-import java.util.concurrent.CountDownLatch;
-
+/**
+ * Class created to wrap around the kafka produce task object, so we can make the upsert (grigio) package stream independent
+ * by using this implementation, we don't need to hard code kafka dependency in related package (pinot-server, pinot-core) etc
+ */
 public class ProduceTask<K, V> {
-  private boolean _completed = false;
+  private volatile boolean _completed = false;
   private Exception _exception = null;
-  private CountDownLatch _countDownLatch = null;
+  private Callback _callback = null;
   private String _topic;
   private K _key;
   private V _value;
@@ -40,6 +41,11 @@ public class ProduceTask<K, V> {
     this._value = value;
   }
 
+  /**
+   * topic might be null, if that is the case we assume this produce call will rely on default topic in producer
+   * TODO: refactor this part such we ensure non-null return here
+   * @return the name of the topic we are producing to, if there is such topic
+   */
   public String getTopic() {
     return _topic;
   }
@@ -52,8 +58,8 @@ public class ProduceTask<K, V> {
     return _value;
   }
 
-  public void setCountDownLatch(CountDownLatch countDownLatch) {
-    this._countDownLatch = countDownLatch;
+  public void setCallback(Callback callback) {
+    _callback = callback;
   }
 
   public boolean isSucceed() {
@@ -64,30 +70,28 @@ public class ProduceTask<K, V> {
     return this._exception;
   }
 
+  /**
+   * method to be called within native queue producer only, not supposed to be called by us
+   * @param metadata the metadata associated with this call
+   * @param exception any exception associated with this produce, null if no exception happened
+   */
   public synchronized void markComplete(Object metadata, Exception exception) {
-    if (exception == null) {
-      markComplete();
-    } else {
-      markException(exception);
-    }
-  }
-
-  public synchronized void markComplete() {
-    if (!this._completed) {
-      this._completed = true;
-      if (_countDownLatch != null) {
-        this._countDownLatch.countDown();
+    if (!_completed) {
+      _completed = true;
+      _exception = exception;
+      if (_callback != null) {
+        if (exception == null) {
+          _callback.onSuccess();
+        } else {
+          _callback.onFailure(exception);
+        }
       }
     }
   }
 
-  public synchronized void markException(Exception exception) {
-    if (!this._completed) {
-      this._completed = true;
-      this._exception = exception;
-      if (_countDownLatch != null) {
-        this._countDownLatch.countDown();
-      }
-    }
+  public interface Callback {
+    void onSuccess();
+
+    void onFailure(Exception ex);
   }
 }

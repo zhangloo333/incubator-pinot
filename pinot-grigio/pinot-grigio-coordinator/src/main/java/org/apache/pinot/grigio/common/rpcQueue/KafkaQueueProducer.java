@@ -58,6 +58,11 @@ public abstract class KafkaQueueProducer<K, V> implements QueueProducer<K, V> {
     }
   }
 
+  /**
+   * this method will wait for the necessary long time to ensure all messages are delivered to kafka (including retries and other)
+   * in order to control the latency of this method, you will need to config the kafka producer config such as retries count and timeout
+   * we should also monitor the metrics to ensure the flush is not taking too long
+   */
   @Override
   public void flush() {
     long startTime = System.currentTimeMillis();

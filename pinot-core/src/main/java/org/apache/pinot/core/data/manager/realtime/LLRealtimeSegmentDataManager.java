@@ -201,7 +201,7 @@ public abstract class LLRealtimeSegmentDataManager extends RealtimeSegmentDataMa
   private final IndexLoadingConfig _indexLoadingConfig;
   protected final Schema _schema;
   private final String _metricKeyName;
-  private final ServerMetrics _serverMetrics;
+  protected final ServerMetrics _serverMetrics;
   protected final MutableSegmentImpl _realtimeSegment;
   private volatile long _currentOffset;
   protected volatile State _state;

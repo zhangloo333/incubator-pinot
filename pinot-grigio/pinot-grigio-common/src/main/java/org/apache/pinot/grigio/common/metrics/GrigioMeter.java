@@ -31,6 +31,7 @@ public enum GrigioMeter implements AbstractMetrics.Meter {
   MESSAGE_FETCH_PER_ROUND("messages", MetricsType.SERVER_ONLY),
 
   // key coordinator related metrics
+  MESSAGE_PRODUCE_FAILED_COUNT("message", MetricsType.KC_ONLY),
   MESSAGE_PROCESS_THREAD_FETCH_COUNT("messages", MetricsType.KC_ONLY)
   ;
 
