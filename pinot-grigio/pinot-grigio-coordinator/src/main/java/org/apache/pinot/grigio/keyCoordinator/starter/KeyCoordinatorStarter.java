@@ -28,6 +28,7 @@ import org.apache.pinot.grigio.common.config.CommonConfig;
 import org.apache.pinot.grigio.common.rpcQueue.KeyCoordinatorQueueConsumer;
 import org.apache.pinot.grigio.common.rpcQueue.KeyCoordinatorQueueProducer;
 import org.apache.pinot.grigio.common.rpcQueue.LogCoordinatorQueueProducer;
+import org.apache.pinot.grigio.common.rpcQueue.VersionMsgQueueProducer;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
 import org.apache.pinot.grigio.common.updateStrategy.MessageResolveStrategy;
 import org.apache.pinot.grigio.common.updateStrategy.MessageTimeResolveStrategy;
@@ -49,7 +50,7 @@ public class KeyCoordinatorStarter {
   private GrigioKeyCoordinatorMetrics _metrics;
   private KeyCoordinatorQueueConsumer _consumer;
   private LogCoordinatorQueueProducer _producer;
-  private KeyCoordinatorQueueProducer _versionMessageProducer;
+  private VersionMsgQueueProducer _versionMessageProducer;
   private MessageResolveStrategy _messageResolveStrategy;
   private DistributedKeyCoordinatorCore _keyCoordinatorCore;
   private KeyCoordinatorApiApplication _application;
@@ -104,9 +105,9 @@ public class KeyCoordinatorStarter {
     return producer;
   }
 
-  private KeyCoordinatorQueueProducer getVersionMessageProducer(Configuration configuration) {
+  private VersionMsgQueueProducer getVersionMessageProducer(Configuration configuration) {
     configuration.setProperty(CommonConfig.RPC_QUEUE_CONFIG.HOSTNAME_KEY, _hostName);
-    KeyCoordinatorQueueProducer versionMessageProducer = new KeyCoordinatorQueueProducer();
+    VersionMsgQueueProducer versionMessageProducer = new VersionMsgQueueProducer();
     versionMessageProducer.init(configuration, _metrics);
     return versionMessageProducer;
   }

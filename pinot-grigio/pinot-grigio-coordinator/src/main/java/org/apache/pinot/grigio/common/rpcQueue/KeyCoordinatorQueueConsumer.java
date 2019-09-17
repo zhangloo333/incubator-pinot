@@ -39,11 +39,11 @@ import java.util.Properties;
 /**
  * Consumer to ingest data from key coordinator messages produced by pinot servers into key coordinators
  */
-public class KeyCoordinatorQueueConsumer extends KafkaQueueConsumer<Integer, KeyCoordinatorQueueMsg> {
+public class KeyCoordinatorQueueConsumer extends KafkaQueueConsumer<byte[], KeyCoordinatorQueueMsg> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(KeyCoordinatorQueueConsumer.class);
 
-  private KafkaConsumer<Integer, KeyCoordinatorQueueMsg> _consumer;
+  private KafkaConsumer<byte[], KeyCoordinatorQueueMsg> _consumer;
   private GrigioMetrics _metrics;
 
   /**
@@ -74,7 +74,7 @@ public class KeyCoordinatorQueueConsumer extends KafkaQueueConsumer<Integer, Key
   }
 
   @Override
-  protected KafkaConsumer<Integer, KeyCoordinatorQueueMsg> getConsumer() {
+  protected KafkaConsumer<byte[], KeyCoordinatorQueueMsg> getConsumer() {
     Preconditions.checkState(_consumer != null, "consumer is not initialized yet");
     return _consumer;
   }

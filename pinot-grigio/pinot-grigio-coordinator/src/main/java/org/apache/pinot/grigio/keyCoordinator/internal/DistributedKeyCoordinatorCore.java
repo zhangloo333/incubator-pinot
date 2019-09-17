@@ -28,27 +28,27 @@ import org.apache.pinot.grigio.common.keyValueStore.ByteArrayWrapper;
 import org.apache.pinot.grigio.common.keyValueStore.KeyValueStoreDB;
 import org.apache.pinot.grigio.common.keyValueStore.KeyValueStoreTable;
 import org.apache.pinot.grigio.common.keyValueStore.RocksDBKeyValueStoreDB;
-import org.apache.pinot.grigio.common.rpcQueue.ProduceTask;
-import org.apache.pinot.grigio.common.rpcQueue.QueueConsumerRecord;
-import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
-import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
 import org.apache.pinot.grigio.common.messages.KeyCoordinatorMessageContext;
 import org.apache.pinot.grigio.common.messages.KeyCoordinatorQueueMsg;
 import org.apache.pinot.grigio.common.messages.LogCoordinatorMessage;
 import org.apache.pinot.grigio.common.messages.LogEventType;
-import org.apache.pinot.grigio.common.rpcQueue.KeyCoordinatorQueueConsumer;
-import org.apache.pinot.grigio.common.rpcQueue.KeyCoordinatorQueueProducer;
-import org.apache.pinot.grigio.common.rpcQueue.LogCoordinatorQueueProducer;
-import org.apache.pinot.grigio.common.updateStrategy.MessageResolveStrategy;
-import org.apache.pinot.grigio.common.utils.CommonUtils;
-import org.apache.pinot.grigio.common.utils.PartitionIdMapper;
 import org.apache.pinot.grigio.common.metrics.GrigioGauge;
 import org.apache.pinot.grigio.common.metrics.GrigioMeter;
 import org.apache.pinot.grigio.common.metrics.GrigioTimer;
+import org.apache.pinot.grigio.common.rpcQueue.KeyCoordinatorQueueConsumer;
+import org.apache.pinot.grigio.common.rpcQueue.LogCoordinatorQueueProducer;
+import org.apache.pinot.grigio.common.rpcQueue.ProduceTask;
+import org.apache.pinot.grigio.common.rpcQueue.QueueConsumerRecord;
+import org.apache.pinot.grigio.common.rpcQueue.VersionMsgQueueProducer;
+import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
+import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
+import org.apache.pinot.grigio.common.updateStrategy.MessageResolveStrategy;
+import org.apache.pinot.grigio.common.utils.CommonUtils;
+import org.apache.pinot.grigio.common.utils.PartitionIdMapper;
+import org.apache.pinot.grigio.keyCoordinator.GrigioKeyCoordinatorMetrics;
 import org.apache.pinot.grigio.keyCoordinator.helix.KeyCoordinatorClusterHelixManager;
 import org.apache.pinot.grigio.keyCoordinator.helix.KeyCoordinatorLeadershipManager;
 import org.apache.pinot.grigio.keyCoordinator.helix.KeyCoordinatorVersionManager;
-import org.apache.pinot.grigio.keyCoordinator.GrigioKeyCoordinatorMetrics;
 import org.apache.pinot.grigio.keyCoordinator.helix.State;
 import org.apache.pinot.grigio.keyCoordinator.starter.KeyCoordinatorConf;
 import org.slf4j.Logger;
@@ -79,12 +79,12 @@ public class DistributedKeyCoordinatorCore {
   protected KeyCoordinatorConf _conf;
   protected LogCoordinatorQueueProducer _outputKafkaProducer;
   protected KeyCoordinatorQueueConsumer _inputKafkaConsumer;
-  protected KeyCoordinatorQueueProducer _versionMessageKafkaProducer;
+  protected VersionMsgQueueProducer _versionMessageKafkaProducer;
   protected MessageResolveStrategy _messageResolveStrategy;
   protected KeyValueStoreDB<ByteArrayWrapper, KeyCoordinatorMessageContext> _keyValueStoreDB;
   protected ExecutorService _messageProcessThread;
   protected ExecutorService _consumerThread;
-  protected BlockingQueue<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> _consumerRecordBlockingQueue;
+  protected BlockingQueue<QueueConsumerRecord<byte[], KeyCoordinatorQueueMsg>> _consumerRecordBlockingQueue;
   protected PartitionIdMapper _partitionIdMapper;
   protected UpdateLogStorageProvider _storageProvider;
   protected KeyCoordinatorClusterHelixManager _keyCoordinatorClusterHelixManager;
@@ -104,7 +104,7 @@ public class DistributedKeyCoordinatorCore {
   public DistributedKeyCoordinatorCore() {}
 
   public void init(KeyCoordinatorConf conf, LogCoordinatorQueueProducer keyCoordinatorProducer,
-                   KeyCoordinatorQueueConsumer keyCoordinatorConsumer, KeyCoordinatorQueueProducer versionMessageKafkaProducer,
+                   KeyCoordinatorQueueConsumer keyCoordinatorConsumer, VersionMsgQueueProducer versionMessageKafkaProducer,
                    MessageResolveStrategy messageResolveStrategy,
                    KeyCoordinatorClusterHelixManager keyCoordinatorClusterHelixManager, GrigioKeyCoordinatorMetrics metrics) {
     init(conf, keyCoordinatorProducer, keyCoordinatorConsumer, versionMessageKafkaProducer, messageResolveStrategy,
@@ -115,7 +115,7 @@ public class DistributedKeyCoordinatorCore {
   @VisibleForTesting
   public void init(KeyCoordinatorConf conf, LogCoordinatorQueueProducer keyCoordinatorProducer,
                    KeyCoordinatorQueueConsumer keyCoordinatorConsumer,
-                   KeyCoordinatorQueueProducer versionMessageKafkaProducer,
+                   VersionMsgQueueProducer versionMessageKafkaProducer,
                    MessageResolveStrategy messageResolveStrategy,
                    KeyValueStoreDB<ByteArrayWrapper, KeyCoordinatorMessageContext> keyValueStoreDB,
                    ExecutorService coreThread, ExecutorService consumerThread, UpdateLogStorageProvider storageProvider,
@@ -203,7 +203,7 @@ public class DistributedKeyCoordinatorCore {
     while (_state == State.RUNNING) {
       try {
         _metrics.setValueOfGlobalGauge(GrigioGauge.MESSAGE_PROCESS_QUEUE_SIZE, _consumerRecordBlockingQueue.size());
-        List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> records = _inputKafkaConsumer.getRequests(_fetchMsgMaxDelayMs,
+        List<QueueConsumerRecord<byte[], KeyCoordinatorQueueMsg>> records = _inputKafkaConsumer.getRequests(_fetchMsgMaxDelayMs,
             TimeUnit.MILLISECONDS);
         if (records.size() == 0) {
           LOGGER.info("no message found in kafka consumer, sleep and wait for next batch");
@@ -231,8 +231,8 @@ public class DistributedKeyCoordinatorCore {
         LOGGER.info("starting new loop");
         long start = System.currentTimeMillis();
         // process message when we got max message count or reach max delay ms
-        MessageAndOffset<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> messageAndOffset = getMessagesFromQueue(_consumerRecordBlockingQueue, deadline);
-        List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> messages = messageAndOffset.getMessages();
+        MessageAndOffset<QueueConsumerRecord<byte[], KeyCoordinatorQueueMsg>> messageAndOffset = getMessagesFromQueue(_consumerRecordBlockingQueue, deadline);
+        List<QueueConsumerRecord<byte[], KeyCoordinatorQueueMsg>> messages = messageAndOffset.getMessages();
         deadline = System.currentTimeMillis() + _fetchMsgMaxDelayMs;
 
         _metrics.addMeteredGlobalValue(GrigioMeter.MESSAGE_PROCESS_THREAD_FETCH_COUNT, messages.size());
@@ -264,9 +264,9 @@ public class DistributedKeyCoordinatorCore {
    * @param deadline at which time we should stop the ingestion and return it to caller with the data we have
    * @return list of messages to be processed
    */
-  private MessageAndOffset<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> getMessagesFromQueue(
-      BlockingQueue<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> queue, long deadline) {
-    List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> buffer = new ArrayList<>(_fetchMsgMaxCount * 2);
+  private MessageAndOffset<QueueConsumerRecord<byte[], KeyCoordinatorQueueMsg>> getMessagesFromQueue(
+      BlockingQueue<QueueConsumerRecord<byte[], KeyCoordinatorQueueMsg>> queue, long deadline) {
+    List<QueueConsumerRecord<byte[], KeyCoordinatorQueueMsg>> buffer = new ArrayList<>(_fetchMsgMaxCount * 2);
     while(System.currentTimeMillis() < deadline && buffer.size() < _fetchMsgMaxCount) {
       queue.drainTo(buffer, _fetchMsgMaxCount - buffer.size());
       if (buffer.size() < _fetchMsgMaxCount) {
@@ -274,7 +274,7 @@ public class DistributedKeyCoordinatorCore {
       }
     }
     OffsetInfo offsetInfo = new OffsetInfo();
-    for (QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg> record: buffer) {
+    for (QueueConsumerRecord<byte[], KeyCoordinatorQueueMsg> record: buffer) {
       offsetInfo.updateOffsetIfNecessary(record);
     }
     return new MessageAndOffset<>(buffer, offsetInfo);
@@ -304,10 +304,10 @@ public class DistributedKeyCoordinatorCore {
    * process a list of update logs (update kv, send to downstream kafka, etc)
    * @param messages list of the segment ingestion event for us to use in updates
    */
-  private void processMessages(List<QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg>> messages) {
+  private void processMessages(List<QueueConsumerRecord<byte[], KeyCoordinatorQueueMsg>> messages) {
     long start = System.currentTimeMillis();
     Map<String, List<MessageWithPartitionAndVersion>> tableMsgMap = new HashMap<>();
-    for (QueueConsumerRecord<Integer, KeyCoordinatorQueueMsg> msg: messages) {
+    for (QueueConsumerRecord<byte[], KeyCoordinatorQueueMsg> msg: messages) {
       if (msg.getRecord().isVersionMessage()) {
         // update _currentVersionConsumed for each version message
         _currentVersionConsumed.put(msg.getPartition(), msg.getRecord().getVersion());

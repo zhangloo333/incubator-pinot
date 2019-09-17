@@ -22,10 +22,10 @@ import com.google.common.base.Preconditions;
 import org.apache.commons.configuration.Configuration;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.pinot.grigio.common.CoordinatorConfig;
 import org.apache.pinot.grigio.common.DistributedCommonUtils;
+import org.apache.pinot.grigio.common.IntPartitioner;
 import org.apache.pinot.grigio.common.config.CommonConfig;
 import org.apache.pinot.grigio.common.messages.KeyCoordinatorQueueMsg;
 import org.apache.pinot.grigio.common.metrics.GrigioMetrics;
@@ -33,22 +33,21 @@ import org.apache.pinot.grigio.common.utils.CommonUtils;
 
 import java.util.Properties;
 
-public class KeyCoordinatorQueueProducer extends KafkaQueueProducer<byte[], KeyCoordinatorQueueMsg> {
+public class VersionMsgQueueProducer extends KafkaQueueProducer<Integer, KeyCoordinatorQueueMsg> {
 
   private Configuration _conf;
-  private String _topic;
   private GrigioMetrics _grigioMetrics;
-  private KafkaProducer<byte[], KeyCoordinatorQueueMsg> _kafkaProducer;
+  private String _topic;
+  private KafkaProducer<Integer, KeyCoordinatorQueueMsg> _kafkaProducer;
 
   @Override
-  protected KafkaProducer<byte[], KeyCoordinatorQueueMsg> getKafkaNativeProducer() {
+  protected KafkaProducer<Integer, KeyCoordinatorQueueMsg> getKafkaNativeProducer() {
     Preconditions.checkState(_kafkaProducer != null, "Producer has not been initialized yet");
     return _kafkaProducer;
   }
 
   @Override
   protected String getDefaultTopic() {
-    Preconditions.checkState(_topic != null, "Producer has not been initialized yet");
     return _topic;
   }
 
@@ -58,16 +57,16 @@ public class KeyCoordinatorQueueProducer extends KafkaQueueProducer<byte[], KeyC
   }
 
   @Override
-  public void init(Configuration conf, GrigioMetrics grigioMetrics) {
+  public void init(Configuration conf, GrigioMetrics metrics) {
     _conf = conf;
-    _grigioMetrics = grigioMetrics;
     _topic = _conf.getString(CommonConfig.RPC_QUEUE_CONFIG.TOPIC_KEY);
+    _grigioMetrics = metrics;
     String hostname = conf.getString(CommonConfig.RPC_QUEUE_CONFIG.HOSTNAME_KEY);
     final Properties kafkaProducerConfig = CommonUtils.getPropertiesFromConf(
         conf.subset(CoordinatorConfig.KAFKA_CONFIG.KAFKA_CONFIG_KEY));
 
-    kafkaProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-    kafkaProducerConfig.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, DefaultPartitioner.class.getName());
+    kafkaProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class.getName());
+    kafkaProducerConfig.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, IntPartitioner.class.getName());
     DistributedCommonUtils.setKakfaLosslessProducerConfig(kafkaProducerConfig, hostname);
 
     _kafkaProducer = new KafkaProducer<>(kafkaProducerConfig);
