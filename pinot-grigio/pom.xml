@@ -23,7 +23,7 @@
   <parent>
     <artifactId>pinot</artifactId>
     <groupId>org.apache.pinot</groupId>
-    <version>0.2.2.5.16-SNAPSHOT</version>
+    <version>2.2.5.20-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
   <artifactId>pinot-grigio</artifactId>

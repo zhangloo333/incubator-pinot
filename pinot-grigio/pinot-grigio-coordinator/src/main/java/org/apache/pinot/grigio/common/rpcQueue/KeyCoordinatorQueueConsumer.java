@@ -22,7 +22,7 @@ import com.google.common.base.Preconditions;
 import org.apache.commons.configuration.Configuration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.pinot.grigio.common.CoordinatorConfig;
 import org.apache.pinot.grigio.common.DistributedCommonUtils;
 import org.apache.pinot.grigio.common.config.CommonConfig;
@@ -56,7 +56,9 @@ public class KeyCoordinatorQueueConsumer extends KafkaQueueConsumer<byte[], KeyC
     String hostname = conf.getString(CommonConfig.RPC_QUEUE_CONFIG.HOSTNAME_KEY);
 
     Properties kafkaProperties = CommonUtils.getPropertiesFromConf(conf.subset(CoordinatorConfig.KAFKA_CONFIG.KAFKA_CONFIG_KEY));
-    kafkaProperties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class.getName());
+    // right now key coordinator version message still generate message with integer as the key.
+    // However, because we don't read key for any real purpose, it is fine to have wrong key decoding scheme here
+    kafkaProperties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
     kafkaProperties.put(ConsumerConfig.GROUP_ID_CONFIG, _consumerGroupPrefix + hostname);
     kafkaProperties.put(ConsumerConfig.CLIENT_ID_CONFIG, DistributedCommonUtils.getClientId(hostname));
     kafkaProperties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
