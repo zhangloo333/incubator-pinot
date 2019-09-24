@@ -36,9 +36,11 @@ public enum GrigioTimer implements AbstractMetrics.Timer {
   UPDATE_LOCAL_LOG_FILE_TIME(MetricsType.SERVER_ONLY),
   SEGMENT_UPDATER_LOOP_TIME(MetricsType.SERVER_ONLY),
 
-  // metrics for key cooridantor
+  // metrics for key coordinator
   MESSAGE_PROCESS_THREAD_FETCH_DELAY(MetricsType.KC_ONLY),
   MESSAGE_PROCESS_THREAD_PROCESS_DELAY(MetricsType.KC_ONLY),
+
+  PRODUCE_VERSION_MESSAGE(MetricsType.KC_ONLY),
 
   FETCH_MSG_FROM_KV_DELAY(MetricsType.KC_ONLY),
   PROCESS_MSG_UPDATE(MetricsType.KC_ONLY),

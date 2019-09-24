@@ -173,6 +173,7 @@ public class DistributedKeyCoordinatorCore {
   }
 
   private void produceVersionMessage() {
+    long start = System.currentTimeMillis();
     if (_state != State.RUNNING) {
       LOGGER.info("Key coordinator not running, skip producing version messages");
       return;
@@ -184,7 +185,6 @@ public class DistributedKeyCoordinatorCore {
     try {
       long versionProduced = _keyCoordinatorVersionManager.getVersionProducedFromPropertyStore();
       long versionToProduce = versionProduced + 1;
-      LOGGER.info("Producing version messages to all partitions with version {}", versionToProduce);
       // produce to all partitions
       for (int partition = 0; partition < _conf.getKeyCoordinatorMessagePartitionCount(); partition++) {
         ProduceTask<Integer, KeyCoordinatorQueueMsg> produceTask =
@@ -194,6 +194,9 @@ public class DistributedKeyCoordinatorCore {
       }
       // todo: make producing version messages and setting versions to property store as one transaction
       _keyCoordinatorVersionManager.setVersionProducedToPropertyStore(versionToProduce);
+      long duration = System.currentTimeMillis() - start;
+      _metrics.addTimedValueMs(GrigioTimer.PRODUCE_VERSION_MESSAGE, duration);
+      LOGGER.info("Produced version messages to all partitions with version {} in {} ms", versionToProduce, duration);
     } catch (Exception ex) {
       LOGGER.error("Failed to produce version message", ex);
     }

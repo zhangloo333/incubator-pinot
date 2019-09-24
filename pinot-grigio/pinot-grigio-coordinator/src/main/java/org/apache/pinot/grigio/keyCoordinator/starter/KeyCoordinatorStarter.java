@@ -26,7 +26,6 @@ import org.apache.pinot.common.metrics.MetricsHelper;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.grigio.common.config.CommonConfig;
 import org.apache.pinot.grigio.common.rpcQueue.KeyCoordinatorQueueConsumer;
-import org.apache.pinot.grigio.common.rpcQueue.KeyCoordinatorQueueProducer;
 import org.apache.pinot.grigio.common.rpcQueue.LogCoordinatorQueueProducer;
 import org.apache.pinot.grigio.common.rpcQueue.VersionMsgQueueProducer;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
