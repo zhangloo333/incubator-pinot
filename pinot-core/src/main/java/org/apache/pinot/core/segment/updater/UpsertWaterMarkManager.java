@@ -21,8 +21,9 @@ package org.apache.pinot.core.segment.updater;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
+import org.apache.pinot.grigio.common.metrics.GrigioMeter;
+import org.apache.pinot.grigio.common.metrics.GrigioMetrics;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
-import org.apache.pinot.grigio.common.utils.PartitionIdMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,22 +31,26 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class UpsertWaterMarkManager {
-  private static final Logger LOGGER = LoggerFactory.getLogger(UpsertWaterMarkManager.class);
-  private final Map<String, Map<Integer, Long>> _highWaterMarkTablePartitionMap = new ConcurrentHashMap<>();
 
+  private final Map<String, Map<Integer, Long>> _highWaterMarkTablePartitionMap = new ConcurrentHashMap<>();
+  private final GrigioMetrics _metrics;
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(UpsertWaterMarkManager.class);
   private static volatile UpsertWaterMarkManager _instance;
 
-  private UpsertWaterMarkManager() {
+  private UpsertWaterMarkManager(GrigioMetrics metrics) {
+    _metrics = metrics;
+  }
+
+  public static void init(GrigioMetrics metrics) {
+    synchronized (UpsertWaterMarkManager.class) {
+      Preconditions.checkState(_instance == null, "upsert water mark manager is already init");
+      _instance = new UpsertWaterMarkManager(metrics);
+    }
   }
 
   public static UpsertWaterMarkManager getInstance() {
-    if (_instance == null) {
-      synchronized (UpsertWaterMarkManager.class) {
-        if (_instance == null) {
-          _instance = new UpsertWaterMarkManager();
-        }
-      }
-    }
+    Preconditions.checkState(_instance != null, "upsert water mark manager is not yet init");
     return _instance;
   }
 
@@ -65,7 +70,8 @@ public class UpsertWaterMarkManager {
       long currentVersion = partitionToHighWaterMark.get(partition);
       if (version < currentVersion) {
         // We expect the version number to increase monotonically unless we are reprocessing previous seen messages.
-        LOGGER.warn("The latest record {} has lower version than the current one for the table {} ", logEntry, table);
+        _metrics.addMeteredGlobalValue(GrigioMeter.VERSION_LOWER_THAN_CURRENT, 1);
+        LOGGER.debug("The latest record {} has lower version than the current one for the table {} ", logEntry, table);
       }
       partitionToHighWaterMark.put(partition, Math.max(version, currentVersion));
     }

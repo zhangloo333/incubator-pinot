@@ -20,6 +20,7 @@ package org.apache.pinot.core.indexsegment.immutable;
 
 import com.clearspring.analytics.util.Preconditions;
 import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
 import org.apache.pinot.common.config.TableNameBuilder;
 import org.apache.pinot.common.data.Schema;
@@ -29,17 +30,13 @@ import org.apache.pinot.core.io.reader.BaseSingleColumnSingleValueReader;
 import org.apache.pinot.core.io.reader.DataFileReader;
 import org.apache.pinot.core.segment.index.SegmentMetadataImpl;
 import org.apache.pinot.core.segment.index.column.ColumnIndexContainer;
-import org.apache.pinot.core.segment.index.readers.BitmapInvertedIndexReader;
 import org.apache.pinot.core.segment.index.readers.Dictionary;
-import org.apache.pinot.core.segment.index.readers.InvertedIndexReader;
 import org.apache.pinot.core.segment.store.SegmentDirectory;
 import org.apache.pinot.core.segment.updater.UpsertWaterMarkManager;
 import org.apache.pinot.core.segment.virtualcolumn.mutable.VirtualColumnLongValueReaderWriter;
 import org.apache.pinot.core.startree.v2.store.StarTreeIndexContainer;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
-import org.roaringbitmap.IntIterator;
-import org.roaringbitmap.buffer.ImmutableRoaringBitmap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,8 +57,11 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
   private final String _segmentName;
   private final Schema _schema;
   private final int _totalDoc;
-  private final ColumnIndexContainer _kafkaOffsetColumnIndexContainer;
+  private final ColumnIndexContainer _offsetColumnIndexContainer;
   private final UpsertWaterMarkManager _upsertWaterMarkManager;
+  // right now we use map for this storage. But it will cost 12 bytes per record. It will translate to 12GB for 1B records
+  // will look into reducing this cost later
+  private final ImmutableMap<Long, Integer> sourceOffsetToDocId;
 
   public ImmutableUpsertSegmentImpl(SegmentDirectory segmentDirectory,
                                     SegmentMetadataImpl segmentMetadata,
@@ -74,7 +74,7 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
     _segmentName = segmentMetadata.getName();
     _schema = segmentMetadata.getSchema();
     _totalDoc = segmentMetadata.getTotalDocs();
-    _kafkaOffsetColumnIndexContainer = columnIndexContainerMap.get(_schema.getOffsetKey());
+    _offsetColumnIndexContainer = columnIndexContainerMap.get(_schema.getOffsetKey());
     _upsertWaterMarkManager = UpsertWaterMarkManager.getInstance();
     for (Map.Entry<String, ColumnIndexContainer> entry: columnIndexContainerMap.entrySet()) {
       String columnName = entry.getKey();
@@ -82,6 +82,32 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
       if (_schema.isVirtualColumn(columnName) && (container.getForwardIndex() instanceof VirtualColumnLongValueReaderWriter)) {
         _virtualColumnsReaderWriter.add((VirtualColumnLongValueReaderWriter) container.getForwardIndex());
       }
+    }
+    sourceOffsetToDocId = buildOffsetToDocIdMap();
+  }
+
+  private ImmutableMap<Long, Integer> buildOffsetToDocIdMap() {
+    final DataFileReader reader = _offsetColumnIndexContainer.getForwardIndex();
+    final Dictionary dictionary = _offsetColumnIndexContainer.getDictionary();
+    ImmutableMap.Builder<Long, Integer> kafkaOffsetToDocIdBuilder = ImmutableMap.builder();
+    if (reader instanceof BaseSingleColumnSingleValueReader) {
+      BaseSingleColumnSingleValueReader scsvReader = (BaseSingleColumnSingleValueReader) reader;
+      for (int docId = 0; docId < _totalDoc; docId++) {
+        final Long offset;
+        if (dictionary == null) {
+          offset = scsvReader.getLong(docId);
+        } else {
+          offset = (Long) dictionary.get(scsvReader.getInt(docId));
+        }
+        if (offset == null) {
+          LOGGER.error("kafka offset is null at docID {}", docId);
+        } else {
+          kafkaOffsetToDocIdBuilder.put(offset, docId);
+        }
+      }
+      return kafkaOffsetToDocIdBuilder.build();
+    } else {
+      throw new RuntimeException("unexpected forward reader type for kafka offset column " + reader.getClass());
     }
   }
 
@@ -94,37 +120,18 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
   @Override
   public void updateVirtualColumn(List<UpdateLogEntry> logEntryList) {
     for (UpdateLogEntry logEntry: logEntryList) {
-      ImmutableRoaringBitmap bitmap = getDocIdsForOffset(logEntry.getOffset());
-      if (bitmap == null) {
-        // The segment does not have the record.
-        LOGGER.debug("offset {} not found while trying to update segment {}", logEntry.getOffset(), _segmentName);
+      boolean updated = false;
+      Integer docId = sourceOffsetToDocId.get(logEntry.getOffset());
+      if (docId == null) {
+        LOGGER.warn("segment {} failed to found docId for log update entry {}", _segmentName, logEntry.toString());
       } else {
-        IntIterator it = bitmap.getIntIterator();
-        boolean updated = false;
-        while (it.hasNext()) {
-          int docId = it.next();
-          for (VirtualColumnLongValueReaderWriter readerWriter: _virtualColumnsReaderWriter) {
-            updated = readerWriter.update(docId, logEntry.getValue(), logEntry.getType()) || updated;
-          }
+        for (VirtualColumnLongValueReaderWriter readerWriter : _virtualColumnsReaderWriter) {
+          updated = readerWriter.update(docId, logEntry.getValue(), logEntry.getType()) || updated;
         }
         if (updated) {
           _upsertWaterMarkManager.processMessage(_tableNameWithType, _segmentName, logEntry);
         }
       }
-    }
-  }
-
-  private ImmutableRoaringBitmap getDocIdsForOffset(long offset) {
-    int dictionaryId = _kafkaOffsetColumnIndexContainer.getDictionary().indexOf(offset);
-    if (dictionaryId < 0) {
-      return null;
-    }
-    InvertedIndexReader invertedIndexReader= _kafkaOffsetColumnIndexContainer.getInvertedIndex();
-    if (invertedIndexReader instanceof BitmapInvertedIndexReader) {
-      return ((BitmapInvertedIndexReader) invertedIndexReader).getDocIds(dictionaryId);
-    } else {
-      throw new RuntimeException("unexpected data type for kafka offset column inverted index reader "
-          + invertedIndexReader.getClass().toString());
     }
   }
 
@@ -141,31 +148,23 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
     for (UpdateLogEntry logEntry: updateLogEntries) {
       updateLogEntryMap.put(logEntry.getOffset(), logEntry);
     }
-
-    // go through all records and update the value
-    final DataFileReader reader = _kafkaOffsetColumnIndexContainer.getForwardIndex();
-    final Dictionary dictionary = _kafkaOffsetColumnIndexContainer.getDictionary();
-    if (reader instanceof BaseSingleColumnSingleValueReader) {
-      for (int i = 0; i < _totalDoc; i++) {
-        long offset = (Long) dictionary.get(((BaseSingleColumnSingleValueReader) reader).getInt(i));
-        if (updateLogEntryMap.containsKey(offset)) {
-          boolean updated = false;
-          Collection<UpdateLogEntry> entries = updateLogEntryMap.get(offset);
-          UpdateLogEntry lastEntry = null;
-          for (UpdateLogEntry entry : entries) {
-            lastEntry = entry;
-            for (VirtualColumnLongValueReaderWriter readerWriter : _virtualColumnsReaderWriter) {
-              updated = readerWriter.update(i, entry.getValue(), entry.getType()) || updated;
-            }
-          }
-          if (updated) {
-            _upsertWaterMarkManager.processMessage(_tableNameWithType, _segmentName, lastEntry);
+    for (Map.Entry<Long, Integer> mapEntry: sourceOffsetToDocId.entrySet()) {
+      final long offset = mapEntry.getKey();
+      final int docId = mapEntry.getValue();
+      if (updateLogEntryMap.containsKey(offset)) {
+        boolean updated = false;
+        Collection<UpdateLogEntry> entries = updateLogEntryMap.get(offset);
+        UpdateLogEntry lastEntry = null;
+        for (UpdateLogEntry entry : entries) {
+          lastEntry = entry;
+          for (VirtualColumnLongValueReaderWriter readerWriter : _virtualColumnsReaderWriter) {
+            updated = readerWriter.update(docId, entry.getValue(), entry.getType()) || updated;
           }
         }
+        if (updated) {
+          _upsertWaterMarkManager.processMessage(_tableNameWithType, _segmentName, lastEntry);
+        }
       }
-    } else {
-      throw new RuntimeException("unexpected forward reader type for kafka offset column " + reader.getClass());
     }
-
   }
 }

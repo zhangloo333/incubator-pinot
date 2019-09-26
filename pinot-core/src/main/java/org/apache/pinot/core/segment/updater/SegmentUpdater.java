@@ -65,6 +65,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
 
   private static final long NO_MESSAGE_SLEEP_MS = 100;
   private static final long SHUTDOWN_WAIT_MS = 2000;
+  private static final long LOGGER_TIME_GAP_MS = 5000;
 
   private final Configuration _conf;
   private final int _updateSleepMs;
@@ -86,6 +87,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
     _updateSleepMs = conf.getInt(SegmentUpdaterConfig.SEGMENT_UDPATE_SLEEP_MS,
         SegmentUpdaterConfig.SEGMENT_UDPATE_SLEEP_MS_DEFAULT);
 
+    UpsertWaterMarkManager.init(metrics);
     _consumer = provider.getConsumer();
     _ingestionExecutorService = Executors.newFixedThreadPool(1);
     _updateLogStorageProvider = UpdateLogStorageProvider.getInstance();
@@ -127,6 +129,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
   private void updateLoop() {
     try {
       LOGGER.info("starting update loop");
+      long lastReportedTime = System.currentTimeMillis();
       while (isStarted) {
         long startTime = System.currentTimeMillis();
         long loopStartTime = startTime;
@@ -163,7 +166,11 @@ public class SegmentUpdater implements SegmentDeletionListener {
         if (eventCount == 0) {
           Uninterruptibles.sleepUninterruptibly(NO_MESSAGE_SLEEP_MS, TimeUnit.MILLISECONDS);
         } else {
-          LOGGER.info("latest high water mark is {}", UpsertWaterMarkManager.getInstance().toString());
+          if (System.currentTimeMillis() - lastReportedTime > LOGGER_TIME_GAP_MS) {
+            lastReportedTime = System.currentTimeMillis();
+            LOGGER.info("processed {} messages in {} ms", eventCount, System.currentTimeMillis() - loopStartTime);
+            LOGGER.info("latest high water mark is {}", UpsertWaterMarkManager.getInstance().toString());
+          }
           _consumer.ackOffset();
           _metrics.addTimedValueMs(GrigioTimer.SEGMENT_UPDATER_LOOP_TIME, System.currentTimeMillis() - loopStartTime);
         }

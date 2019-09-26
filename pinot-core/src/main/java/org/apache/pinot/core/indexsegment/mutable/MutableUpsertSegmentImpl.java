@@ -19,17 +19,15 @@
 package org.apache.pinot.core.indexsegment.mutable;
 
 import com.google.common.base.Preconditions;
-import org.apache.pinot.core.indexsegment.UpsertSegment;
-import org.apache.pinot.core.segment.updater.UpsertWaterMarkManager;
-import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
-import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
-import org.apache.pinot.core.segment.virtualcolumn.mutable.VirtualColumnLongValueReaderWriter;
-import org.apache.pinot.grigio.common.messages.LogEventType;
 import org.apache.pinot.core.data.GenericRow;
+import org.apache.pinot.core.indexsegment.UpsertSegment;
 import org.apache.pinot.core.io.reader.DataFileReader;
 import org.apache.pinot.core.realtime.impl.RealtimeSegmentConfig;
-import org.roaringbitmap.IntIterator;
-import org.roaringbitmap.buffer.MutableRoaringBitmap;
+import org.apache.pinot.core.segment.updater.UpsertWaterMarkManager;
+import org.apache.pinot.core.segment.virtualcolumn.mutable.VirtualColumnLongValueReaderWriter;
+import org.apache.pinot.grigio.common.messages.LogEventType;
+import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
+import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,6 +45,7 @@ public class MutableUpsertSegmentImpl extends MutableSegmentImpl implements Upse
   private final String _kafkaOffsetColumnName;
 
   private final List<VirtualColumnLongValueReaderWriter> _mutableSegmentReaderWriters = new ArrayList<>();
+  private final Map<Long, Integer> _sourceOffsetToDocId = new ConcurrentHashMap<>();
   // to store the update event that arrive before my current record
   // TODO remove this in the later version of design if necessary
   private final Map<Long, UpdateLogEntry> _unmatchedInsertRecords = new ConcurrentHashMap<>();
@@ -73,17 +72,11 @@ public class MutableUpsertSegmentImpl extends MutableSegmentImpl implements Upse
     for (UpdateLogEntry logEntry: logEntryList) {
       boolean updated = false;
       boolean offsetFound = false;
-      MutableRoaringBitmap bitmap = getDocIdsForOffset(logEntry.getOffset());
-      if (bitmap != null) {
-        IntIterator it = bitmap.getIntIterator();
-        // we are not really expecting more than 1 record with the same kafka offset unless something is very wrong here
-        // TODO add some check over here
-        while (it.hasNext()) {
-          int docId = it.next();
-          offsetFound = true;
-          for (VirtualColumnLongValueReaderWriter readerWriter : _mutableSegmentReaderWriters) {
-            updated = readerWriter.update(docId, logEntry.getValue(), logEntry.getType()) || updated;
-          }
+      Integer docId = _sourceOffsetToDocId.get(logEntry.getOffset());
+      if (docId != null) {
+        offsetFound = true;
+        for (VirtualColumnLongValueReaderWriter readerWriter : _mutableSegmentReaderWriters) {
+          updated = readerWriter.update(docId, logEntry.getValue(), logEntry.getType()) || updated;
         }
         if (updated) {
           // only update high water mark if it indeed updated something
@@ -102,6 +95,7 @@ public class MutableUpsertSegmentImpl extends MutableSegmentImpl implements Upse
     for (VirtualColumnLongValueReaderWriter readerWriter: _mutableSegmentReaderWriters) {
       readerWriter.addNewRecord(docId);
     }
+    _sourceOffsetToDocId.put(offset, docId);
     checkForOutstandingRecords(_unmatchedDeleteRecords, offset, docId);
     checkForOutstandingRecords(_unmatchedInsertRecords, offset, docId);
   }
@@ -138,11 +132,4 @@ public class MutableUpsertSegmentImpl extends MutableSegmentImpl implements Upse
     unmatchedRecords.put(logEntry.getOffset(), logEntry);
   }
 
-  private MutableRoaringBitmap getDocIdsForOffset(long offset) {
-    int dictionaryId = _dictionaryMap.get(_kafkaOffsetColumnName).indexOf(offset);
-    if (dictionaryId < 0) {
-      return null;
-    }
-    return _invertedIndexMap.get(_kafkaOffsetColumnName).getDocIds(dictionaryId);
-  }
 }

@@ -412,6 +412,10 @@ public class TableConfig {
     _updateSemantic = updateSemantic;
   }
 
+  public boolean isTableForUpsert() {
+    return _updateSemantic == UpdateSemantic.UPSERT;
+  }
+
   @Override
   public String toString() {
     try {

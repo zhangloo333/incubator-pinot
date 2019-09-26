@@ -29,6 +29,7 @@ public enum GrigioMeter implements AbstractMetrics.Meter {
 
   // segment updater metrics
   MESSAGE_FETCH_PER_ROUND("messages", MetricsType.SERVER_ONLY),
+  VERSION_LOWER_THAN_CURRENT("messages", MetricsType.SERVER_ONLY),
 
   // key coordinator related metrics
   MESSAGE_PRODUCE_FAILED_COUNT("message", MetricsType.KC_ONLY),

@@ -18,13 +18,13 @@
  */
 package org.apache.pinot.core.data.manager.offline;
 
-import org.apache.pinot.core.data.manager.UpsertSegmentDataManager;
-import org.apache.pinot.core.indexsegment.UpsertSegment;
-import org.apache.pinot.core.segment.updater.SegmentUpdater;
 import org.apache.pinot.common.config.TableNameBuilder;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.LLCSegmentName;
+import org.apache.pinot.core.data.manager.UpsertSegmentDataManager;
+import org.apache.pinot.core.indexsegment.UpsertSegment;
 import org.apache.pinot.core.indexsegment.immutable.ImmutableSegment;
+import org.apache.pinot.core.segment.updater.SegmentUpdater;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
 
 import java.io.IOException;
@@ -53,8 +53,9 @@ public class UpsertImmutableSegmentDataManager extends ImmutableSegmentDataManag
   }
 
   private void initVirtualColumns() throws IOException {
-    // 1. ensure the data manager can capture all update events
+    // 1. add listener for update events
     // 2. load all existing messages
+    // ensure the above orders so we can ensure all events are received by this data manager
     SegmentUpdater.getInstance().addSegmentDataManager(_tableNameWithType, new LLCSegmentName(getSegmentName()), this);
     ((UpsertSegment) _immutableSegment).initVirtualColumn();
   }
