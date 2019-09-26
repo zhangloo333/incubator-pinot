@@ -413,6 +413,7 @@ public class DistributedKeyCoordinatorCore {
   private void processMessageUpdates(String tableName, List<MessageWithPartitionAndVersion> msgList,
                                      Map<ByteArrayWrapper, KeyCoordinatorMessageContext> primaryKeyToValueMap,
                                      List<ProduceTask<Integer, LogCoordinatorMessage>> tasks) {
+    // TODO: add a unit test
     long start = System.currentTimeMillis();
     for (MessageWithPartitionAndVersion msg: msgList) {
       KeyCoordinatorMessageContext currentContext = msg.getContext();
@@ -420,27 +421,25 @@ public class DistributedKeyCoordinatorCore {
       if (primaryKeyToValueMap.containsKey(key)) {
         // key conflicts, should resolve which one to delete
         KeyCoordinatorMessageContext oldContext = primaryKeyToValueMap.get(key);
-        if (!oldContext.equals(currentContext)) {
+        if (oldContext.equals(currentContext)) {
           // message are equals, it is from another replica and should skip
-          if (_messageResolveStrategy.shouldDeleteFirstMessage(oldContext, currentContext)) {
-            // the existing message we have is older than the message we just processed, create delete for it
-            tasks.add(createMessageToLogCoordinator(tableName, oldContext.getSegmentName(), oldContext.getKafkaOffset(),
-                msg.getVersion(), LogEventType.DELETE, msg.getPartition()));
-            // update the local cache to the latest message, so message within the same batch can override each other
-            primaryKeyToValueMap.put(key, currentContext);
-          } else {
-            // the new message is older than the existing message
-            tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
-                msg.getVersion(), LogEventType.DELETE, msg.getPartition()));
-          }
+          continue;
+        }
+        if (_messageResolveStrategy.shouldDeleteFirstMessage(oldContext, currentContext)) {
+          // the existing message we have is older than the message we just processed, create delete for it
+          tasks.add(createMessageToLogCoordinator(tableName, oldContext.getSegmentName(), oldContext.getKafkaOffset(),
+              msg.getVersion(), LogEventType.DELETE, msg.getPartition()));
+          // update the local cache to the latest message, so message within the same batch can override each other
+          primaryKeyToValueMap.put(key, currentContext);
+          tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
+              msg.getVersion(), LogEventType.INSERT, msg.getPartition()));
         }
       } else {
         // no key in the existing map, adding this key to the running set
         primaryKeyToValueMap.put(key, currentContext);
+        tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
+            msg.getVersion(), LogEventType.INSERT, msg.getPartition()));
       }
-      // always create a insert event for validFrom if is not a duplicated input
-      tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
-          msg.getVersion(), LogEventType.INSERT, msg.getPartition()));
     }
     _metrics.addTimedValueMs(GrigioTimer.PROCESS_MSG_UPDATE, System.currentTimeMillis() - start);
     LOGGER.info("processed all messages in {} ms", System.currentTimeMillis() - start);
