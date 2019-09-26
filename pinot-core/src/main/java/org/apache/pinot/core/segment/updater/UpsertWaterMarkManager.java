@@ -21,6 +21,7 @@ package org.apache.pinot.core.segment.updater;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
+import org.apache.pinot.grigio.common.metrics.GrigioGauge;
 import org.apache.pinot.grigio.common.metrics.GrigioMeter;
 import org.apache.pinot.grigio.common.metrics.GrigioMetrics;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
@@ -64,16 +65,14 @@ public class UpsertWaterMarkManager {
     Preconditions.checkState(partition >= 0, "logEntry has no partition info {} for table ", logEntry.toString(), table);
 
     Map<Integer, Long> partitionToHighWaterMark = _highWaterMarkTablePartitionMap.computeIfAbsent(table, t -> new ConcurrentHashMap<>());
-    if (partitionToHighWaterMark.get(partition) == null) {
+    long currentVersion = partitionToHighWaterMark.getOrDefault(partition, -1L);  // assumes that valid version is non-negative
+    if (version < currentVersion) {
+      // We expect the version number to increase monotonically unless we are reprocessing previous seen messages.
+      _metrics.addMeteredGlobalValue(GrigioMeter.VERSION_LOWER_THAN_CURRENT, 1);
+      LOGGER.debug("The latest record {} has lower version than the current one for the table {} ", logEntry, table);
+    } else if (version > currentVersion) {
       partitionToHighWaterMark.put(partition, version);
-    } else {
-      long currentVersion = partitionToHighWaterMark.get(partition);
-      if (version < currentVersion) {
-        // We expect the version number to increase monotonically unless we are reprocessing previous seen messages.
-        _metrics.addMeteredGlobalValue(GrigioMeter.VERSION_LOWER_THAN_CURRENT, 1);
-        LOGGER.debug("The latest record {} has lower version than the current one for the table {} ", logEntry, table);
-      }
-      partitionToHighWaterMark.put(partition, Math.max(version, currentVersion));
+      _metrics.setValueOfTableGauge(String.valueOf(partition), GrigioGauge.SERVER_VERSION_CONSUMED, version);
     }
   }
 

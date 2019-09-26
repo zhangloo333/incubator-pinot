@@ -196,6 +196,7 @@ public class DistributedKeyCoordinatorCore {
       _keyCoordinatorVersionManager.setVersionProducedToPropertyStore(versionToProduce);
       long duration = System.currentTimeMillis() - start;
       _metrics.addTimedValueMs(GrigioTimer.PRODUCE_VERSION_MESSAGE, duration);
+      _metrics.setValueOfGlobalGauge(GrigioGauge.VERSION_PRODUCED, versionToProduce);
       LOGGER.info("Produced version messages to all partitions with version {} in {} ms", versionToProduce, duration);
     } catch (Exception ex) {
       LOGGER.error("Failed to produce version message", ex);
@@ -314,6 +315,7 @@ public class DistributedKeyCoordinatorCore {
       if (msg.getRecord().isVersionMessage()) {
         // update _currentVersionConsumed for each version message
         _currentVersionConsumed.put(msg.getPartition(), msg.getRecord().getVersion());
+        _metrics.setValueOfTableGauge(String.valueOf(msg.getPartition()), GrigioGauge.KC_VERSION_CONSUMED, msg.getRecord().getVersion());
       } else {
         // filter out version messages, attach the current version (and partition) to each regular messages
         tableMsgMap.computeIfAbsent(msg.getRecord().getPinotTableName(), t -> new ArrayList<>()).add(

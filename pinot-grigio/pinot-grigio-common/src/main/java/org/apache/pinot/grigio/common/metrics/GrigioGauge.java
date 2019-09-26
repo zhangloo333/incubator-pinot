@@ -27,7 +27,10 @@ public enum GrigioGauge implements AbstractMetrics.Gauge {
 
   // key coordinator related metrics
   MESSAGE_PROCESS_QUEUE_SIZE("messages", MetricsType.KC_ONLY),
-  FETCH_MSG_FROM_KV_COUNT("messages", MetricsType.KC_ONLY)
+  FETCH_MSG_FROM_KV_COUNT("messages", MetricsType.KC_ONLY),
+  VERSION_PRODUCED("versions", MetricsType.KC_ONLY),
+  KC_VERSION_CONSUMED("versions", MetricsType.KC_ONLY),
+  SERVER_VERSION_CONSUMED("versions", MetricsType.SERVER_ONLY),
   ;
 
   private final String _gaugeName;
