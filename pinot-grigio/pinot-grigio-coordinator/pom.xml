@@ -20,18 +20,18 @@
 
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <parent>
-        <artifactId>pinot-grigio</artifactId>
-        <groupId>org.apache.pinot</groupId>
-        <version>0.2.2.5.44-SNAPSHOT</version>
-    </parent>
-    <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <artifactId>pinot-grigio</artifactId>
+    <groupId>org.apache.pinot</groupId>
+    <version>0.2.2.5.44-SNAPSHOT</version>
+  </parent>
+  <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>pinot-grigio-coordinator</artifactId>
-
-    <properties>
-        <pinot.root>${basedir}/../..</pinot.root>
-    </properties>
+  <artifactId>pinot-grigio-coordinator</artifactId>
+  <name>Pinot Grigio Coordinator</name>
+  <properties>
+    <pinot.root>${basedir}/../..</pinot.root>
+  </properties>
 
   <dependencies>
     <dependency>
@@ -82,7 +82,6 @@
     <dependency>
       <groupId>org.apache.pinot</groupId>
       <artifactId>pinot-grigio-common</artifactId>
-      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>org.apache.pinot</groupId>
