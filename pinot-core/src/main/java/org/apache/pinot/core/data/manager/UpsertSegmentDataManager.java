@@ -24,5 +24,16 @@ import java.util.List;
 
 public interface UpsertSegmentDataManager {
 
-  void updateVirtualColumn(List<UpdateLogEntry> messages);
+  /**
+   * update the upsert-related virtual columns with the new values in this list of update logs
+   * @param messages list of updates logs to update the virtual columns
+   */
+  void updateVirtualColumns(List<UpdateLogEntry> messages);
+
+  /**
+   * get the upsert related virtual column debug info given an offset
+   * @param offset the offset we want to look up the virtual column info from
+   * @return debug info describing the upsert-related virtual column info
+   */
+  String getVirtualColumnInfo(long offset);
 }

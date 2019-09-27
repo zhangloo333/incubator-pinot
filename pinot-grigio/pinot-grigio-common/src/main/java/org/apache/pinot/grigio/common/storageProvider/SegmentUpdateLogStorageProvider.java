@@ -26,6 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
@@ -45,13 +46,15 @@ public class SegmentUpdateLogStorageProvider {
   @VisibleForTesting
   protected final File _file;
   @VisibleForTesting
-  protected final FileChannel _channel;
+  protected final FileOutputStream _outputStream;
 
   public SegmentUpdateLogStorageProvider(File file)
       throws IOException {
     Preconditions.checkState(file != null && file.exists(), "storage file for this virtual column provider does not exist");
+    LOGGER.info("creating segmentUpdateLogProvider at {}", file.getPath());
     _file = file;
-    _channel = openAndLoadDataFromFile(file);
+    openAndLoadDataFromFile(file);
+    _outputStream = new FileOutputStream(_file, true);
   }
 
   public synchronized List<UpdateLogEntry> readAllMessagesFromFile() throws IOException {
@@ -60,7 +63,7 @@ public class SegmentUpdateLogStorageProvider {
     int fileLength = (int) _file.length();
     if (fileLength > 0) {
       ByteBuffer buffer = ByteBuffer.allocate(fileLength);
-      readFullyFromBeginning(_channel, buffer);
+      readFullyFromBeginning(_file, buffer);
       int messageCount = fileLength / UpdateLogEntry.SIZE;
       List<UpdateLogEntry> logs = new ArrayList<>(messageCount);
       for (int i = 0; i < messageCount; i++) {
@@ -86,37 +89,41 @@ public class SegmentUpdateLogStorageProvider {
       message.addEntryToBuffer(buffer);
     }
     buffer.flip();
-    // writing out to file
-//    LOGGER.info("writing out {} messages to file {}", messageCount, _file.getAbsolutePath());
-    _channel.write(buffer);
-    _channel.force(true);
+    _outputStream.write(buffer.array());
+    _outputStream.flush();
+
   }
 
   public synchronized void destroy() throws IOException {
-    _channel.close();
+    _outputStream.close();
     if (_file.exists()) {
+      LOGGER.info("deleting file {}", _file.getPath());
       _file.delete();
     }
   }
 
-  private synchronized FileChannel openAndLoadDataFromFile(File segmentUpdateFile) throws IOException {
+  public synchronized void close() throws IOException {
+    _outputStream.close();
+  }
+
+  private synchronized void openAndLoadDataFromFile(File segmentUpdateFile) throws IOException {
     if (segmentUpdateFile == null || !segmentUpdateFile.exists()) {
       throw new IOException("failed to open segment update file");
     }
-    FileChannel channnel = new RandomAccessFile(segmentUpdateFile, "rw").getChannel();
+    FileChannel channel = new RandomAccessFile(segmentUpdateFile, "rw").getChannel();
     // truncate file if necessary, in case the java process crashed while we have not finished writing out content to
     // the file. We abandon any unfinished message as we can always read them back from kafka
     if (segmentUpdateFile.length() > 0 && segmentUpdateFile.length() % UpdateLogEntry.SIZE != 0) {
       long newSize = segmentUpdateFile.length() / UpdateLogEntry.SIZE * UpdateLogEntry.SIZE;
       LOGGER.info("truncating {} file from size {} to size {}", segmentUpdateFile.getAbsolutePath(),
           segmentUpdateFile.length(), newSize);
-      channnel.truncate(newSize);
-      channnel.force(false);
+      channel.truncate(newSize);
+      channel.force(false);
     }
-    return channnel;
   }
 
-  private synchronized void readFullyFromBeginning(FileChannel channel, ByteBuffer buffer) throws IOException {
+  private synchronized void readFullyFromBeginning(File segmentUpdateFile, ByteBuffer buffer) throws IOException {
+    FileChannel channel = new RandomAccessFile(segmentUpdateFile, "r").getChannel();
     channel.position(0);
     long position = 0;
     int byteRead;

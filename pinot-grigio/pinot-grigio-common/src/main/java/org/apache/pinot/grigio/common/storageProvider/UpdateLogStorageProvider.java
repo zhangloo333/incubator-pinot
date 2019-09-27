@@ -38,6 +38,7 @@ public class UpdateLogStorageProvider {
   private final Configuration _conf;
   private final File _virtualColumnStorageDir;
   private final Map<String, Map<String, SegmentUpdateLogStorageProvider>> _virtualColumnStorage = new ConcurrentHashMap<>();
+  private volatile boolean _isClosed = false;
 
   public static final String BASE_PATH_CONF_KEY = "basePath";
 
@@ -75,6 +76,47 @@ public class UpdateLogStorageProvider {
   }
 
   public synchronized void addSegment(String tableName, String segmentName) throws IOException {
+    maybeAddTableToMetadata(tableName);
+    Map<String, SegmentUpdateLogStorageProvider> segmentMap = _virtualColumnStorage.get(tableName);
+    if (!segmentMap.containsKey(segmentName)) {
+      File tableDir = new File(_virtualColumnStorageDir, tableName);
+      LOGGER.info("adding local update log storage for table {} segment {}", tableName, segmentName);
+      final File segmentUpdateFile = new File(tableDir, segmentName);
+      if (!segmentUpdateFile.exists()) {
+        LOGGER.info("creating new local update log storage at {}", segmentUpdateFile.getPath());
+        boolean result = segmentUpdateFile.createNewFile();
+        Preconditions.checkState(result, "creating segment path failed " + tableDir);
+      }
+      Preconditions.checkState(segmentUpdateFile.isFile(), "expect segment log location as file");
+      segmentMap.put(segmentName, new SegmentUpdateLogStorageProvider(segmentUpdateFile));
+    }
+  }
+
+  /**
+   * load all segment update logs under a table name in this update log provider
+   * @param tableName the name of the table with type info
+   * @throws IOException
+   */
+  public synchronized void loadTable(String tableName) throws IOException {
+    LOGGER.info("loading table {}", tableName);
+    final File tableDir = new File(_virtualColumnStorageDir, tableName);
+    Preconditions.checkState(tableDir.exists(), "table directory does not exist at path " + tableDir.getPath());
+    Map<String, SegmentUpdateLogStorageProvider> tableUpdateLogs = new ConcurrentHashMap<>();
+    _virtualColumnStorage.put(tableName, tableUpdateLogs);
+    File[] segmentFiles = tableDir.listFiles();
+    if (segmentFiles != null) {
+      for (File segmentFile: segmentFiles) {
+        tableUpdateLogs.put(segmentFile.getName(), new SegmentUpdateLogStorageProvider(segmentFile));
+      }
+      LOGGER.info("loaded {} segment from table", segmentFiles.length);
+    }
+  }
+
+  /**
+   * add a table to internal mapping and ensure the local directory exists
+   * @param tableName the name of the table we are adding
+   */
+  private synchronized void maybeAddTableToMetadata(String tableName) {
     final File tableDir = new File(_virtualColumnStorageDir, tableName);
     if (!_virtualColumnStorage.containsKey(tableName)) {
       LOGGER.info("adding virtual column for table {}", tableName);
@@ -83,17 +125,7 @@ public class UpdateLogStorageProvider {
         Preconditions.checkState(result, "creating table path failed " + tableDir);
       }
       Preconditions.checkState(tableDir.isDirectory(), "table path is not directory " + tableDir);
-    }
-    Map<String, SegmentUpdateLogStorageProvider> segmentMap = _virtualColumnStorage.computeIfAbsent(tableName, t -> new ConcurrentHashMap<>());
-    if (!segmentMap.containsKey(segmentName)) {
-      LOGGER.info("adding virtual column for table {} segment {}", tableName, segmentName);
-      final File segmentUpdateFile = new File(tableDir, segmentName);
-      if (!segmentUpdateFile.exists()) {
-        boolean result = segmentUpdateFile.createNewFile();
-        Preconditions.checkState(result, "creating segment path failed " + tableDir);
-      }
-      Preconditions.checkState(segmentUpdateFile.isFile(), "expect segment log location as file");
-      segmentMap.put(segmentName, new SegmentUpdateLogStorageProvider(segmentUpdateFile));
+      _virtualColumnStorage.computeIfAbsent(tableName, t -> new ConcurrentHashMap<>());
     }
   }
 
@@ -112,26 +144,34 @@ public class UpdateLogStorageProvider {
       return ImmutableList.of();
     }
   }
+
   public void addDataToFile(String tableName, String segmentName, List<UpdateLogEntry> messages) throws IOException {
-    if (_virtualColumnStorage.containsKey(tableName)) {
-      Map<String, SegmentUpdateLogStorageProvider> segmentProviderMap =  _virtualColumnStorage.get(tableName);
-      if (!segmentProviderMap.containsKey(segmentName)) {
-        // TODO fix this part as we are adding all segment metadata
-        // need to work on new design to prevent writing too much data
-        addSegment(tableName, segmentName);
-      }
-      segmentProviderMap.get(segmentName).addData(messages);
-    } else {
-      LOGGER.warn("receive update event for table {} not in this server", tableName);
+    Preconditions.checkState(!_isClosed, "update log provider has been closed");
+    maybeAddTableToMetadata(tableName);
+    Map<String, SegmentUpdateLogStorageProvider> segmentProviderMap =  _virtualColumnStorage.get(tableName);
+    if (!segmentProviderMap.containsKey(segmentName)) {
+      // TODO fix this part as we are adding all segment metadata
+      // need to work on new design to prevent writing too much data
+      addSegment(tableName, segmentName);
     }
+    segmentProviderMap.get(segmentName).addData(messages);
   }
 
   public synchronized void removeSegment(String tableName, String segmentName) throws IOException {
     if (_virtualColumnStorage.containsKey(tableName)) {
       SegmentUpdateLogStorageProvider provider = _virtualColumnStorage.get(tableName).remove(segmentName);
       if (provider != null) {
-        LOGGER.info("deleting table {} segment {}", tableName, segmentName);
+        LOGGER.info("deleting segment update log for table {} segment {}", tableName, segmentName);
         provider.destroy();
+      }
+    }
+  }
+
+  public synchronized void close() throws IOException {
+    _isClosed = true;
+    for (Map<String, SegmentUpdateLogStorageProvider> segmentUpdateLogStorageProviderMap: _virtualColumnStorage.values()) {
+      for (SegmentUpdateLogStorageProvider provider: segmentUpdateLogStorageProviderMap.values()) {
+        provider.close();
       }
     }
   }

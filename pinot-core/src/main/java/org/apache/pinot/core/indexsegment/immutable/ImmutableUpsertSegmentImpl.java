@@ -61,7 +61,7 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
   private final UpsertWaterMarkManager _upsertWaterMarkManager;
   // right now we use map for this storage. But it will cost 12 bytes per record. It will translate to 12GB for 1B records
   // will look into reducing this cost later
-  private final ImmutableMap<Long, Integer> sourceOffsetToDocId;
+  private final ImmutableMap<Long, Integer> _sourceOffsetToDocId;
 
   public ImmutableUpsertSegmentImpl(SegmentDirectory segmentDirectory,
                                     SegmentMetadataImpl segmentMetadata,
@@ -83,7 +83,7 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
         _virtualColumnsReaderWriter.add((VirtualColumnLongValueReaderWriter) container.getForwardIndex());
       }
     }
-    sourceOffsetToDocId = buildOffsetToDocIdMap();
+    _sourceOffsetToDocId = buildOffsetToDocIdMap();
   }
 
   private ImmutableMap<Long, Integer> buildOffsetToDocIdMap() {
@@ -121,7 +121,7 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
   public void updateVirtualColumn(List<UpdateLogEntry> logEntryList) {
     for (UpdateLogEntry logEntry: logEntryList) {
       boolean updated = false;
-      Integer docId = sourceOffsetToDocId.get(logEntry.getOffset());
+      Integer docId = _sourceOffsetToDocId.get(logEntry.getOffset());
       if (docId == null) {
         LOGGER.warn("segment {} failed to found docId for log update entry {}", _segmentName, logEntry.toString());
       } else {
@@ -135,6 +135,20 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
     }
   }
 
+  @Override
+  public String getVirtualColumnInfo(long offset) {
+    Integer docId = _sourceOffsetToDocId.get(offset);
+    StringBuilder result = new StringBuilder("matched: ");
+    if (docId == null) {
+      result = new StringBuilder("no doc id found ");
+    } else {
+      for (VirtualColumnLongValueReaderWriter readerWriter : _virtualColumnsReaderWriter) {
+        result.append(readerWriter.getLong(docId)).append("; ");
+      }
+    }
+    return result.toString();
+  }
+
   /**
    * this method will fetch all updates from update logs in local disk and apply those updates to the current virtual columns
    * it traverses through all records in the current segment and match existing updates log to its kafka offsets
@@ -142,13 +156,13 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
    */
   @Override
   public void initVirtualColumn() throws IOException {
+    long start = System.currentTimeMillis();
     List<UpdateLogEntry> updateLogEntries = UpdateLogStorageProvider.getInstance().getAllMessages(_tableNameWithType, _segmentName);
-    LOGGER.info("got {} update log entries for current segment {}", updateLogEntries.size(), _segmentName);
     Multimap<Long, UpdateLogEntry> updateLogEntryMap = ArrayListMultimap.create();
     for (UpdateLogEntry logEntry: updateLogEntries) {
       updateLogEntryMap.put(logEntry.getOffset(), logEntry);
     }
-    for (Map.Entry<Long, Integer> mapEntry: sourceOffsetToDocId.entrySet()) {
+    for (Map.Entry<Long, Integer> mapEntry: _sourceOffsetToDocId.entrySet()) {
       final long offset = mapEntry.getKey();
       final int docId = mapEntry.getValue();
       if (updateLogEntryMap.containsKey(offset)) {
@@ -166,5 +180,7 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
         }
       }
     }
+    LOGGER.info("loaded {} update log entries for current immutable segment {} in {} ms", updateLogEntries.size(),
+        _segmentName, System.currentTimeMillis() - start);
   }
 }

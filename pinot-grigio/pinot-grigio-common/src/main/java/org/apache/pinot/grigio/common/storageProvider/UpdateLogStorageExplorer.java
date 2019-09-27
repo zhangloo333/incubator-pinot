@@ -29,9 +29,16 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Scanner;
 
+/**
+ * command line tools for debug pinot server by allowing us to interatively explore the update log data in pinot server/kc
+ * usage:
+ * $java -cp <pinot-jar-path> org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageExplorer <path to virtual column base path>
+ * you can then input the table name (with _REALTIME postfix) and segment to load data
+ * after this, you can enter the offset you want to explore the update log data at
+ */
 public class UpdateLogStorageExplorer {
   public static void main(String[] args) throws IOException {
-    Preconditions.checkState(args.length > 1, "need basepath as first parameter");
+    Preconditions.checkState(args.length > 0, "need basepath as first parameter");
     String basePath = args[0];
 
     Configuration conf = new PropertiesConfiguration();
@@ -46,8 +53,9 @@ public class UpdateLogStorageExplorer {
     String[] inputSplits = input.split(" ");
     Preconditions.checkState(inputSplits.length == 2, "expect input data to be 'tableName segmentName'");
     String tableName = inputSplits[0];
-    String segmentName = inputSplits[0];
+    String segmentName = inputSplits[1];
 
+    provider.loadTable(tableName);
     List<UpdateLogEntry> updateLogEntryList = provider.getAllMessages(tableName, segmentName);
     Multimap<Long, UpdateLogEntry> map = ArrayListMultimap.create();
     System.out.println("update log size: " + updateLogEntryList.size());

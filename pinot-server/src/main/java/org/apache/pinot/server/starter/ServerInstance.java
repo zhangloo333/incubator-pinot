@@ -156,6 +156,10 @@ public class ServerInstance {
     }
   }
 
+  public boolean isUpsertEnabled() {
+    return _serverConf.isUpsertEnabled();
+  }
+
   public void maybeStopSegmentUpdater() {
     if (_segmentUpdater != null) {
       LOGGER.info("Shutting down segment updater");

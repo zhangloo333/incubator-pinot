@@ -90,6 +90,26 @@ public class MutableUpsertSegmentImpl extends MutableSegmentImpl implements Upse
   }
 
   @Override
+  public String getVirtualColumnInfo(long offset) {
+    Integer docId = _sourceOffsetToDocId.get(offset);
+    StringBuilder result = new StringBuilder("matched: ");
+    if (docId == null) {
+      result = new StringBuilder("no doc id found ");
+    } else {
+      for (VirtualColumnLongValueReaderWriter readerWriter : _mutableSegmentReaderWriters) {
+        result.append(readerWriter.getLong(docId)).append("; ");
+      }
+    }
+    if (_unmatchedInsertRecords.containsKey(offset)) {
+      result.append(" unmatched insert: ").append(_unmatchedInsertRecords.get(offset).getValue());
+    }
+    if (_unmatchedDeleteRecords.containsKey(offset)) {
+      result.append(" unmatched delete: ").append(_unmatchedDeleteRecords.get(offset).getValue());
+    }
+    return result.toString();
+  }
+
+  @Override
   protected void postProcessRecords(GenericRow row, int docId) {
     final Long offset = (Long) row.getValue(_kafkaOffsetColumnName);
     for (VirtualColumnLongValueReaderWriter readerWriter: _mutableSegmentReaderWriters) {

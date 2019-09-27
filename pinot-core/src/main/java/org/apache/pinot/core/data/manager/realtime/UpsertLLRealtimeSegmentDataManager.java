@@ -64,8 +64,13 @@ public class UpsertLLRealtimeSegmentDataManager extends LLRealtimeSegmentDataMan
   }
 
   @Override
-  public void updateVirtualColumn(List<UpdateLogEntry> messages) {
+  public void updateVirtualColumns(List<UpdateLogEntry> messages) {
     ((UpsertSegment) _realtimeSegment).updateVirtualColumn(messages);
+  }
+
+  @Override
+  public String getVirtualColumnInfo(long offset) {
+    return ((UpsertSegment) _realtimeSegment).getVirtualColumnInfo(offset);
   }
 
   @Override

@@ -18,6 +18,7 @@
  */
 package org.apache.pinot.core.segment.updater;
 
+import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.Uninterruptibles;
 import io.netty.util.internal.ConcurrentSet;
@@ -40,6 +41,7 @@ import org.apache.pinot.grigio.servers.SegmentUpdaterProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.concurrent.ThreadSafe;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -58,6 +60,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * class to perform fetching updates for upsert related information from kafka to local machine and fill in
  * virtual columns. It should be started after all segments are loaded in current pinot server.
  */
+@ThreadSafe
 public class SegmentUpdater implements SegmentDeletionListener {
   private static final Logger LOGGER = LoggerFactory.getLogger(SegmentUpdater.class);
 
@@ -101,7 +104,8 @@ public class SegmentUpdater implements SegmentDeletionListener {
 
 
   public void start() {
-    LOGGER.info("starting segment updater main loop");
+    String listOfTables = Joiner.on(",").join(_tableSegmentMap.keySet());
+    LOGGER.info("starting segment updater main loop with the following table in server: {}", listOfTables);
     _ingestionExecutorService.submit(this::updateLoop);
   }
 
@@ -115,11 +119,16 @@ public class SegmentUpdater implements SegmentDeletionListener {
       LOGGER.error("failed to wait for shutdown", e);
     }
     _ingestionExecutorService.shutdownNow();
+    try {
+      _updateLogStorageProvider.close();
+    } catch (IOException ex) {
+      LOGGER.error("failed to shutdown update log provider", ex);
+    }
     LOGGER.info("finished shutdown of segment updater service");
   }
 
   /**
-   * the following method will perform the following:
+   * this method will perform the following:
    * 1. fetch a list of updates for pinot upsert from kafka consumer
    * 2. organize the message by table/segment/List<UpdateLogEntry> map
    * 3. call to save the update data in local file system
@@ -135,10 +144,10 @@ public class SegmentUpdater implements SegmentDeletionListener {
         long loopStartTime = startTime;
         final List<QueueConsumerRecord<String, LogCoordinatorMessage>> records = _consumer.getRequests(_updateSleepMs, TimeUnit.MILLISECONDS);
         _metrics.addTimedValueMs(GrigioTimer.FETCH_MSG_FROM_CONSUMER_TIME, System.currentTimeMillis() - startTime);
-        final Map<String, TableUpdateLogs> tableSegmentToUpdateLogs = new HashMap<>();
         int eventCount = records.size();
         _metrics.addMeteredGlobalValue(GrigioMeter.MESSAGE_FETCH_PER_ROUND, eventCount);
 
+        final Map<String, TableUpdateLogs> tableSegmentToUpdateLogs = new HashMap<>();
         // organize the update logs by {tableName: {segmentName: {list of updatelogs}}}
         records.iterator().forEachRemaining(consumerRecord -> {
           TableUpdateLogs tableUpdateLogs = tableSegmentToUpdateLogs.computeIfAbsent(
@@ -157,7 +166,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
             final TableUpdateLogs segment2UpdateLogsMap = entry.getValue();
             updateSegmentVirtualColumns(tableName, segmentManagersMap, segment2UpdateLogsMap, timeToStoreUpdateLogs);
           } else {
-            LOGGER.debug("got messages for table {} not in this server", tableName);
+            LOGGER.warn("got messages for table {} not in this server", tableName);
           }
           _metrics.addMeteredTableValue(tableName, GrigioMeter.MESSAGE_FETCH_PER_ROUND, tableMessageCount);
         }
@@ -180,7 +189,6 @@ public class SegmentUpdater implements SegmentDeletionListener {
     } finally {
       LOGGER.info("exiting segment update loop");
     }
-    LOGGER.info("segment update failed");
   }
 
   /**
@@ -214,7 +222,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
 
     try {
       for (UpsertSegmentDataManager dataManager: segmentDataManagers) {
-        dataManager.updateVirtualColumn(messages);
+        dataManager.updateVirtualColumns(messages);
       }
     } catch (Exception ex) {
       LOGGER.error("failed to update virtual column for key ", ex);
@@ -255,10 +263,6 @@ public class SegmentUpdater implements SegmentDeletionListener {
         segmentDataManagers.remove(toDeleteManager);
         if (segmentDataManagers.size() == 0) {
           segmentMap.remove(segmentName);
-        }
-        if (segmentMap.size() == 0) {
-          _tableSegmentMap.remove(tableNameWithType);
-          // TODO do other handling of table mapping removal
         }
       }
     }

@@ -26,8 +26,11 @@ import org.testng.annotations.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class SegmentUpdateLogStorageProviderTest {
 
@@ -45,7 +48,7 @@ public class SegmentUpdateLogStorageProviderTest {
   }
 
   @Test
-  public void testAddAndReadData() throws IOException {
+  public void testWriteAndReadData() throws IOException {
     List<UpdateLogEntry> logEntryList = provider.readAllMessagesFromFile();
     // new file should have no data
     Assert.assertEquals(logEntryList.size(), 0);
@@ -57,14 +60,16 @@ public class SegmentUpdateLogStorageProviderTest {
     Assert.assertEquals(logEntryList.get(0), inputDataList.get(0));
     Assert.assertEquals(logEntryList.get(1), inputDataList.get(1));
     Assert.assertEquals(logEntryList.get(2), inputDataList.get(2));
+    provider.addData(inputDataList);
+    Assert.assertEquals(provider.readAllMessagesFromFile().size(), inputDataList.size() * 2);
   }
 
   @Test
   public void testReadPartialData() throws IOException {
     provider.addData(inputDataList);
     // write some more data to channel and persist it
-    provider._channel.write(ByteBuffer.wrap(new byte[]{1,2,3}));
-    provider._channel.force(true);
+    provider._outputStream.write(new byte[]{1,2,3});
+    provider._outputStream.flush();
 
     SegmentUpdateLogStorageProvider provider1 = new SegmentUpdateLogStorageProvider(provider._file);
     List<UpdateLogEntry> logEntryList = provider1.readAllMessagesFromFile();
@@ -74,4 +79,42 @@ public class SegmentUpdateLogStorageProviderTest {
     Assert.assertEquals(logEntryList.get(2), inputDataList.get(2));
   }
 
+  @Test
+  public void testMultiThreadReadAndWrite() throws InterruptedException, IOException {
+
+    ExecutorService service = Executors.newFixedThreadPool(2);
+    final long writeIterationCount = 1000;
+    final long readIterationCount = 100;
+    List<Callable<Object>> tasks = new ArrayList<>();
+    tasks.add(() -> {
+      for (int i = 0; i < writeIterationCount; i++) {
+        try {
+          provider.addData(inputDataList);
+        } catch (IOException e) {
+          Assert.fail();
+        }
+      }
+      return null;
+    });
+    tasks.add(() -> {
+      for (int i = 0; i < readIterationCount; i++) {
+        try {
+          provider.readAllMessagesFromFile();
+        } catch (IOException e) {
+          Assert.fail();
+        }
+      }
+      return null;
+    });
+    service.invokeAll(tasks);
+    service.shutdownNow();
+    List<UpdateLogEntry> updateLogEntries = provider.readAllMessagesFromFile();
+    Assert.assertEquals(updateLogEntries.size(), writeIterationCount * inputDataList.size());
+    for (int i = 0; i < writeIterationCount; i++) {
+      Assert.assertEquals(updateLogEntries.get(i * inputDataList.size()), inputDataList.get(0));
+      Assert.assertEquals(updateLogEntries.get(i * inputDataList.size() + 1), inputDataList.get(1));
+      Assert.assertEquals(updateLogEntries.get(i * inputDataList.size() + 2), inputDataList.get(2));
+    }
+
+  }
 }

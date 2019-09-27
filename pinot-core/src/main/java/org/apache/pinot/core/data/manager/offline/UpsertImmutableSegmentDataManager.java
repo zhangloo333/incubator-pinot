@@ -42,8 +42,13 @@ public class UpsertImmutableSegmentDataManager extends ImmutableSegmentDataManag
   }
 
   @Override
-  public void updateVirtualColumn(List<UpdateLogEntry> messages) {
+  public void updateVirtualColumns(List<UpdateLogEntry> messages) {
     ((UpsertSegment) _immutableSegment).updateVirtualColumn(messages);
+  }
+
+  @Override
+  public String getVirtualColumnInfo(long offset) {
+    return ((UpsertSegment) _immutableSegment).getVirtualColumnInfo(offset);
   }
 
   @Override
