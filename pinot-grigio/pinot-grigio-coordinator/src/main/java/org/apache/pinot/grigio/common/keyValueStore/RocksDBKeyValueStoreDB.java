@@ -18,6 +18,7 @@
  */
 package org.apache.pinot.grigio.common.keyValueStore;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang.StringUtils;
@@ -71,7 +72,7 @@ public class RocksDBKeyValueStoreDB implements KeyValueStoreDB<ByteArrayWrapper,
       LOGGER.info("adding table {}", tableName);
       String path = getPathForTable(t);
       try {
-        return new RocksDBKeyValueStoreTable(_DBBasePath, _rocksDBOptions, _readOptions, _writeOptions);
+        return new RocksDBKeyValueStoreTable(path, _rocksDBOptions, _readOptions, _writeOptions);
       } catch (IOException e) {
         throw new RuntimeException("failed to open rocksdb for path " + path, e);
       }
@@ -93,7 +94,8 @@ public class RocksDBKeyValueStoreDB implements KeyValueStoreDB<ByteArrayWrapper,
     return Paths.get(_DBBasePath, table).toString();
   }
 
-  private Options getDBOptions(Configuration configuration) {
+  @VisibleForTesting
+  protected static Options getDBOptions(Configuration configuration) {
     Options options = new Options();
     options.setCreateIfMissing(true);
     if (configuration.getBoolean(RocksDBConfig.USE_MEMORY_CONFIG, false)) {
@@ -141,14 +143,16 @@ public class RocksDBKeyValueStoreDB implements KeyValueStoreDB<ByteArrayWrapper,
     return options;
   }
 
-  private WriteOptions getWriteOptions(Configuration configuration) {
+  @VisibleForTesting
+  protected static WriteOptions getWriteOptions(Configuration configuration) {
     WriteOptions writeOptions = new WriteOptions();
     writeOptions.setSync(configuration.getBoolean(RocksDBConfig.WRITE_SYNC, true));
     writeOptions.setDisableWAL(configuration.getBoolean(RocksDBConfig.WRITE_DISABLE_WAL, false));
     return writeOptions;
   }
 
-  private ReadOptions getReadOptions(Configuration configuration) {
+  @VisibleForTesting
+  protected static ReadOptions getReadOptions(Configuration configuration) {
     ReadOptions readOptions = new ReadOptions();
     readOptions.setVerifyChecksums(configuration.getBoolean(RocksDBConfig.READ_VERIFY_CHECKSUM, false));
     readOptions.setVerifyChecksums(configuration.getBoolean(RocksDBConfig.READ_USE_TAILING, false));

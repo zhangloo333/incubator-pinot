@@ -81,4 +81,12 @@ public class KeyCoordinatorMessageContext implements Serializable {
     return Objects.hash(_segmentName, _timestamp, _kafkaOffset);
   }
 
+  @Override
+  public String toString() {
+    return "KeyCoordinatorMessageContext{" +
+        "_segmentName='" + _segmentName + '\'' +
+        ", _timestamp=" + _timestamp +
+        ", _kafkaOffset=" + _kafkaOffset +
+        '}';
+  }
 }
