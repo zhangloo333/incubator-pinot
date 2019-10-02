@@ -18,6 +18,10 @@
  */
 package org.apache.pinot.broker.upsert;
 
+import com.google.common.base.Preconditions;
+import org.apache.pinot.common.metrics.BrokerGauge;
+import org.apache.pinot.common.metrics.BrokerMeter;
+import org.apache.pinot.common.metrics.BrokerMetrics;
 import org.apache.pinot.common.restlet.resources.TableLowWaterMarksInfo;
 import org.apache.helix.AccessOption;
 import org.apache.helix.HelixDataAccessor;
@@ -61,9 +65,10 @@ public class PollingBasedLowWaterMarkService implements LowWaterMarkService {
   private int _serverPollingInterval;
   private int _serverPort;
   private boolean _shuttingDown;
+  private BrokerMetrics _brokerMetrics;
 
   public PollingBasedLowWaterMarkService(HelixDataAccessor helixDataAccessor, String helixClusterName,
-                                         int serverPollingInterval, int serverPort) {
+                                         int serverPollingInterval, int serverPort, BrokerMetrics brokerMetrics) {
     // Construct the zk path to get the server instances.
     String instanceConfigs = PropertyPathBuilder.instanceConfig(helixClusterName);
     // Build a zk data reader.
@@ -76,6 +81,7 @@ public class PollingBasedLowWaterMarkService implements LowWaterMarkService {
     _httpClient.property(ClientProperties.READ_TIMEOUT, SERVER_READ_TIMEOUT);
     _serverPollingInterval = serverPollingInterval;
     _serverPort = serverPort;
+    _brokerMetrics = brokerMetrics;
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
       public void run() {
@@ -151,6 +157,15 @@ public class PollingBasedLowWaterMarkService implements LowWaterMarkService {
     // Validate the low water mark info polled from all the servers are right. For now, return true.
     // (TODO tingchen) figure out the right checks.
     private boolean validate(Map<String, Map<Integer, Long>> latestLowWaterMarks) {
+      if (latestLowWaterMarks == null) {
+        _brokerMetrics.addMeteredGlobalValue(BrokerMeter.LOW_WATER_MARK_QUERY_FAILURES, 1);
+        return false;
+      }
+      for(String tableName : latestLowWaterMarks.keySet()) {
+        Map<Integer, Long> partitionLWMs = latestLowWaterMarks.get(tableName);
+        _brokerMetrics.addValueToTableGauge(tableName, BrokerGauge.TABLE_MIN_LOW_WATER_MARK,
+            Collections.min(partitionLWMs.values()));
+      }
       return true;
     }
 
