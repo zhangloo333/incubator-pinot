@@ -44,7 +44,6 @@ import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
 import org.apache.pinot.grigio.common.updateStrategy.MessageResolveStrategy;
 import org.apache.pinot.grigio.common.utils.CommonUtils;
-import org.apache.pinot.grigio.common.utils.PartitionIdMapper;
 import org.apache.pinot.grigio.keyCoordinator.GrigioKeyCoordinatorMetrics;
 import org.apache.pinot.grigio.keyCoordinator.helix.KeyCoordinatorClusterHelixManager;
 import org.apache.pinot.grigio.keyCoordinator.helix.KeyCoordinatorLeadershipManager;
@@ -85,7 +84,6 @@ public class DistributedKeyCoordinatorCore {
   protected ExecutorService _messageProcessThread;
   protected ExecutorService _consumerThread;
   protected BlockingQueue<QueueConsumerRecord<byte[], KeyCoordinatorQueueMsg>> _consumerRecordBlockingQueue;
-  protected PartitionIdMapper _partitionIdMapper;
   protected UpdateLogStorageProvider _storageProvider;
   protected KeyCoordinatorClusterHelixManager _keyCoordinatorClusterHelixManager;
   protected KeyCoordinatorLeadershipManager _keyCoordinatorLeadershipManager;
@@ -129,7 +127,6 @@ public class DistributedKeyCoordinatorCore {
     _messageResolveStrategy = messageResolveStrategy;
     _keyValueStoreDB = keyValueStoreDB;
     _messageProcessThread = coreThread;
-    _partitionIdMapper = new PartitionIdMapper();
     _consumerThread = consumerThread;
     _consumerRecordBlockingQueue = new ArrayBlockingQueue<>(_conf.getConsumerBlockingQueueSize());
     _storageProvider = storageProvider;
