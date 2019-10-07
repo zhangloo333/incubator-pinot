@@ -36,6 +36,7 @@ import org.apache.pinot.grigio.common.rpcQueue.QueueConsumer;
 import org.apache.pinot.grigio.common.rpcQueue.QueueConsumerRecord;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
+import org.apache.pinot.grigio.common.storageProvider.retentionManager.UpdateLogRetentionManager;
 import org.apache.pinot.grigio.common.utils.CommonUtils;
 import org.apache.pinot.grigio.servers.SegmentUpdaterProvider;
 import org.slf4j.Logger;
@@ -78,18 +79,20 @@ public class SegmentUpdater implements SegmentDeletionListener {
   private final Map<String, Map<String, Set<UpsertSegmentDataManager>>> _tableSegmentMap = new ConcurrentHashMap<>();
   private final Map<String, Map<Integer, Long>> _tablePartitionCreationTime = new ConcurrentHashMap<>();
   private final UpdateLogStorageProvider _updateLogStorageProvider;
+  private final UpdateLogRetentionManager _retentionManager;
   private final GrigioMetrics _metrics;
 
   private volatile boolean isStarted = true;
 
-  public SegmentUpdater(Configuration conf, SegmentUpdaterProvider provider, GrigioMetrics metrics) {
+  public SegmentUpdater(Configuration conf, SegmentUpdaterProvider provider, UpdateLogRetentionManager retentionManager,
+                        GrigioMetrics metrics) {
     _conf = conf;
     _metrics = metrics;
+    _retentionManager = retentionManager;
     _topicPrefix = conf.getString(SegmentUpdaterConfig.INPUT_TOPIC_PREFIX,
         CommonConfig.RPC_QUEUE_CONFIG.DEFAULT_KC_OUTPUT_TOPIC_PREFIX);
     _updateSleepMs = conf.getInt(SegmentUpdaterConfig.SEGMENT_UDPATE_SLEEP_MS,
         SegmentUpdaterConfig.SEGMENT_UDPATE_SLEEP_MS_DEFAULT);
-
     UpsertWaterMarkManager.init(metrics);
     _consumer = provider.getConsumer();
     _ingestionExecutorService = Executors.newFixedThreadPool(1);
@@ -191,8 +194,14 @@ public class SegmentUpdater implements SegmentDeletionListener {
     }
   }
 
+  private void storeUpdateLogs(String table, String segment, List<UpdateLogEntry> messages,
+                               AtomicLong timeToStoreUpdateLogs) throws IOException {
+    long startTime = System.currentTimeMillis();
+    _updateLogStorageProvider.addDataToFile(table, segment, messages);
+    timeToStoreUpdateLogs.addAndGet(System.currentTimeMillis() - startTime);
+  }
+
   /**
-   *
    * Update the virtual columns of affected segments of a table.
    */
   private void updateSegmentVirtualColumns(String tableName, Map<String, Set<UpsertSegmentDataManager>> segmentManagersMap,
@@ -200,7 +209,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
     for (Map.Entry<String, List<UpdateLogEntry>> segmentEntry : segment2UpdateLogsMap.getSegments2UpdateLog().entrySet()) {
       final String segmentNameStr = segmentEntry.getKey();
       updateVirtualColumn(tableName, segmentNameStr,
-              segmentManagersMap.computeIfAbsent(segmentNameStr, sn -> new ConcurrentSet<>()),
+          segmentManagersMap.computeIfAbsent(segmentNameStr, sn -> new ConcurrentSet<>()),
           segment2UpdateLogsMap.get(segmentNameStr), timeToStoreUpdateLogs);
     }
   }
@@ -214,12 +223,9 @@ public class SegmentUpdater implements SegmentDeletionListener {
                                    List<UpdateLogEntry> messages, AtomicLong timeToStoreUpdateLogs) throws IOException {
     LOGGER.debug("updating segment {} with {} results for {} data managers", segment, messages.size(),
         segmentDataManagers.size());
-
-    // update storage
-    long startTime = System.currentTimeMillis();
-    _updateLogStorageProvider.addDataToFile(table, segment, messages);
-    timeToStoreUpdateLogs.addAndGet(System.currentTimeMillis() - startTime);
-
+    if (segmentDataManagers.size() > 0 || _retentionManager.getRetentionManagerForTable(table).shouldIngestForSegment(segment)) {
+      storeUpdateLogs(table, segment, messages, timeToStoreUpdateLogs);
+    }
     try {
       for (UpsertSegmentDataManager dataManager: segmentDataManagers) {
         dataManager.updateVirtualColumns(messages);
@@ -276,7 +282,8 @@ public class SegmentUpdater implements SegmentDeletionListener {
    */
   private void handleNewTableInServer(String tableNameWithType) {
     LOGGER.info("subscribing to new table {}", tableNameWithType);
-    // key coordinator generate message without table name
+    // init the retention manager to ensure we get the first ideal state
+    _retentionManager.getRetentionManagerForTable(tableNameWithType);
     _consumer.subscribeForTable(TableNameBuilder.extractRawTableName(tableNameWithType));
   }
 
@@ -285,7 +292,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
    * @param tableNameWithType
    */
   private void handleTableRemovalInServer(String tableNameWithType) {
-    LOGGER.info("subscribing to new table {}", tableNameWithType);
+    LOGGER.info("unsubscribe to old table {}", tableNameWithType);
     // key coordinator generate message without table name
     _consumer.unsubscribeForTable(TableNameBuilder.extractRawTableName(tableNameWithType));
   }
@@ -300,6 +307,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
       }
       try {
         segmentManagerMap.remove(segmentName);
+        _retentionManager.getRetentionManagerForTable(tableNameWithType).notifySegmentDeletion(tableNameWithType);
         _updateLogStorageProvider.removeSegment(tableNameWithType, segmentName);
       } catch (IOException e) {
         throw new RuntimeException(String.format("failed to delete table %s segment %s", tableNameWithType, segmentName), e);
@@ -313,32 +321,31 @@ public class SegmentUpdater implements SegmentDeletionListener {
           tableNameWithType, segmentName);
     }
   }
-}
 
-// A table's update logs grouped by segment names.
-class TableUpdateLogs {
-  private static final Logger LOGGER = LoggerFactory.getLogger(TableUpdateLogs.class);
-  private Map<String, List<UpdateLogEntry>> _segments2UpdateLog;
+  // A table's update logs grouped by segment names.
+  private class TableUpdateLogs {
+    private Map<String, List<UpdateLogEntry>> _segments2UpdateLog;
 
-  public TableUpdateLogs() {
-    _segments2UpdateLog = new HashMap<>();
-  }
+    public TableUpdateLogs() {
+                                 _segments2UpdateLog = new HashMap<>();
+                                                                       }
 
-  public Map<String, List<UpdateLogEntry>> getSegments2UpdateLog() {
-    return Collections.unmodifiableMap(_segments2UpdateLog);
-  }
-
-  // Partition is the partition where the record appears in the Segment Update Event message queue.
-  public void addUpdateLogEntry(LogCoordinatorMessage record, int partition) {
-    if (record == null || record.getSegmentName() == null) {
-      LOGGER.error("Empty update log or no segment in the entry: {}", record);
-      return;
+    public Map<String, List<UpdateLogEntry>> getSegments2UpdateLog() {
+      return Collections.unmodifiableMap(_segments2UpdateLog);
     }
-    _segments2UpdateLog.computeIfAbsent(
-            record.getSegmentName(), s -> new ArrayList<>()).add(new UpdateLogEntry(record, partition));
-  }
 
-  public List<UpdateLogEntry> get(String segmentNameStr) {
-    return Collections.unmodifiableList(_segments2UpdateLog.get(segmentNameStr));
+    // Partition is the partition where the record appears in the Segment Update Event message queue.
+    public void addUpdateLogEntry(LogCoordinatorMessage record, int partition) {
+      if (record == null || record.getSegmentName() == null) {
+        LOGGER.error("Empty update log or no segment in the entry: {}", record);
+        return;
+      }
+      _segments2UpdateLog.computeIfAbsent(
+              record.getSegmentName(), s -> new ArrayList<>()).add(new UpdateLogEntry(record, partition));
+    }
+
+    public List<UpdateLogEntry> get(String segmentNameStr) {
+      return Collections.unmodifiableList(_segments2UpdateLog.get(segmentNameStr));
+    }
   }
 }

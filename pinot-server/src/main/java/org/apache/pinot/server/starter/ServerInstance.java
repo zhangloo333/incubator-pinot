@@ -20,14 +20,18 @@ package org.apache.pinot.server.starter;
 
 import com.google.common.collect.ImmutableList;
 import org.apache.commons.configuration.Configuration;
+import org.apache.helix.HelixManager;
 import org.apache.helix.ZNRecord;
 import org.apache.helix.store.zk.ZkHelixPropertyStore;
 import org.apache.pinot.common.metrics.ServerMetrics;
+import org.apache.pinot.common.utils.IdealStateHelper;
 import org.apache.pinot.core.data.manager.InstanceDataManager;
 import org.apache.pinot.core.query.executor.QueryExecutor;
 import org.apache.pinot.core.query.scheduler.QueryScheduler;
 import org.apache.pinot.core.query.scheduler.QuerySchedulerFactory;
 import org.apache.pinot.core.segment.updater.SegmentUpdater;
+import org.apache.pinot.grigio.common.storageProvider.retentionManager.UpdateLogRetentionManager;
+import org.apache.pinot.grigio.common.storageProvider.retentionManager.UpdateLogRetentionManagerImpl;
 import org.apache.pinot.grigio.servers.KeyCoordinatorProvider;
 import org.apache.pinot.grigio.servers.SegmentUpdaterProvider;
 import org.apache.pinot.server.conf.ServerConf;
@@ -59,12 +63,14 @@ public class ServerInstance {
   private LongAccumulator _latestQueryTime;
   private KeyCoordinatorProvider _keyCoordinatorProvider;
   private SegmentUpdaterProvider _updaterProvider;
+  private UpdateLogRetentionManager _retentionManager;
   private SegmentUpdater _segmentUpdater;
   private SegmentDeletionHandler _segmentDeletionHandler;
 
   private boolean _started = false;
 
-  public void init(@Nonnull ServerConf serverConf, @Nonnull ZkHelixPropertyStore<ZNRecord> propertyStore)
+  public void init(@Nonnull ServerConf serverConf, @Nonnull ZkHelixPropertyStore<ZNRecord> propertyStore,
+                   HelixManager helixManager, String clusterName, String instanceName)
       throws Exception {
     LOGGER.info("Initializing server instance");
 
@@ -87,7 +93,9 @@ public class ServerInstance {
       serverBuilder.initVirtualColumnStorageProvider();
       _keyCoordinatorProvider = serverBuilder.buildKeyCoordinatorProvider();
       _updaterProvider = serverBuilder.buildSegmentUpdaterProvider();
-      _segmentUpdater = serverBuilder.buildSegmentUpdater(_updaterProvider);
+      _retentionManager = new UpdateLogRetentionManagerImpl(
+          new IdealStateHelper(helixManager.getClusterManagmentTool(), clusterName), instanceName);
+      _segmentUpdater = serverBuilder.buildSegmentUpdater(_updaterProvider, _retentionManager);
       _segmentDeletionHandler = new SegmentDeletionHandler(ImmutableList.of(_segmentUpdater));
     } else {
       _segmentDeletionHandler = new SegmentDeletionHandler();
@@ -96,6 +104,7 @@ public class ServerInstance {
 
     LOGGER.info("Finish initializing server instance");
   }
+
 
   public void start() {
     LOGGER.info("Starting server instance");

@@ -207,7 +207,7 @@ public class HelixServerStarter {
     ServerSegmentCompletionProtocolHandler
         .init(_serverConf.subset(SegmentCompletionProtocol.PREFIX_OF_CONFIG_OF_SEGMENT_UPLOADER));
     _serverInstance = new ServerInstance();
-    _serverInstance.init(serverInstanceConfig, propertyStore);
+    _serverInstance.init(serverInstanceConfig, propertyStore, _helixManager, _helixClusterName, _instanceId);
     _serverInstance.start();
 
     // Register state model factory
@@ -215,7 +215,7 @@ public class HelixServerStarter {
         new SegmentFetcherAndLoader(_serverConf, _serverInstance.getInstanceDataManager(), propertyStore);
     StateModelFactory<?> stateModelFactory =
         new SegmentOnlineOfflineStateModelFactory(_instanceId, _serverInstance.getInstanceDataManager(),
-            fetcherAndLoader, propertyStore);
+            fetcherAndLoader, propertyStore, _serverInstance.getSegmentDeletionHandler());
     _helixManager.getStateMachineEngine()
         .registerStateModelFactory(SegmentOnlineOfflineStateModelFactory.getStateModelName(), stateModelFactory);
 

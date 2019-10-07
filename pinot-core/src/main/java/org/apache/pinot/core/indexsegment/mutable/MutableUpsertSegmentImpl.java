@@ -68,7 +68,7 @@ public class MutableUpsertSegmentImpl extends MutableSegmentImpl implements Upse
   }
 
   @Override
-  public void updateVirtualColumn(List<UpdateLogEntry> logEntryList) {
+  public synchronized void updateVirtualColumn(List<UpdateLogEntry> logEntryList) {
     for (UpdateLogEntry logEntry: logEntryList) {
       boolean updated = false;
       boolean offsetFound = false;
@@ -110,7 +110,7 @@ public class MutableUpsertSegmentImpl extends MutableSegmentImpl implements Upse
   }
 
   @Override
-  protected void postProcessRecords(GenericRow row, int docId) {
+  protected synchronized void postProcessRecords(GenericRow row, int docId) {
     final Long offset = (Long) row.getValue(_kafkaOffsetColumnName);
     for (VirtualColumnLongValueReaderWriter readerWriter: _mutableSegmentReaderWriters) {
       readerWriter.addNewRecord(docId);
@@ -122,11 +122,12 @@ public class MutableUpsertSegmentImpl extends MutableSegmentImpl implements Upse
 
   @Override
   public void initVirtualColumn() throws IOException {
-    //TODO add logic for init virtual column
     Preconditions.checkState(_numDocsIndexed == 0, "should init virtual column before ingestion");
     List<UpdateLogEntry> updateLogEntries = UpdateLogStorageProvider.getInstance().getAllMessages(_tableName, _segmentName);
     LOGGER.info("got {} update log entries for current segment {}", updateLogEntries.size(), _segmentName);
-    updateLogEntries.forEach(this::putEntryToUnmatchMap);
+    // some physical data might have been ingested when we init virtual column, we will go through the normal update
+    // flow to ensure we wont miss records
+    updateVirtualColumn(updateLogEntries);
   }
 
   private void checkForOutstandingRecords(Map<Long, UpdateLogEntry> unmatchRecordsMap, Long offset, int docId) {

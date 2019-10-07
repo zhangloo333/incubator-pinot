@@ -161,8 +161,41 @@ public class UpdateLogStorageProvider {
     if (_virtualColumnStorage.containsKey(tableName)) {
       SegmentUpdateLogStorageProvider provider = _virtualColumnStorage.get(tableName).remove(segmentName);
       if (provider != null) {
-        LOGGER.info("deleting segment update log for table {} segment {}", tableName, segmentName);
+        LOGGER.info("deleting update log for table {} segment {}", tableName, segmentName);
         provider.destroy();
+      } else {
+        // will also try to delete update log file that are on this server but not loaded due to lazy-loading
+        File segmentUpdateLogFile = new File(new File(_virtualColumnStorageDir, tableName), segmentName);
+        if (segmentUpdateLogFile.exists()) {
+          LOGGER.info("deleting old updates log for table {} segment {}", tableName, segmentName);
+          segmentUpdateLogFile.delete();
+        } else {
+          LOGGER.info("trying to delete table {} segment {} but it doesn't exist", tableName, segmentName);
+        }
+      }
+    } else {
+      LOGGER.info("trying to delete table {} segment {} but table is not in the current server", tableName, segmentName);
+    }
+  }
+
+  public synchronized void removeAllUpdateLogsForTable(String tableName) {
+    LOGGER.info("removing all update log storage for the given table {}", tableName);
+    if (_virtualColumnStorage.containsKey(tableName)) {
+      for (String segmentName : _virtualColumnStorage.get(tableName).keySet()) {
+        try {
+          removeSegment(tableName, segmentName);
+        } catch (IOException ex) {
+          LOGGER.error("failed to remove segment {}:{}", tableName, segmentName);
+        }
+      }
+      _virtualColumnStorage.remove(tableName);
+    }
+    final File tableDir = new File(_virtualColumnStorageDir, tableName);
+    if (tableDir.exists() && tableDir.isDirectory()) {
+      File[] segmentUpdateLogs = tableDir.listFiles();
+      LOGGER.info("remove {} files under table directory {}", segmentUpdateLogs.length, tableDir.getAbsolutePath());
+      for (File segmentUpdateLog : segmentUpdateLogs) {
+        segmentUpdateLog.delete();
       }
     }
   }

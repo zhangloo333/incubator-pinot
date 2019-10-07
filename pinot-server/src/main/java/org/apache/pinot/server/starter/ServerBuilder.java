@@ -33,6 +33,7 @@ import org.apache.pinot.core.query.scheduler.QuerySchedulerFactory;
 import org.apache.pinot.core.segment.updater.SegmentUpdater;
 import org.apache.pinot.grigio.common.metrics.GrigioMetrics;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
+import org.apache.pinot.grigio.common.storageProvider.retentionManager.UpdateLogRetentionManager;
 import org.apache.pinot.grigio.servers.GrigioServerMetrics;
 import org.apache.pinot.grigio.servers.KeyCoordinatorProvider;
 import org.apache.pinot.grigio.servers.SegmentUpdaterProvider;
@@ -153,8 +154,10 @@ public class ServerBuilder {
     return new SegmentUpdaterProvider(_serverConf.getUpsertSegmentUpdateProviderConfig(), _serverConf.getPinotServerHostname(), _grigioMetrics);
   }
 
-  public SegmentUpdater buildSegmentUpdater(SegmentUpdaterProvider updateProvider) {
-    return new SegmentUpdater(_serverConf.getUpsertSegmentUpdaterConfig(), updateProvider, _grigioMetrics);
+  public SegmentUpdater buildSegmentUpdater(SegmentUpdaterProvider updateProvider,
+                                            UpdateLogRetentionManager updateLogRetentionManager) {
+    return new SegmentUpdater(_serverConf.getUpsertSegmentUpdaterConfig(), updateProvider, updateLogRetentionManager,
+        _grigioMetrics);
   }
 
   public void initVirtualColumnStorageProvider() {
