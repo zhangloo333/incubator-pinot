@@ -71,6 +71,9 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
   private static final String ZK_STR = "zk.str";
   private static final String KC_CLUSTER_NAME = "kc.cluster.name";
 
+  private static final String PINOT_HELIX_CLUSTER_NAME = "pinot.helix.cluster.name";
+  private static final String PINOT_HELIX_ZK_STR = "pinot.zk.str";
+
   // metrics related config
   public static final String METRICS_CONFIG = "metrics";
 
@@ -123,8 +126,19 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
   }
 
   public String getZkStr() {
-    Object zkAddressObj = getProperty(ZK_STR);
+    return convertConfigToZkString(getProperty(ZK_STR));
+  }
 
+  public String getPinotClusterZkStr() {
+    return convertConfigToZkString(getProperty(PINOT_HELIX_ZK_STR));
+  }
+
+  public String getPinotClusterName() {
+    return this.getString(PINOT_HELIX_CLUSTER_NAME);
+  }
+
+  // convert the config value to zk string
+  private String convertConfigToZkString(Object zkAddressObj) {
     // The set method converted comma separated string into ArrayList, so need to convert back to String here.
     if (zkAddressObj instanceof ArrayList) {
       List<String> zkAddressList = (ArrayList<String>) zkAddressObj;
@@ -137,6 +151,7 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
           "Unexpected data type for zkAddress PropertiesConfiguration, expecting String but got " + zkAddressObj
               .getClass().getName());
     }
+
   }
 
   public String getKeyCoordinatorMessageTopic() {

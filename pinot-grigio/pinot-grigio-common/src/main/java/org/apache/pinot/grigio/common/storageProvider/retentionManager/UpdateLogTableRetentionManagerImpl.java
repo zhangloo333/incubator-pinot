@@ -110,6 +110,11 @@ public class UpdateLogTableRetentionManagerImpl implements UpdateLogTableRetenti
     }
   }
 
+  @Override
+  public void notifySegmentsChange() {
+    updateStateFromHelix();
+  }
+
   private boolean isSegmentAssignedToCurrentServer(String segmentName) {
     return _segmentsToInstanceMap.containsKey(segmentName)
         && _segmentsToInstanceMap.get(segmentName).containsKey(_instanceId)

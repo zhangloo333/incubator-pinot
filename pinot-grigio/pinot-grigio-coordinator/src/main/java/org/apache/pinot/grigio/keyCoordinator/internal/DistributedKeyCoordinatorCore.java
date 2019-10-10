@@ -22,6 +22,8 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.Uninterruptibles;
 import org.apache.commons.configuration.Configuration;
+import org.apache.pinot.common.config.TableNameBuilder;
+import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.grigio.common.DistributedCommonUtils;
 import org.apache.pinot.grigio.common.OffsetInfo;
 import org.apache.pinot.grigio.common.keyValueStore.ByteArrayWrapper;
@@ -42,6 +44,8 @@ import org.apache.pinot.grigio.common.rpcQueue.QueueConsumerRecord;
 import org.apache.pinot.grigio.common.rpcQueue.VersionMsgQueueProducer;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
+import org.apache.pinot.grigio.common.storageProvider.retentionManager.UpdateLogRetentionManager;
+import org.apache.pinot.grigio.common.storageProvider.retentionManager.UpdateLogTableRetentionManager;
 import org.apache.pinot.grigio.common.updateStrategy.MessageResolveStrategy;
 import org.apache.pinot.grigio.common.utils.CommonUtils;
 import org.apache.pinot.grigio.keyCoordinator.GrigioKeyCoordinatorMetrics;
@@ -88,6 +92,7 @@ public class DistributedKeyCoordinatorCore {
   protected KeyCoordinatorClusterHelixManager _keyCoordinatorClusterHelixManager;
   protected KeyCoordinatorLeadershipManager _keyCoordinatorLeadershipManager;
   protected KeyCoordinatorVersionManager _keyCoordinatorVersionManager;
+  protected UpdateLogRetentionManager _retentionManager;
   protected GrigioKeyCoordinatorMetrics _metrics;
   protected String _topicPrefix;
   protected int _fetchMsgDelayMs;
@@ -105,10 +110,12 @@ public class DistributedKeyCoordinatorCore {
   public void init(KeyCoordinatorConf conf, LogCoordinatorQueueProducer keyCoordinatorProducer,
                    KeyCoordinatorQueueConsumer keyCoordinatorConsumer, VersionMsgQueueProducer versionMessageKafkaProducer,
                    MessageResolveStrategy messageResolveStrategy,
-                   KeyCoordinatorClusterHelixManager keyCoordinatorClusterHelixManager, GrigioKeyCoordinatorMetrics metrics) {
+                   KeyCoordinatorClusterHelixManager keyCoordinatorClusterHelixManager,
+                   UpdateLogRetentionManager retentionManager, GrigioKeyCoordinatorMetrics metrics) {
     init(conf, keyCoordinatorProducer, keyCoordinatorConsumer, versionMessageKafkaProducer, messageResolveStrategy,
         getKeyValueStore(conf.subset(KeyCoordinatorConf.KEY_COORDINATOR_KV_STORE)), Executors.newSingleThreadExecutor(),
-        Executors.newSingleThreadExecutor(), UpdateLogStorageProvider.getInstance(), keyCoordinatorClusterHelixManager, metrics);
+        Executors.newSingleThreadExecutor(), UpdateLogStorageProvider.getInstance(), keyCoordinatorClusterHelixManager,
+        retentionManager, metrics);
   }
 
   @VisibleForTesting
@@ -118,7 +125,8 @@ public class DistributedKeyCoordinatorCore {
                    MessageResolveStrategy messageResolveStrategy,
                    KeyValueStoreDB<ByteArrayWrapper, KeyCoordinatorMessageContext> keyValueStoreDB,
                    ExecutorService coreThread, ExecutorService consumerThread, UpdateLogStorageProvider storageProvider,
-                   KeyCoordinatorClusterHelixManager keyCoordinatorClusterHelixManager, GrigioKeyCoordinatorMetrics metrics) {
+                   KeyCoordinatorClusterHelixManager keyCoordinatorClusterHelixManager,
+                   UpdateLogRetentionManager updateLogRetentionManager, GrigioKeyCoordinatorMetrics metrics) {
     CommonUtils.printConfiguration(conf, "distributed key coordinator core");
     Preconditions.checkState(_state == State.SHUTDOWN, "can only init if it is not running yet");
     _conf = conf;
@@ -132,6 +140,7 @@ public class DistributedKeyCoordinatorCore {
     _consumerRecordBlockingQueue = new ArrayBlockingQueue<>(_conf.getConsumerBlockingQueueSize());
     _storageProvider = storageProvider;
     _keyCoordinatorClusterHelixManager = keyCoordinatorClusterHelixManager;
+    _retentionManager = updateLogRetentionManager;
     _metrics = metrics;
 
     _fetchMsgDelayMs = conf.getInt(KeyCoordinatorConf.FETCH_MSG_DELAY_MS,
@@ -414,6 +423,8 @@ public class DistributedKeyCoordinatorCore {
                                      List<ProduceTask<Integer, LogCoordinatorMessage>> tasks) {
     // TODO: add a unit test
     long start = System.currentTimeMillis();
+    UpdateLogTableRetentionManager tableRetentionManager = _retentionManager.getRetentionManagerForTable(
+        TableNameBuilder.ensureTableNameWithType(tableName, CommonConstants.Helix.TableType.REALTIME));
     for (MessageWithPartitionAndVersion msg: msgList) {
       KeyCoordinatorMessageContext currentContext = msg.getContext();
       ByteArrayWrapper key = new ByteArrayWrapper(msg.getKey());
@@ -426,8 +437,11 @@ public class DistributedKeyCoordinatorCore {
         }
         if (_messageResolveStrategy.shouldDeleteFirstMessage(oldContext, currentContext)) {
           // the existing message we have is older than the message we just processed, create delete for it
-          tasks.add(createMessageToLogCoordinator(tableName, oldContext.getSegmentName(), oldContext.getKafkaOffset(),
-              msg.getVersion(), LogEventType.DELETE, msg.getPartition()));
+          if (tableRetentionManager.shouldIngestForSegment(oldContext.getSegmentName())) {
+            // only generate delete event if the segment is still valid
+            tasks.add(createMessageToLogCoordinator(tableName, oldContext.getSegmentName(), oldContext.getKafkaOffset(),
+                msg.getVersion(), LogEventType.DELETE, msg.getPartition()));
+          }
           // update the local cache to the latest message, so message within the same batch can override each other
           primaryKeyToValueMap.put(key, currentContext);
           tasks.add(createMessageToLogCoordinator(tableName, currentContext.getSegmentName(), currentContext.getKafkaOffset(),
@@ -497,6 +511,7 @@ public class DistributedKeyCoordinatorCore {
    * @throws IOException
    */
   private void storeMessageToLocal(String tableName, List<ProduceTask<Integer, LogCoordinatorMessage>> tasks) throws IOException {
+    String tableNameWithType = TableNameBuilder.ensureTableNameWithType(tableName, CommonConstants.Helix.TableType.REALTIME);
     long start = System.currentTimeMillis();
     Map<String, List<UpdateLogEntry>> segmentUpdateLogs = new HashMap<>();
     for (ProduceTask<Integer, LogCoordinatorMessage> task: tasks) {
@@ -505,8 +520,7 @@ public class DistributedKeyCoordinatorCore {
       segmentUpdateLogs.computeIfAbsent(segmentName, s -> new ArrayList<>()).add(entry);
     }
     for (Map.Entry<String, List<UpdateLogEntry>> segmentEntry: segmentUpdateLogs.entrySet()) {
-      _storageProvider.addSegment(tableName, segmentEntry.getKey());
-      _storageProvider.addDataToFile(tableName, segmentEntry.getKey(), segmentEntry.getValue());
+      _storageProvider.addDataToFile(tableNameWithType, segmentEntry.getKey(), segmentEntry.getValue());
     }
     long duration = System.currentTimeMillis() - start;
     _metrics.addTimedValueMs(GrigioTimer.STORE_UPDATE_ON_DISK, duration);

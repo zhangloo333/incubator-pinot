@@ -21,6 +21,7 @@ package org.apache.pinot.grigio.common.storageProvider;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
@@ -30,6 +31,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class UpdateLogStorageProvider {
@@ -100,15 +102,26 @@ public class UpdateLogStorageProvider {
   public synchronized void loadTable(String tableName) throws IOException {
     LOGGER.info("loading table {}", tableName);
     final File tableDir = new File(_virtualColumnStorageDir, tableName);
-    Preconditions.checkState(tableDir.exists(), "table directory does not exist at path " + tableDir.getPath());
-    Map<String, SegmentUpdateLogStorageProvider> tableUpdateLogs = new ConcurrentHashMap<>();
-    _virtualColumnStorage.put(tableName, tableUpdateLogs);
-    File[] segmentFiles = tableDir.listFiles();
-    if (segmentFiles != null) {
-      for (File segmentFile: segmentFiles) {
-        tableUpdateLogs.put(segmentFile.getName(), new SegmentUpdateLogStorageProvider(segmentFile));
+    if (!tableDir.exists()) {
+      LOGGER.warn("table directory does not exist at path {}", tableDir.getPath());
+    } else {
+      Map<String, SegmentUpdateLogStorageProvider> tableUpdateLogs = new ConcurrentHashMap<>();
+      _virtualColumnStorage.put(tableName, tableUpdateLogs);
+      File[] segmentFiles = tableDir.listFiles();
+      if (segmentFiles != null) {
+        for (File segmentFile: segmentFiles) {
+          tableUpdateLogs.put(segmentFile.getName(), new SegmentUpdateLogStorageProvider(segmentFile));
+        }
+        LOGGER.info("loaded {} segment from table", segmentFiles.length);
       }
-      LOGGER.info("loaded {} segment from table", segmentFiles.length);
+    }
+  }
+
+  public synchronized Set<String> getAllSegments(String tableName) {
+    if (_virtualColumnStorage.containsKey(tableName)) {
+      return ImmutableSet.copyOf(_virtualColumnStorage.get(tableName).keySet());
+    } else {
+      return ImmutableSet.of();
     }
   }
 

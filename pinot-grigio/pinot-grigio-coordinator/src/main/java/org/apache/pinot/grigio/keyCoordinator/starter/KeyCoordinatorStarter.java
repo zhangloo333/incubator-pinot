@@ -24,16 +24,19 @@ import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang.StringUtils;
 import org.apache.pinot.common.metrics.MetricsHelper;
 import org.apache.pinot.common.utils.CommonConstants;
+import org.apache.pinot.common.utils.IdealStateHelper;
 import org.apache.pinot.grigio.common.config.CommonConfig;
 import org.apache.pinot.grigio.common.rpcQueue.KeyCoordinatorQueueConsumer;
 import org.apache.pinot.grigio.common.rpcQueue.LogCoordinatorQueueProducer;
 import org.apache.pinot.grigio.common.rpcQueue.VersionMsgQueueProducer;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
+import org.apache.pinot.grigio.common.storageProvider.retentionManager.KCUpdateLogRetentionManagerImpl;
 import org.apache.pinot.grigio.common.updateStrategy.MessageResolveStrategy;
 import org.apache.pinot.grigio.common.updateStrategy.MessageTimeResolveStrategy;
 import org.apache.pinot.grigio.keyCoordinator.GrigioKeyCoordinatorMetrics;
 import org.apache.pinot.grigio.keyCoordinator.api.KeyCoordinatorApiApplication;
 import org.apache.pinot.grigio.keyCoordinator.helix.KeyCoordinatorClusterHelixManager;
+import org.apache.pinot.grigio.keyCoordinator.helix.KeyCoordinatorPinotHelixSpectator;
 import org.apache.pinot.grigio.keyCoordinator.helix.State;
 import org.apache.pinot.grigio.keyCoordinator.internal.DistributedKeyCoordinatorCore;
 import org.slf4j.Logger;
@@ -56,7 +59,9 @@ public class KeyCoordinatorStarter {
   private String _hostName;
   private int _port;
   private String _instanceId;
+  private KCUpdateLogRetentionManagerImpl _retentionManager;
   private KeyCoordinatorClusterHelixManager _keyCoordinatorClusterHelixManager;
+  private KeyCoordinatorPinotHelixSpectator _keyCoordinatorPinotHelixSpectator;
 
   public KeyCoordinatorStarter(KeyCoordinatorConf conf) throws Exception {
     _keyCoordinatorConf = conf;
@@ -77,6 +82,12 @@ public class KeyCoordinatorStarter {
         conf.getKeyCoordinatorMessagePartitionCount()
     );
     UpdateLogStorageProvider.init(_keyCoordinatorConf.getStorageProviderConf());
+    _keyCoordinatorPinotHelixSpectator = new KeyCoordinatorPinotHelixSpectator(
+        _keyCoordinatorConf.getPinotClusterZkStr(), _keyCoordinatorConf.getPinotClusterName(), _instanceId);
+    _retentionManager = new KCUpdateLogRetentionManagerImpl(
+        new IdealStateHelper(_keyCoordinatorPinotHelixSpectator.getHelixManager().getClusterManagmentTool(), _keyCoordinatorConf.getPinotClusterName()),
+        UpdateLogStorageProvider.getInstance(), _instanceId);
+    _keyCoordinatorPinotHelixSpectator.addListener(_retentionManager);
     _messageResolveStrategy = new MessageTimeResolveStrategy();
     _keyCoordinatorCore = new DistributedKeyCoordinatorCore();
     _application = new KeyCoordinatorApiApplication(this);
@@ -123,7 +134,7 @@ public class KeyCoordinatorStarter {
     LOGGER.info("starting key coordinator instance");
     _keyCoordinatorCore
         .init(_keyCoordinatorConf, _producer, _consumer, _versionMessageProducer, _messageResolveStrategy,
-            _keyCoordinatorClusterHelixManager, _metrics);
+            _keyCoordinatorClusterHelixManager, _retentionManager, _metrics);
     LOGGER.info("finished init key coordinator instance, starting loop");
     _keyCoordinatorCore.start();
     LOGGER.info("starting web service");
