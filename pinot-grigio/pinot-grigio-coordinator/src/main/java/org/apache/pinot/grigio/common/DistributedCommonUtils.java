@@ -19,15 +19,14 @@
 package org.apache.pinot.grigio.common;
 
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.pinot.grigio.common.config.CommonConfig;
 import org.apache.pinot.grigio.keyCoordinator.starter.KeyCoordinatorConf;
 
 import java.util.Properties;
 
 public class DistributedCommonUtils {
 
-  public static String getKafkaTopicFromTableName(String tableName) {
-    return CommonConfig.RPC_QUEUE_CONFIG.DEFAULT_KC_OUTPUT_TOPIC_PREFIX + tableName;
+  public static String getKafkaTopicFromTableName(String tableName, String topicPrefix) {
+    return topicPrefix + tableName;
   }
 
   public static String getClientId(String hostName) {

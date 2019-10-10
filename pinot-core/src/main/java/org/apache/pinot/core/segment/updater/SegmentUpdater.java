@@ -27,7 +27,6 @@ import org.apache.pinot.common.config.TableNameBuilder;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.LLCSegmentName;
 import org.apache.pinot.core.data.manager.UpsertSegmentDataManager;
-import org.apache.pinot.grigio.common.config.CommonConfig;
 import org.apache.pinot.grigio.common.messages.LogCoordinatorMessage;
 import org.apache.pinot.grigio.common.metrics.GrigioMeter;
 import org.apache.pinot.grigio.common.metrics.GrigioMetrics;
@@ -89,8 +88,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
     _conf = conf;
     _metrics = metrics;
     _retentionManager = retentionManager;
-    _topicPrefix = conf.getString(SegmentUpdaterConfig.INPUT_TOPIC_PREFIX,
-        CommonConfig.RPC_QUEUE_CONFIG.DEFAULT_KC_OUTPUT_TOPIC_PREFIX);
+    _topicPrefix = conf.getString(SegmentUpdaterConfig.INPUT_TOPIC_PREFIX);
     _updateSleepMs = conf.getInt(SegmentUpdaterConfig.SEGMENT_UDPATE_SLEEP_MS,
         SegmentUpdaterConfig.SEGMENT_UDPATE_SLEEP_MS_DEFAULT);
     UpsertWaterMarkManager.init(metrics);
@@ -284,7 +282,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
     LOGGER.info("subscribing to new table {}", tableNameWithType);
     // init the retention manager to ensure we get the first ideal state
     _retentionManager.getRetentionManagerForTable(tableNameWithType);
-    _consumer.subscribeForTable(TableNameBuilder.extractRawTableName(tableNameWithType));
+    _consumer.subscribeForTable(TableNameBuilder.extractRawTableName(tableNameWithType), _topicPrefix);
   }
 
   /**
@@ -294,7 +292,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
   private void handleTableRemovalInServer(String tableNameWithType) {
     LOGGER.info("unsubscribe to old table {}", tableNameWithType);
     // key coordinator generate message without table name
-    _consumer.unsubscribeForTable(TableNameBuilder.extractRawTableName(tableNameWithType));
+    _consumer.unsubscribeForTable(TableNameBuilder.extractRawTableName(tableNameWithType), _topicPrefix);
   }
 
   @Override

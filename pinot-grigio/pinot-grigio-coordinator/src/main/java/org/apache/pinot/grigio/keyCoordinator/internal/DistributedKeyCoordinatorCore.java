@@ -89,6 +89,7 @@ public class DistributedKeyCoordinatorCore {
   protected KeyCoordinatorLeadershipManager _keyCoordinatorLeadershipManager;
   protected KeyCoordinatorVersionManager _keyCoordinatorVersionManager;
   protected GrigioKeyCoordinatorMetrics _metrics;
+  protected String _topicPrefix;
   protected int _fetchMsgDelayMs;
   protected int _fetchMsgMaxDelayMs;
   protected int _fetchMsgMaxCount;
@@ -139,6 +140,7 @@ public class DistributedKeyCoordinatorCore {
         KeyCoordinatorConf.FETCH_MSG_MAX_DELAY_MS_DEFAULT);
     _fetchMsgMaxCount = conf.getInt(KeyCoordinatorConf.FETCH_MSG_MAX_BATCH_SIZE,
         KeyCoordinatorConf.FETCH_MSG_MAX_BATCH_SIZE_DEFAULT);
+    _topicPrefix = conf.getTopicPrefix();
     LOGGER.info("starting with fetch delay: {} max delay: {}, fetch max count: {}", _fetchMsgDelayMs, _fetchMsgMaxDelayMs,
         _fetchMsgMaxCount);
 
@@ -370,7 +372,7 @@ public class DistributedKeyCoordinatorCore {
   private ProduceTask<Integer, LogCoordinatorMessage> createMessageToLogCoordinator(String tableName, String segmentName,
                                                                                     long oldKafkaOffset, long value,
                                                                                     LogEventType eventType, int partition) {
-    return new ProduceTask<>(DistributedCommonUtils.getKafkaTopicFromTableName(tableName),
+    return new ProduceTask<>(DistributedCommonUtils.getKafkaTopicFromTableName(tableName, _topicPrefix),
             partition, new LogCoordinatorMessage(segmentName, oldKafkaOffset, value, eventType));
   }
 

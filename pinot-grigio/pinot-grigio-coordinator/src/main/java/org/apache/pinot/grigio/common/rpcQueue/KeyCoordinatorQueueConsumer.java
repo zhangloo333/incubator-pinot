@@ -66,12 +66,12 @@ public class KeyCoordinatorQueueConsumer extends KafkaQueueConsumer<byte[], KeyC
   }
 
   @Override
-  public void subscribeForTable(String table) {
+  public void subscribeForTable(String tableName, String topicPrefix) {
     // nothing as key coordinator don't subscribe for table
   }
 
   @Override
-  public void unsubscribeForTable(String table) {
+  public void unsubscribeForTable(String tableName, String topicPrefix) {
     // nothing as key coordinator don't subscribe for table
   }
 

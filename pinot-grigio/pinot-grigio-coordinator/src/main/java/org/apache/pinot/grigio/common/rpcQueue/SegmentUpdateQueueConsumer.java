@@ -62,16 +62,16 @@ public class SegmentUpdateQueueConsumer extends KafkaQueueConsumer<String, LogCo
   }
 
   @Override
-  public void subscribeForTable(String table) {
-    String topicName = DistributedCommonUtils.getKafkaTopicFromTableName(table);
-    LOGGER.info("subscribing for table {}, kafka topic {}", table, topicName);
+  public void subscribeForTable(String tableName, String topicPrefix) {
+    String topicName = DistributedCommonUtils.getKafkaTopicFromTableName(tableName, topicPrefix);
+    LOGGER.info("subscribing for table {}, kafka topic {}", tableName, topicName);
     this.subscribe(topicName);
   }
 
   @Override
-  public void unsubscribeForTable(String table) {
-    String topicName = DistributedCommonUtils.getKafkaTopicFromTableName(table);
-    LOGGER.info("unsubscribing for table {}, kafka topic {}", table, topicName);
+  public void unsubscribeForTable(String tableName, String topicPrefix) {
+    String topicName = DistributedCommonUtils.getKafkaTopicFromTableName(tableName, topicPrefix);
+    LOGGER.info("unsubscribing for table {}, kafka topic {}", tableName, topicName);
     this.unsubscribe(topicName);
   }
 

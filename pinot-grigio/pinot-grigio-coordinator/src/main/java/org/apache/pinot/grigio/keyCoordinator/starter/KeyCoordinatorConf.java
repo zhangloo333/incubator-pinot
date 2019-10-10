@@ -18,8 +18,6 @@
  */
 package org.apache.pinot.grigio.keyCoordinator.starter;
 
-import java.util.ArrayList;
-import java.util.List;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.PropertiesConfiguration;
@@ -28,6 +26,8 @@ import org.apache.pinot.common.utils.StringUtil;
 import org.apache.pinot.grigio.common.config.CommonConfig;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 
 public class KeyCoordinatorConf extends PropertiesConfiguration {
 
@@ -63,6 +63,9 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
 
   private static final String KC_MESSAGE_TOPIC = "kc.message.topic";
   private static final String KC_MESSAGE_PARTITION_COUNT = "kc.message.partition.count";  // todo: get partition count from topic
+
+  public static final String KC_OUTPUT_TOPIC_PREFIX_KEY = "kc.output.topic.prefix";
+
   // helix related cofig
   private static final String HELIX_CLUSTER_NAME = "helix.cluster.name";
   private static final String ZK_STR = "zk.str";
@@ -111,8 +114,8 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
     return this.subset(SERVER_CONFIG).getInt(KeyCoordinatorConf.PORT, KeyCoordinatorConf.PORT_DEFAULT);
   }
 
-  public String getHelixClusterName() {
-    return this.getString(HELIX_CLUSTER_NAME);
+  public String getTopicPrefix() {
+    return this.getString(KC_OUTPUT_TOPIC_PREFIX_KEY);
   }
 
   public String getKeyCoordinatorClusterName() {
