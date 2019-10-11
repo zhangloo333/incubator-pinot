@@ -18,6 +18,8 @@
  */
 package org.apache.pinot.broker.upsert;
 
+import org.apache.pinot.common.metrics.BrokerMetrics;
+
 import java.util.Map;
 
 /**
@@ -27,6 +29,10 @@ import java.util.Map;
 public interface LowWaterMarkService {
     // Return the low water mark mapping from partition id to the corresponding low water mark of a given table.
     Map<Integer, Long> getLowWaterMarks(String tableName);
+
     // Shutdown the service.
     void shutDown();
+
+    // start
+    void start(BrokerMetrics brokerMetrics);
 }

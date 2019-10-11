@@ -170,6 +170,12 @@ public class HelixBrokerStarter {
     _propertyStore = _spectatorHelixManager.getHelixPropertyStore();
     _helixDataAccessor = _spectatorHelixManager.getHelixDataAccessor();
 
+    // start lwm service
+    _lwmService = new PollingBasedLowWaterMarkService(_spectatorHelixManager.getHelixDataAccessor(), _clusterName,
+        _brokerConf.getInt(CommonConstants.Broker.CONFIG_OF_BROKER_POLLING_SERVER_LWMS_INTERVAL_MS, 5 * 1000),
+        _brokerConf.getInt(CommonConstants.Broker.CONFIG_OF_BROKER_POLLING_SERVER_LWMS_SERVER_PORT,
+            CommonConstants.Server.DEFAULT_ADMIN_API_PORT));
+
     // Set up the broker server builder
     LOGGER.info("Setting up broker server builder");
     _helixExternalViewBasedRouting =
@@ -191,10 +197,7 @@ public class HelixBrokerStarter {
     _brokerServerBuilder.start();
 
     // start lwm service
-    _lwmService = new PollingBasedLowWaterMarkService(_spectatorHelixManager.getHelixDataAccessor(), _clusterName,
-        _brokerConf.getInt(CommonConstants.Broker.CONFIG_OF_BROKER_POLLING_SERVER_LWMS_INTERVAL_MS, 5 * 1000),
-        _brokerConf.getInt(CommonConstants.Broker.CONFIG_OF_BROKER_POLLING_SERVER_LWMS_SERVER_PORT,
-            CommonConstants.Server.DEFAULT_ADMIN_API_PORT), brokerMetrics);
+    _lwmService.start(brokerMetrics);
 
     // Initialize the cluster change mediator
     LOGGER.info("Initializing cluster change mediator");

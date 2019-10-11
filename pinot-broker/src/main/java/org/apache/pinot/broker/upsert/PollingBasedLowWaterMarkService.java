@@ -18,11 +18,6 @@
  */
 package org.apache.pinot.broker.upsert;
 
-import com.google.common.base.Preconditions;
-import org.apache.pinot.common.metrics.BrokerGauge;
-import org.apache.pinot.common.metrics.BrokerMeter;
-import org.apache.pinot.common.metrics.BrokerMetrics;
-import org.apache.pinot.common.restlet.resources.TableLowWaterMarksInfo;
 import org.apache.helix.AccessOption;
 import org.apache.helix.HelixDataAccessor;
 import org.apache.helix.PropertyPathBuilder;
@@ -30,6 +25,10 @@ import org.apache.helix.ZNRecord;
 import org.apache.helix.manager.zk.ZkBaseDataAccessor;
 import org.apache.helix.manager.zk.ZkCacheBaseDataAccessor;
 import org.apache.helix.model.InstanceConfig;
+import org.apache.pinot.common.metrics.BrokerGauge;
+import org.apache.pinot.common.metrics.BrokerMeter;
+import org.apache.pinot.common.metrics.BrokerMetrics;
+import org.apache.pinot.common.restlet.resources.TableLowWaterMarksInfo;
 import org.glassfish.jersey.client.ClientProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,7 +67,7 @@ public class PollingBasedLowWaterMarkService implements LowWaterMarkService {
   private BrokerMetrics _brokerMetrics;
 
   public PollingBasedLowWaterMarkService(HelixDataAccessor helixDataAccessor, String helixClusterName,
-                                         int serverPollingInterval, int serverPort, BrokerMetrics brokerMetrics) {
+                                         int serverPollingInterval, int serverPort) {
     // Construct the zk path to get the server instances.
     String instanceConfigs = PropertyPathBuilder.instanceConfig(helixClusterName);
     // Build a zk data reader.
@@ -81,7 +80,6 @@ public class PollingBasedLowWaterMarkService implements LowWaterMarkService {
     _httpClient.property(ClientProperties.READ_TIMEOUT, SERVER_READ_TIMEOUT);
     _serverPollingInterval = serverPollingInterval;
     _serverPort = serverPort;
-    _brokerMetrics = brokerMetrics;
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
       public void run() {
@@ -92,7 +90,11 @@ public class PollingBasedLowWaterMarkService implements LowWaterMarkService {
         }
       }
     });
+  }
 
+  @Override
+  public void start(BrokerMetrics brokerMetrics) {
+    _brokerMetrics = brokerMetrics;
     Thread serverPollingThread = new Thread(new PinotServerPollingExecutor());
     serverPollingThread.start();
   }
