@@ -18,40 +18,31 @@
  */
 package org.apache.pinot.grigio.common.storageProvider.retentionManager;
 
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
-import org.apache.pinot.common.utils.IdealStateHelper;
-import org.apache.pinot.common.utils.LLCSegmentName;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
+import org.apache.pinot.grigio.common.utils.IdealStateHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
-public class KCUpdateLogTableRetentionManagerImpl implements UpdateLogTableRetentionManager {
+public class KCUpdateLogTableRetentionManagerImpl extends UpdateLogTableRetentionManager {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(KCUpdateLogTableRetentionManagerImpl.class);
 
   private Set<String> _segments;
-  private Map<Integer, LLCSegmentName> _partitionToLastSegment;
-  private final Map<String, String> _blackListedSegments;
-  private final String _tableName;
   private final UpdateLogStorageProvider _provider;
-  private final IdealStateHelper _idealStateHelper;
 
   public KCUpdateLogTableRetentionManagerImpl(IdealStateHelper idealStateHelper, String tableName, UpdateLogStorageProvider provider) throws IOException {
-
+    super(idealStateHelper, tableName);
     _provider = provider;
-    _tableName = tableName;
-    _idealStateHelper = idealStateHelper;
-    _blackListedSegments = new ConcurrentHashMap<>();
+    // load the current update log on this server and match it with helix stored state,
+    // so we can remove any unused update logs
     _provider.loadTable(tableName);
     _segments = _provider.getAllSegments(tableName);
-    _partitionToLastSegment = UpdateLogTableRetentionManager.getPartitionToLastSegment(_segments);
+    updateStateFromHelix();
   }
 
   public synchronized void updateSegmentsAndRemoveOldFiles(Set<String> newSegmentSet) {
@@ -69,40 +60,17 @@ public class KCUpdateLogTableRetentionManagerImpl implements UpdateLogTableReten
     }
   }
 
-  private synchronized void updateSegments(Set<String> newSegmentSet) {
-    _segments = newSegmentSet;
-    _partitionToLastSegment = UpdateLogTableRetentionManager.getPartitionToLastSegment(_segments);
-  }
-
-  public Set<String> getAllSegments() {
-    return ImmutableSet.copyOf(_segments);
+  @Override
+  protected boolean isSegmentAssignedToCurrentServer(String segmentName) {
+    // always return true as key coordinator should store whatever segment sent to it
+    return true;
   }
 
   @Override
-  public synchronized boolean shouldIngestForSegment(String segmentName) {
-    if (_segments.contains(segmentName)) {
-      return true;
-    } else if (_blackListedSegments.containsKey(segmentName)) {
-      return false;
-    } else {
-      LLCSegmentName llcSegmentName = new LLCSegmentName(segmentName);
-      int partition = llcSegmentName.getPartitionId();
-      if (!_partitionToLastSegment.containsKey(llcSegmentName.getPartitionId())
-          || UpdateLogTableRetentionManager.compareSegment(llcSegmentName, _partitionToLastSegment.get(partition))) {
-        updateStateFromHelix();
-        if (_segments.contains(segmentName)) {
-          LOGGER.info("segment {} matched in ideal state after refresh", segmentName);
-          return true;
-        }
-      }
-      _blackListedSegments.put(segmentName, segmentName);
-      return false;
-    }
-  }
-
-  private void updateStateFromHelix() {
+  protected void updateStateFromHelix() {
     long start = System.currentTimeMillis();
-    updateSegmentsAndRemoveOldFiles(_idealStateHelper.getSegmentToInstanceMap(_tableName).keySet());
+    super.updateStateFromHelix();
+    updateSegmentsAndRemoveOldFiles(_segmentsToInstanceMap.keySet());
     LOGGER.info("updated table {} state from helix in {} ms", _tableName, System.currentTimeMillis() - start);
   }
 

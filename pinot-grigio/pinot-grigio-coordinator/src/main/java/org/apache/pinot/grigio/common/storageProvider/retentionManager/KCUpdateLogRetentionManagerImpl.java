@@ -22,7 +22,7 @@ import org.apache.helix.NotificationContext;
 import org.apache.helix.api.listeners.IdealStateChangeListener;
 import org.apache.helix.model.IdealState;
 import org.apache.pinot.common.Utils;
-import org.apache.pinot.common.utils.IdealStateHelper;
+import org.apache.pinot.grigio.common.utils.IdealStateHelper;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

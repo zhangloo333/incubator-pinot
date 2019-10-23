@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.common.utils;
+package org.apache.pinot.grigio.common.utils;
 
 import org.apache.helix.HelixAdmin;
 import org.apache.helix.model.IdealState;

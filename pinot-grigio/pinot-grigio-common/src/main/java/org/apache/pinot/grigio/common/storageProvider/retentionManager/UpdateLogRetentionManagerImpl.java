@@ -18,7 +18,7 @@
  */
 package org.apache.pinot.grigio.common.storageProvider.retentionManager;
 
-import org.apache.pinot.common.utils.IdealStateHelper;
+import org.apache.pinot.grigio.common.utils.IdealStateHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -24,7 +24,7 @@ import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang.StringUtils;
 import org.apache.pinot.common.metrics.MetricsHelper;
 import org.apache.pinot.common.utils.CommonConstants;
-import org.apache.pinot.common.utils.IdealStateHelper;
+import org.apache.pinot.grigio.common.utils.IdealStateHelper;
 import org.apache.pinot.grigio.common.config.CommonConfig;
 import org.apache.pinot.grigio.common.rpcQueue.KeyCoordinatorQueueConsumer;
 import org.apache.pinot.grigio.common.rpcQueue.LogCoordinatorQueueProducer;
