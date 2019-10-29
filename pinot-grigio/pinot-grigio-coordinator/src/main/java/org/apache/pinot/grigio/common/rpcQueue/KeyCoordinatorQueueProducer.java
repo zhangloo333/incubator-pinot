@@ -22,10 +22,10 @@ import com.google.common.base.Preconditions;
 import org.apache.commons.configuration.Configuration;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.pinot.grigio.common.CoordinatorConfig;
 import org.apache.pinot.grigio.common.DistributedCommonUtils;
+import org.apache.pinot.grigio.common.FixedPartitionCountBytesPartitioner;
 import org.apache.pinot.grigio.common.config.CommonConfig;
 import org.apache.pinot.grigio.common.messages.KeyCoordinatorQueueMsg;
 import org.apache.pinot.grigio.common.metrics.GrigioMetrics;
@@ -67,7 +67,7 @@ public class KeyCoordinatorQueueProducer extends KafkaQueueProducer<byte[], KeyC
         conf.subset(CoordinatorConfig.KAFKA_CONFIG.KAFKA_CONFIG_KEY));
 
     kafkaProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-    kafkaProducerConfig.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, DefaultPartitioner.class.getName());
+    kafkaProducerConfig.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, FixedPartitionCountBytesPartitioner.class.getName());
     DistributedCommonUtils.setKakfaLosslessProducerConfig(kafkaProducerConfig, hostname);
 
     _kafkaProducer = new KafkaProducer<>(kafkaProducerConfig);

@@ -25,7 +25,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.pinot.grigio.common.CoordinatorConfig;
 import org.apache.pinot.grigio.common.DistributedCommonUtils;
-import org.apache.pinot.grigio.common.IntPartitioner;
+import org.apache.pinot.grigio.common.FixedPartitionCountIntPartitioner;
 import org.apache.pinot.grigio.common.config.CommonConfig;
 import org.apache.pinot.grigio.common.messages.KeyCoordinatorQueueMsg;
 import org.apache.pinot.grigio.common.metrics.GrigioMetrics;
@@ -66,7 +66,7 @@ public class VersionMsgQueueProducer extends KafkaQueueProducer<Integer, KeyCoor
         conf.subset(CoordinatorConfig.KAFKA_CONFIG.KAFKA_CONFIG_KEY));
 
     kafkaProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class.getName());
-    kafkaProducerConfig.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, IntPartitioner.class.getName());
+    kafkaProducerConfig.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, FixedPartitionCountIntPartitioner.class.getName());
     DistributedCommonUtils.setKakfaLosslessProducerConfig(kafkaProducerConfig, hostname);
 
     _kafkaProducer = new KafkaProducer<>(kafkaProducerConfig);

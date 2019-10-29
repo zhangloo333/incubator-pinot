@@ -29,7 +29,7 @@ import org.apache.pinot.grigio.common.metrics.GrigioMetrics;
 import org.apache.pinot.grigio.common.utils.CommonUtils;
 import org.apache.pinot.grigio.common.CoordinatorConfig;
 import org.apache.pinot.grigio.common.DistributedCommonUtils;
-import org.apache.pinot.grigio.common.IntPartitioner;
+import org.apache.pinot.grigio.common.FixedPartitionCountIntPartitioner;
 
 import java.util.Properties;
 
@@ -65,7 +65,7 @@ public class LogCoordinatorQueueProducer extends KafkaQueueProducer<Integer, Log
     _grigioMetrics = grigioMetrics;
 
     kafkaProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class.getName());
-    kafkaProducerConfig.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, IntPartitioner.class.getName());
+    kafkaProducerConfig.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, FixedPartitionCountIntPartitioner.class.getName());
     DistributedCommonUtils.setKakfaLosslessProducerConfig(kafkaProducerConfig, hostName);
 
     this._kafkaProducer = new KafkaProducer<>(kafkaProducerConfig);

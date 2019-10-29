@@ -62,7 +62,7 @@ public class KeyCoordinatorConf extends PropertiesConfiguration {
   public static final String KAFKA_CONSUMER_GROUP_ID_PREFIX = "pinot_upsert_kc_consumerGroup_";
 
   private static final String KC_MESSAGE_TOPIC = "kc.message.topic";
-  private static final String KC_MESSAGE_PARTITION_COUNT = "kc.message.partition.count";  // todo: get partition count from topic
+  private static final String KC_MESSAGE_PARTITION_COUNT = "kc.message.partition.count";
 
   public static final String KC_OUTPUT_TOPIC_PREFIX_KEY = "kc.output.topic.prefix";
 

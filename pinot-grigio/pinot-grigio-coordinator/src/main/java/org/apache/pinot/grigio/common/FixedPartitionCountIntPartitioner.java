@@ -19,28 +19,24 @@
 package org.apache.pinot.grigio.common;
 
 import com.google.common.base.Preconditions;
-import org.apache.kafka.clients.producer.Partitioner;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.PartitionInfo;
 
-import java.util.List;
-import java.util.Map;
 
-public class IntPartitioner implements Partitioner {
+/**
+ * Fixed partition count partitioner that assumes that the primary key is integer and use it as the partition directly
+ */
+public class FixedPartitionCountIntPartitioner extends FixedPartitionCountPartitioner {
+
   @Override
   public int partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes, Cluster cluster) {
     Preconditions.checkState(key instanceof Integer, "expect key to be an integer");
-    List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
-    int numPartitions = partitions.size();
-    return (Integer) key % numPartitions;
-  }
-
-  @Override
-  public void close() {
-
-  }
-
-  @Override
-  public void configure(Map<String, ?> configs) {
+    int numPartitions = cluster.partitionCountForTopic(topic);
+    int partitionCount = getPartitionCount();
+    if (partitionCount > numPartitions) {
+      throw new IllegalArgumentException(String
+          .format("Cannot partition to %d partitions for records in topic %s, which has only %d partitions.",
+              partitionCount, topic, numPartitions));
+    }
+    return (Integer) key % partitionCount;
   }
 }
