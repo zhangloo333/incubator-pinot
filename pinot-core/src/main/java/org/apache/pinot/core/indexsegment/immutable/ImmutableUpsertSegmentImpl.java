@@ -20,7 +20,6 @@ package org.apache.pinot.core.indexsegment.immutable;
 
 import com.clearspring.analytics.util.Preconditions;
 import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
 import org.apache.pinot.common.config.TableNameBuilder;
 import org.apache.pinot.common.data.Schema;
@@ -44,6 +43,7 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -59,9 +59,10 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
   private final int _totalDoc;
   private final ColumnIndexContainer _offsetColumnIndexContainer;
   private final UpsertWaterMarkManager _upsertWaterMarkManager;
-  // right now we use map for this storage. But it will cost 12 bytes per record. It will translate to 12GB for 1B records
-  // will look into reducing this cost later
-  private final ImmutableMap<Long, Integer> _sourceOffsetToDocId;
+  private long _minSourceOffset;
+  // use array for mapping bewteen offset to docId, where actual offset = min_offset + array_index
+  // use 4 bytes per record
+  private int[] _sourceOffsetToDocIdArray;
 
   public ImmutableUpsertSegmentImpl(SegmentDirectory segmentDirectory,
                                     SegmentMetadataImpl segmentMetadata,
@@ -83,13 +84,15 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
         _virtualColumnsReaderWriter.add((VirtualColumnLongValueReaderWriter) container.getForwardIndex());
       }
     }
-    _sourceOffsetToDocId = buildOffsetToDocIdMap();
+     buildOffsetToDocIdMap();
   }
 
-  private ImmutableMap<Long, Integer> buildOffsetToDocIdMap() {
+  private void buildOffsetToDocIdMap() {
     final DataFileReader reader = _offsetColumnIndexContainer.getForwardIndex();
     final Dictionary dictionary = _offsetColumnIndexContainer.getDictionary();
-    ImmutableMap.Builder<Long, Integer> kafkaOffsetToDocIdBuilder = ImmutableMap.builder();
+    Map<Long, Integer> kafkaOffsetToDocIdMap = new HashMap<>();
+    long minOffset = Long.MAX_VALUE;
+    long maxOffset = 0;
     if (reader instanceof BaseSingleColumnSingleValueReader) {
       BaseSingleColumnSingleValueReader scsvReader = (BaseSingleColumnSingleValueReader) reader;
       for (int docId = 0; docId < _totalDoc; docId++) {
@@ -102,10 +105,21 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
         if (offset == null) {
           LOGGER.error("kafka offset is null at docID {}", docId);
         } else {
-          kafkaOffsetToDocIdBuilder.put(offset, docId);
+          minOffset = Math.min(offset, minOffset);
+          maxOffset = Math.max(offset, maxOffset);
+          kafkaOffsetToDocIdMap.put(offset, docId);
         }
       }
-      return kafkaOffsetToDocIdBuilder.build();
+      _minSourceOffset = minOffset;
+      int size = Math.toIntExact(maxOffset - minOffset + 1);
+      _sourceOffsetToDocIdArray = new int[size];
+      for (int i = 0; i < size; i++) {
+        if (kafkaOffsetToDocIdMap.containsKey(i + minOffset)) {
+          _sourceOffsetToDocIdArray[i] = kafkaOffsetToDocIdMap.get(i + minOffset);
+        } else {
+          _sourceOffsetToDocIdArray[i] = -1;
+        }
+      }
     } else {
       throw new RuntimeException("unexpected forward reader type for kafka offset column " + reader.getClass());
     }
@@ -121,30 +135,22 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
   public void updateVirtualColumn(List<UpdateLogEntry> logEntryList) {
     for (UpdateLogEntry logEntry: logEntryList) {
       boolean updated = false;
-      Integer docId = _sourceOffsetToDocId.get(logEntry.getOffset());
-      if (docId == null) {
-        LOGGER.warn("segment {} failed to found docId for log update entry {}", _segmentName, logEntry.toString());
-      } else {
-        for (VirtualColumnLongValueReaderWriter readerWriter : _virtualColumnsReaderWriter) {
-          updated = readerWriter.update(docId, logEntry.getValue(), logEntry.getType()) || updated;
-        }
-        if (updated) {
-          _upsertWaterMarkManager.processMessage(_tableNameWithType, _segmentName, logEntry);
-        }
+      int docId = getDocIdFromSourceOffset(logEntry.getOffset());
+      for (VirtualColumnLongValueReaderWriter readerWriter : _virtualColumnsReaderWriter) {
+        updated = readerWriter.update(docId, logEntry.getValue(), logEntry.getType()) || updated;
+      }
+      if (updated) {
+        _upsertWaterMarkManager.processMessage(_tableNameWithType, _segmentName, logEntry);
       }
     }
   }
 
   @Override
   public String getVirtualColumnInfo(long offset) {
-    Integer docId = _sourceOffsetToDocId.get(offset);
+    int docId = getDocIdFromSourceOffset(offset);
     StringBuilder result = new StringBuilder("matched: ");
-    if (docId == null) {
-      result = new StringBuilder("no doc id found ");
-    } else {
-      for (VirtualColumnLongValueReaderWriter readerWriter : _virtualColumnsReaderWriter) {
-        result.append(readerWriter.getLong(docId)).append("; ");
-      }
+    for (VirtualColumnLongValueReaderWriter readerWriter : _virtualColumnsReaderWriter) {
+      result.append(readerWriter.getLong(docId)).append("; ");
     }
     return result.toString();
   }
@@ -162,25 +168,50 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
     for (UpdateLogEntry logEntry: updateLogEntries) {
       updateLogEntryMap.put(logEntry.getOffset(), logEntry);
     }
-    for (Map.Entry<Long, Integer> mapEntry: _sourceOffsetToDocId.entrySet()) {
-      final long offset = mapEntry.getKey();
-      final int docId = mapEntry.getValue();
-      if (updateLogEntryMap.containsKey(offset)) {
-        boolean updated = false;
-        Collection<UpdateLogEntry> entries = updateLogEntryMap.get(offset);
-        UpdateLogEntry lastEntry = null;
-        for (UpdateLogEntry entry : entries) {
-          lastEntry = entry;
-          for (VirtualColumnLongValueReaderWriter readerWriter : _virtualColumnsReaderWriter) {
-            updated = readerWriter.update(docId, entry.getValue(), entry.getType()) || updated;
+    for (int i = 0; i < _sourceOffsetToDocIdArray.length; i++) {
+      if (_sourceOffsetToDocIdArray[i] != -1) {
+        final long offset = i + _minSourceOffset;
+        final int docId = _sourceOffsetToDocIdArray[i];
+        if (updateLogEntryMap.containsKey(offset)) {
+          boolean updated = false;
+          Collection<UpdateLogEntry> entries = updateLogEntryMap.get(offset);
+          UpdateLogEntry lastEntry = null;
+          for (UpdateLogEntry entry : entries) {
+            lastEntry = entry;
+            for (VirtualColumnLongValueReaderWriter readerWriter : _virtualColumnsReaderWriter) {
+              updated = readerWriter.update(docId, entry.getValue(), entry.getType()) || updated;
+            }
           }
-        }
-        if (updated) {
-          _upsertWaterMarkManager.processMessage(_tableNameWithType, _segmentName, lastEntry);
+          if (updated) {
+            _upsertWaterMarkManager.processMessage(_tableNameWithType, _segmentName, lastEntry);
+          }
         }
       }
     }
     LOGGER.info("loaded {} update log entries for current immutable segment {} in {} ms", updateLogEntries.size(),
         _segmentName, System.currentTimeMillis() - start);
+  }
+
+  /**
+   * given a offset from source kafka topic, return the docId associated with it
+   * throw exception if there is no docId for the associated kafka offset (because kafka offset might not be continuous)
+   * @param offset offset in the source topic
+   * @return the corresponding docId
+   */
+  private int getDocIdFromSourceOffset(long offset) throws RuntimeException {
+    if (offset < _minSourceOffset || offset - _minSourceOffset >= _sourceOffsetToDocIdArray.length) {
+      LOGGER.error("offset {} is outside range for current segment {} start offset {} size {}",
+          offset, _segmentName, _minSourceOffset, _sourceOffsetToDocIdArray.length);
+      throw new RuntimeException("offset outside range");
+    } else {
+      int position = Math.toIntExact(offset - _minSourceOffset);
+      if (_sourceOffsetToDocIdArray[position] == -1) {
+        LOGGER.error("no docId associated with offset {} for segment {}", offset, _segmentName);
+        throw new RuntimeException("docId not found");
+      } else {
+        return _sourceOffsetToDocIdArray[position];
+      }
+    }
+
   }
 }

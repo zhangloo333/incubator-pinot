@@ -23,16 +23,14 @@
   <parent>
     <artifactId>pinot-grigio</artifactId>
     <groupId>org.apache.pinot</groupId>
-    <version>0.2.2.5.44-SNAPSHOT</version>
+    <version>0.2.2.5.45-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
-
   <artifactId>pinot-grigio-coordinator</artifactId>
   <name>Pinot Grigio Coordinator</name>
   <properties>
     <pinot.root>${basedir}/../..</pinot.root>
   </properties>
-
   <dependencies>
     <dependency>
       <groupId>org.glassfish.jersey.containers</groupId>
