@@ -18,7 +18,7 @@
  */
 package org.apache.pinot.grigio.common.keyValueStore;
 
-import com.google.common.base.Preconditions;
+import org.apache.pinot.common.utils.retry.RetryPolicies;
 import org.apache.pinot.grigio.common.messages.KeyCoordinatorMessageContext;
 import org.rocksdb.Options;
 import org.rocksdb.ReadOptions;
@@ -65,7 +65,9 @@ public class RocksDBKeyValueStoreTable implements KeyValueStoreTable<ByteArrayWr
   public Map<ByteArrayWrapper, KeyCoordinatorMessageContext> multiGet(List<ByteArrayWrapper> keys) throws IOException {
     try {
       List<byte[]> byteKeys = keys.stream().map(ByteArrayWrapper::getData).collect(Collectors.toList());
-      Map<byte[], byte[]> rocksdbResult = _db.multiGet(byteKeys);
+      RocksDBBatchReader batchReader = new RocksDBBatchReader(_db, byteKeys);
+      RetryPolicies.fixedDelayRetryPolicy(RocksDBBatchReader.MAX_RETRY_ATTEMPTS, RocksDBBatchReader.RETRY_WAIT_MS).attempt(batchReader);
+      Map<byte[], byte[]> rocksdbResult = batchReader.getResult();
       Map<ByteArrayWrapper, KeyCoordinatorMessageContext> result = new HashMap<>(rocksdbResult.size());
       for (Map.Entry<byte[], byte[]> entry : rocksdbResult.entrySet()) {
         Optional<KeyCoordinatorMessageContext> value = KeyCoordinatorMessageContext.fromBytes(entry.getValue());
@@ -76,26 +78,8 @@ public class RocksDBKeyValueStoreTable implements KeyValueStoreTable<ByteArrayWr
         }
       }
       return result;
-    } catch (RocksDBException e) {
+    } catch (Exception e) {
       throw new IOException("failed to get keys from rocksdb " + _path, e);
-    }
-  }
-
-  @Override
-  public void multiPut(List<ByteArrayWrapper> keys, List<KeyCoordinatorMessageContext> values) throws IOException {
-    Preconditions.checkState(keys.size() == values.size(),
-        "keys size {} does not match values size {}", keys.size(), values.size());
-    if (keys.size() == 0) {
-      return;
-    }
-    final WriteBatch batch = new WriteBatch();
-    try {
-      for (int i = 0; i < keys.size(); i++) {
-        batch.put(keys.get(i).getData(), values.get(i).toBytes());
-      }
-      _db.write(_writeOptions, batch);
-    } catch (RocksDBException e) {
-      throw new IOException("failed to put data to rocksdb table " + _path, e);
     }
   }
 
@@ -109,8 +93,9 @@ public class RocksDBKeyValueStoreTable implements KeyValueStoreTable<ByteArrayWr
       for (Map.Entry<ByteArrayWrapper, KeyCoordinatorMessageContext> entry: keyValuePairs.entrySet()) {
         batch.put(entry.getKey().getData(), entry.getValue().toBytes());
       }
-      _db.write(_writeOptions, batch);
-    } catch (RocksDBException e) {
+      RocksDBBatchWriter batchWriter = new RocksDBBatchWriter(_db, _writeOptions, batch);
+      RetryPolicies.fixedDelayRetryPolicy(RocksDBBatchWriter.MAX_RETRY_ATTEMPTS, RocksDBBatchWriter.RETRY_WAIT_MS).attempt(batchWriter);
+    } catch (Exception e) {
       throw new IOException("failed to put data to rocksdb table " + _path, e);
     }
 
