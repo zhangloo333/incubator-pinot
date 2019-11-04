@@ -67,6 +67,9 @@ public class FixedPartitionCountBytesPartitionerTest {
     Cluster cluster = mock(Cluster.class);
     when(cluster.partitionCountForTopic(topic)).thenReturn(2);
 
-    partitioner.partition(topic, null, null, null, null, cluster);
+    String key = "test-key";
+    byte[] keyBytes = key.getBytes();
+
+    partitioner.partition(topic, key, keyBytes, null, null, cluster);
   }
 }
