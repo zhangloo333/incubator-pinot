@@ -78,7 +78,7 @@ public abstract class UpdateLogTableRetentionManager {
       int partition = llcSegmentName.getPartitionId();
       if (!partitionLastSeg.containsKey(partition)) {
         partitionLastSeg.put(partition, llcSegmentName);
-      } else if (partitionLastSeg.get(partition).getSequenceNumber() < llcSegmentName.getSequenceNumber()) {
+      } else if (compareSegment(llcSegmentName, partitionLastSeg.get(partition))) {
         partitionLastSeg.put(partition, llcSegmentName);
       }
     }
@@ -110,6 +110,7 @@ public abstract class UpdateLogTableRetentionManager {
       }
       // we most probably got a segment that is from a deleted table or segment assigned to another table
       // assume we don't do re-balance, we won't do refresh
+      LOGGER.warn("adding segment {} to blacklist", segmentName);
       _blacklistedSegments.put(segmentName, segmentName);
       return false;
     }

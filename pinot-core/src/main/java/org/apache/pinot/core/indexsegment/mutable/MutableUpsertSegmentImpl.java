@@ -44,6 +44,7 @@ public class MutableUpsertSegmentImpl extends MutableSegmentImpl implements Upse
 
   private final String _kafkaOffsetColumnName;
 
+
   private final List<VirtualColumnLongValueReaderWriter> _mutableSegmentReaderWriters = new ArrayList<>();
   // use map for mapping between kafka offset and docId because we at-most have 1 mutable segment per consumer
   // will use more memory, but we can update this later

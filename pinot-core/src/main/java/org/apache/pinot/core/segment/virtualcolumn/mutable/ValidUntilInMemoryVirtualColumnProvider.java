@@ -28,11 +28,16 @@ public class ValidUntilInMemoryVirtualColumnProvider extends BaseLongVirtualColu
   public DataFileReader buildReader(VirtualColumnContext context) {
     return new VirtualColumnLongValueReaderWriter(context) {
       @Override
-      public boolean update(int docId, long offset, LogEventType eventType) {
+      public boolean update(int docId, int offset, LogEventType eventType) {
         if (eventType == LogEventType.DELETE) {
           return this.updateValue(docId, offset);
         }
         return false;
+      }
+
+      @Override
+      public boolean update(int docId, long offset, LogEventType eventType) {
+        return update(docId, Math.toIntExact(offset), eventType);
       }
     };
   }

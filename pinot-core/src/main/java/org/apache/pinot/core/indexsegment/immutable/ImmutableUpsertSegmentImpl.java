@@ -150,7 +150,7 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
     int docId = getDocIdFromSourceOffset(offset);
     StringBuilder result = new StringBuilder("matched: ");
     for (VirtualColumnLongValueReaderWriter readerWriter : _virtualColumnsReaderWriter) {
-      result.append(readerWriter.getLong(docId)).append("; ");
+      result.append(readerWriter.getInt(docId)).append("; ");
     }
     return result.toString();
   }

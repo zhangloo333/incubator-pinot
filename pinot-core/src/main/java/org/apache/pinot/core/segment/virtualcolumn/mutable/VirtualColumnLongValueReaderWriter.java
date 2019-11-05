@@ -30,18 +30,17 @@ import java.util.Arrays;
 public abstract class VirtualColumnLongValueReaderWriter extends BaseVirtualColumnSingleValueReaderWriter<ChunkReaderContext> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(VirtualColumnLongValueReaderWriter.class);
-  private static final long DEFAULT_VALUE = Long.MIN_VALUE;
 
   private final VirtualColumnContext _context;
   private int _totalDocSize;
   private int _currentMaxDocId;
-  private final long[] _values;
-  private final long DEFAULT_NEW_VALUE = -1;
+  private final int [] _values;
+  private final int DEFAULT_NEW_VALUE = -1;
 
   public VirtualColumnLongValueReaderWriter(VirtualColumnContext context) {
     _context = context;
     _totalDocSize = context.getTotalDocCount();
-    _values = new long[_totalDocSize];
+    _values = new int[_totalDocSize];
     if (!_context.isMutableSegment()) {
       Arrays.fill(_values, -1);
     }
@@ -84,7 +83,7 @@ public abstract class VirtualColumnLongValueReaderWriter extends BaseVirtualColu
    * method to update the internal data to value at a given location
    * synchronized to ensure the we will not modify the internal array at the same time from multiple threads
    */
-  protected synchronized boolean updateValue(int docId, long value) {
+  protected synchronized boolean updateValue(int docId, int value) {
     if (docId >= _totalDocSize) {
       throw new RuntimeException(String.format("new record docId %s is larger than capacity %s", docId, _totalDocSize));
     }
@@ -100,5 +99,12 @@ public abstract class VirtualColumnLongValueReaderWriter extends BaseVirtualColu
     }
   }
 
+  // ensure backward compatibility
+  protected boolean updateValue(int docId, long value) {
+    return updateValue(docId, Math.toIntExact(value));
+  }
+
   public abstract boolean update(int docId, long value, LogEventType eventType);
+
+  public abstract boolean update(int docId, int value, LogEventType eventType);
 }
