@@ -25,12 +25,13 @@ public class QueueConsumerRecordTest {
 
   @Test
   public void testGets() {
-    QueueConsumerRecord<String, String> record = new QueueConsumerRecord<>("topic", 1, 2, "key", "record");
+    QueueConsumerRecord<String, String> record = new QueueConsumerRecord<>("topic", 1, 2, "key", "record", 123);
     Assert.assertEquals(record.getTopic(), "topic");
     Assert.assertEquals(record.getPartition(), 1);
     Assert.assertEquals(record.getOffset(), 2);
     Assert.assertEquals(record.getKey(), "key");
     Assert.assertEquals(record.getRecord(), "record");
+    Assert.assertEquals(record.getTimestamp(), 123);
 
   }
 }

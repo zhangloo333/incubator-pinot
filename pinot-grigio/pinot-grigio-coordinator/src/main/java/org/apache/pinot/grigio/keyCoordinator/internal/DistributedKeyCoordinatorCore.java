@@ -228,6 +228,8 @@ public class DistributedKeyCoordinatorCore {
               LOGGER.warn("exception while trying to put message to queue", e);
             }
           });
+          _metrics.setValueOfGlobalGauge(GrigioGauge.KC_INPUT_MESSAGE_LAG_MS,
+              System.currentTimeMillis() - records.get(records.size() - 1).getTimestamp());
         }
       } catch (Exception ex) {
         LOGGER.error("encountered exception in consumer ingest loop, will retry", ex);

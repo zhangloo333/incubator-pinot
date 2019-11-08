@@ -29,13 +29,15 @@ public class QueueConsumerRecord<K, V> {
   private final long _offset;
   private final K _key;
   private final V _record;
+  private final long _timestamp;
 
-  public QueueConsumerRecord(String topic, int partition, long offset, K key, V record) {
+  public QueueConsumerRecord(String topic, int partition, long offset, K key, V record, long timestamp) {
     this._topic = topic;
     this._partition = partition;
     this._offset = offset;
     this._key = key;
     this._record = record;
+    this._timestamp = timestamp;
   }
 
   public String getTopic() {
@@ -56,5 +58,9 @@ public class QueueConsumerRecord<K, V> {
 
   public V getRecord() {
     return _record;
+  }
+
+  public long getTimestamp() {
+    return _timestamp;
   }
 }

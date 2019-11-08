@@ -31,6 +31,7 @@ public enum GrigioGauge implements AbstractMetrics.Gauge {
   VERSION_PRODUCED("versions", MetricsType.KC_ONLY),
   KC_VERSION_CONSUMED("versions", MetricsType.KC_ONLY),
   SERVER_VERSION_CONSUMED("versions", MetricsType.SERVER_ONLY),
+  KC_INPUT_MESSAGE_LAG_MS("milliseconds", MetricsType.KC_ONLY)
   ;
 
   private final String _gaugeName;

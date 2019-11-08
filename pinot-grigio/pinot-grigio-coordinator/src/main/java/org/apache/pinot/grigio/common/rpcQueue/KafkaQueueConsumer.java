@@ -122,7 +122,8 @@ public abstract class KafkaQueueConsumer<K, V> implements QueueConsumer<K, V> {
       msgList = new ArrayList<>(records.count());
       for (ConsumerRecord<K, V> record : records) {
         msgList.add(
-            new QueueConsumerRecord<>(record.topic(), record.partition(), record.offset(), record.key(), record.value()));
+            new QueueConsumerRecord<>(record.topic(), record.partition(), record.offset(), record.key(), record.value(),
+                record.timestamp()));
       }
     }
     getMetrics().addMeteredGlobalValue(GrigioMeter.MESSAGE_INGEST_COUNT_PER_BATCH, msgList.size());
