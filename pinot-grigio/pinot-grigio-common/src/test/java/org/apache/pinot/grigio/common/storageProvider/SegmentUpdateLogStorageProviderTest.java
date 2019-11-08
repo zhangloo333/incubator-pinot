@@ -27,6 +27,7 @@ import org.testng.annotations.Test;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -34,6 +35,7 @@ import java.util.concurrent.Executors;
 
 public class SegmentUpdateLogStorageProviderTest {
 
+  protected volatile UpdateLogEntry entryHolder;
   SegmentUpdateLogStorageProvider provider;
   List<UpdateLogEntry> inputDataList = ImmutableList.of(
       new UpdateLogEntry(1, 2, LogEventType.INSERT, 0),
@@ -49,17 +51,19 @@ public class SegmentUpdateLogStorageProviderTest {
 
   @Test
   public void testWriteAndReadData() throws IOException {
-    List<UpdateLogEntry> logEntryList = provider.readAllMessagesFromFile();
+    UpdateLogEntrySet logEntrySet = provider.readAllMessagesFromFile();
     // new file should have no data
-    Assert.assertEquals(logEntryList.size(), 0);
+    Assert.assertEquals(logEntrySet.size(), 0);
     provider.addData(inputDataList);
 
     SegmentUpdateLogStorageProvider provider1= new SegmentUpdateLogStorageProvider(provider._file);
-    logEntryList = provider1.readAllMessagesFromFile();
-    Assert.assertEquals(logEntryList.size(), inputDataList.size());
-    Assert.assertEquals(logEntryList.get(0), inputDataList.get(0));
-    Assert.assertEquals(logEntryList.get(1), inputDataList.get(1));
-    Assert.assertEquals(logEntryList.get(2), inputDataList.get(2));
+    logEntrySet = provider1.readAllMessagesFromFile();
+    Iterator<UpdateLogEntry> it = logEntrySet.iterator();
+    Assert.assertEquals(logEntrySet.size(), inputDataList.size());
+    Assert.assertEquals(it.next(), inputDataList.get(0));
+    Assert.assertEquals(it.next(), inputDataList.get(1));
+    Assert.assertEquals(it.next(), inputDataList.get(2));
+    Assert.assertFalse(it.hasNext());
     provider.addData(inputDataList);
     Assert.assertEquals(provider.readAllMessagesFromFile().size(), inputDataList.size() * 2);
   }
@@ -72,11 +76,13 @@ public class SegmentUpdateLogStorageProviderTest {
     provider._outputStream.flush();
 
     SegmentUpdateLogStorageProvider provider1 = new SegmentUpdateLogStorageProvider(provider._file);
-    List<UpdateLogEntry> logEntryList = provider1.readAllMessagesFromFile();
-    Assert.assertEquals(logEntryList.size(), inputDataList.size());
-    Assert.assertEquals(logEntryList.get(0), inputDataList.get(0));
-    Assert.assertEquals(logEntryList.get(1), inputDataList.get(1));
-    Assert.assertEquals(logEntryList.get(2), inputDataList.get(2));
+    UpdateLogEntrySet logEntrySet = provider1.readAllMessagesFromFile();
+    Iterator<UpdateLogEntry> it = logEntrySet.iterator();
+    Assert.assertEquals(logEntrySet.size(), inputDataList.size());
+    Assert.assertEquals(it.next(), inputDataList.get(0));
+    Assert.assertEquals(it.next(), inputDataList.get(1));
+    Assert.assertEquals(it.next(), inputDataList.get(2));
+    Assert.assertFalse(it.hasNext());
   }
 
   @Test
@@ -108,18 +114,21 @@ public class SegmentUpdateLogStorageProviderTest {
     });
     service.invokeAll(tasks);
     service.shutdownNow();
-    List<UpdateLogEntry> updateLogEntries = provider.readAllMessagesFromFile();
+    UpdateLogEntrySet updateLogEntries = provider.readAllMessagesFromFile();
     Assert.assertEquals(updateLogEntries.size(), writeIterationCount * inputDataList.size());
+    Iterator<UpdateLogEntry> it = updateLogEntries.iterator();
     for (int i = 0; i < writeIterationCount; i++) {
-      Assert.assertEquals(updateLogEntries.get(i * inputDataList.size()), inputDataList.get(0));
-      Assert.assertEquals(updateLogEntries.get(i * inputDataList.size() + 1), inputDataList.get(1));
-      Assert.assertEquals(updateLogEntries.get(i * inputDataList.size() + 2), inputDataList.get(2));
+      Assert.assertEquals(it.next(), inputDataList.get(0));
+      Assert.assertEquals(it.next(), inputDataList.get(1));
+      Assert.assertEquals(it.next(), inputDataList.get(2));
     }
+    Assert.assertFalse(it.hasNext());
   }
 
   @Test
   public void testReadMesssagePerf() throws IOException {
     int totalMessageCount = 5_000_000;
+    // write a lot of data to file
     List<UpdateLogEntry> inputMessages = new ArrayList<>(totalMessageCount * 2);
     for (int i = 0; i < totalMessageCount; i++) {
       inputMessages.add(new UpdateLogEntry(i, 50, LogEventType.INSERT, i%8));
@@ -128,8 +137,25 @@ public class SegmentUpdateLogStorageProviderTest {
     long start = System.currentTimeMillis();
     provider.addData(inputMessages);
     System.out.println("write data takes ms: " + (System.currentTimeMillis() - start));
+
+    // load data from file to temp object, we don't measure this performance as it depends on disk/computer
     start = System.currentTimeMillis();
-    provider.readAllMessagesFromFile();
-    System.out.println("read data takes ms: " + (System.currentTimeMillis() - start));
+    UpdateLogEntrySet entrySet = provider.readAllMessagesFromFile();
+    long loadTime = System.currentTimeMillis() - start;
+    System.out.println("load data takes ms: " + loadTime);
+    Assert.assertTrue(entrySet.size() == totalMessageCount * 2);
+
+    // old implementation where we hold the data in array list will take 1000 - 2000 seconds for the data loading
+    // using iterator (current implementation) should make this code finished within 300 - 600 ms.
+    // test accessing those object
+    start = System.currentTimeMillis();
+    for (UpdateLogEntry entry: entrySet) {
+      // ensure we hold them in volatile member to force JVM allocate the object and
+      // prevent JIT optimize this part of code away
+      entryHolder = entry;
+    }
+    long readTime = System.currentTimeMillis() - start;
+    Assert.assertTrue(readTime < 1_000L); // this should be relatively fast
+    System.out.println("read data takes ms: " + readTime);
   }
 }

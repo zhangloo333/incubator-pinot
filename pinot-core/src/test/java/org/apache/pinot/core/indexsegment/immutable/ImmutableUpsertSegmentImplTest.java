@@ -22,6 +22,7 @@ import org.apache.pinot.core.segment.updater.UpsertWaterMarkManager;
 import org.apache.pinot.core.segment.virtualcolumn.mutable.VirtualColumnLongValueReaderWriter;
 import org.apache.pinot.grigio.common.messages.LogEventType;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
+import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntrySet;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
 import org.testng.Assert;
 import org.testng.annotations.BeforeMethod;
@@ -29,6 +30,7 @@ import org.testng.annotations.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.anyString;
@@ -92,7 +94,13 @@ public class ImmutableUpsertSegmentImplTest {
       updateLogEntries.add(new UpdateLogEntry(minOffset + i, 50, LogEventType.INSERT, i%8));
       updateLogEntries.add(new UpdateLogEntry(minOffset + i, 100, LogEventType.DELETE, i%8));
     }
-    when(_mockProvider.getAllMessages(anyString(), anyString())).thenReturn(updateLogEntries);
+    UpdateLogEntrySet entrySet = new UpdateLogEntrySet(null, 2) {
+      @Override
+      public Iterator<UpdateLogEntry> iterator() {
+        return updateLogEntries.iterator();
+      }
+    };
+    when(_mockProvider.getAllMessages(anyString(), anyString())).thenReturn(entrySet);
     System.out.println("run time for set up: " + (System.currentTimeMillis() - start));
 
     start = System.currentTimeMillis();

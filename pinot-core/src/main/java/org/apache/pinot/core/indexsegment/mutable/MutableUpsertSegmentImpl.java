@@ -27,6 +27,7 @@ import org.apache.pinot.core.segment.updater.UpsertWaterMarkManager;
 import org.apache.pinot.core.segment.virtualcolumn.mutable.VirtualColumnLongValueReaderWriter;
 import org.apache.pinot.grigio.common.messages.LogEventType;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
+import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntrySet;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,7 +44,6 @@ public class MutableUpsertSegmentImpl extends MutableSegmentImpl implements Upse
   private final UpsertWaterMarkManager upsertWaterMarkManager;
 
   private final String _kafkaOffsetColumnName;
-
 
   private final List<VirtualColumnLongValueReaderWriter> _mutableSegmentReaderWriters = new ArrayList<>();
   // use map for mapping between kafka offset and docId because we at-most have 1 mutable segment per consumer
@@ -71,8 +71,8 @@ public class MutableUpsertSegmentImpl extends MutableSegmentImpl implements Upse
   }
 
   @Override
-  public synchronized void updateVirtualColumn(List<UpdateLogEntry> logEntryList) {
-    for (UpdateLogEntry logEntry: logEntryList) {
+  public synchronized void updateVirtualColumn(Iterable<UpdateLogEntry> logEntries) {
+    for (UpdateLogEntry logEntry: logEntries) {
       boolean updated = false;
       boolean offsetFound = false;
       Integer docId = _sourceOffsetToDocId.get(logEntry.getOffset());
@@ -126,7 +126,7 @@ public class MutableUpsertSegmentImpl extends MutableSegmentImpl implements Upse
   @Override
   public void initVirtualColumn() throws IOException {
     Preconditions.checkState(_numDocsIndexed == 0, "should init virtual column before ingestion");
-    List<UpdateLogEntry> updateLogEntries = UpdateLogStorageProvider.getInstance().getAllMessages(_tableName, _segmentName);
+    UpdateLogEntrySet updateLogEntries = UpdateLogStorageProvider.getInstance().getAllMessages(_tableName, _segmentName);
     LOGGER.info("got {} update log entries for current segment {}", updateLogEntries.size(), _segmentName);
     // some physical data might have been ingested when we init virtual column, we will go through the normal update
     // flow to ensure we wont miss records

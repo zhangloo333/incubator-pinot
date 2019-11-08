@@ -74,6 +74,9 @@ public class UpdateLogEntry implements Serializable {
   }
 
   public static UpdateLogEntry fromBytesBuffer(ByteBuffer buffer) {
+    if (buffer == null) {
+      throw new RuntimeException("trying to get update log event from null buffer");
+    }
     return new UpdateLogEntry(buffer.getLong(), buffer.getLong(), LogEventType.getEventType(buffer.getInt()), buffer.getInt());
   }
 

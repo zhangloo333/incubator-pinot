@@ -21,7 +21,6 @@ package org.apache.pinot.core.indexsegment;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
 
 import java.io.IOException;
-import java.util.List;
 
 public interface UpsertSegment {
 
@@ -29,7 +28,7 @@ public interface UpsertSegment {
    * update the upsert-related virtual columns with the new values in this list of update logs
    * @param messages list of updates logs to update the virtual columns
    */
-  void updateVirtualColumn(List<UpdateLogEntry> messages);
+  void updateVirtualColumn(Iterable<UpdateLogEntry> messages);
 
   /**
    * get the upsert related virtual column debug info given an offset

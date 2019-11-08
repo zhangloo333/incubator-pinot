@@ -26,7 +26,6 @@ import org.apache.commons.configuration.PropertiesConfiguration;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.List;
 import java.util.Scanner;
 
 /**
@@ -56,10 +55,10 @@ public class UpdateLogStorageExplorer {
     String segmentName = inputSplits[1];
 
     provider.loadTable(tableName);
-    List<UpdateLogEntry> updateLogEntryList = provider.getAllMessages(tableName, segmentName);
+    UpdateLogEntrySet updateLogEntrySet = provider.getAllMessages(tableName, segmentName);
     Multimap<Long, UpdateLogEntry> map = ArrayListMultimap.create();
-    System.out.println("update log size: " + updateLogEntryList.size());
-    updateLogEntryList.forEach(u -> {
+    System.out.println("update log size: " + updateLogEntrySet.size());
+    updateLogEntrySet.forEach(u -> {
       map.put(u.getOffset(), u);
     });
 

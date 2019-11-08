@@ -18,8 +18,6 @@
  */
 package org.apache.pinot.grigio.common.messages;
 
-import com.google.common.base.Preconditions;
-
 import java.util.HashMap;
 import java.util.Map;
 
@@ -44,9 +42,7 @@ public enum LogEventType {
     return this._uuid;
   }
 
-  public static LogEventType getEventType(long uuid) {
-    int uuidInt = Math.toIntExact(uuid);
-    Preconditions.checkState(UUID_MAP.containsKey(uuidInt));
-    return UUID_MAP.get(uuidInt);
+  public static LogEventType getEventType(int uuid) {
+    return UUID_MAP.get(uuid);
   }
 }

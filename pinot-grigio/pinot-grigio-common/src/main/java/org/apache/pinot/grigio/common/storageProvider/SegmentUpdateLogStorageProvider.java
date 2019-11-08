@@ -20,8 +20,6 @@ package org.apache.pinot.grigio.common.storageProvider;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
-import org.apache.pinot.grigio.common.messages.LogEventType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,7 +31,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -57,31 +54,15 @@ public class SegmentUpdateLogStorageProvider {
     _outputStream = new FileOutputStream(_file, true);
   }
 
-  public synchronized List<UpdateLogEntry> readAllMessagesFromFile() throws IOException {
-    long start = System.currentTimeMillis();
-    int insertMessageCount = 0;
-    int deleteMessageCount = 0;
+  public synchronized UpdateLogEntrySet readAllMessagesFromFile() throws IOException {
     int fileLength = (int) _file.length();
     if (fileLength > 0) {
       ByteBuffer buffer = ByteBuffer.allocate(fileLength);
       readFullyFromBeginning(_file, buffer);
       int messageCount = fileLength / UpdateLogEntry.SIZE;
-      List<UpdateLogEntry> logs = new ArrayList<>(messageCount);
-      for (int i = 0; i < messageCount; i++) {
-        UpdateLogEntry logEntry = UpdateLogEntry.fromBytesBuffer(buffer);
-        if ((logEntry.getType() == LogEventType.INSERT)) {
-          insertMessageCount++;
-        } else {
-          deleteMessageCount++;
-        }
-        logs.add(logEntry);
-      }
-      buffer.clear();
-      LOGGER.info("loaded {} message from file, {} insert and {} delete in {} ms", messageCount, insertMessageCount,
-          deleteMessageCount, System.currentTimeMillis() - start);
-      return logs;
+      return new UpdateLogEntrySet(buffer, messageCount);
     } else {
-      return ImmutableList.of();
+      return UpdateLogEntrySet.getEmptySet();
     }
   }
 

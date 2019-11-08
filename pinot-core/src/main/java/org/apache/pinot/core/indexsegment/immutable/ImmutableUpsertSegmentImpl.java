@@ -34,6 +34,7 @@ import org.apache.pinot.core.segment.updater.UpsertWaterMarkManager;
 import org.apache.pinot.core.segment.virtualcolumn.mutable.VirtualColumnLongValueReaderWriter;
 import org.apache.pinot.core.startree.v2.store.StarTreeIndexContainer;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
+import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntrySet;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -149,8 +150,8 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
   }
 
   @Override
-  public void updateVirtualColumn(List<UpdateLogEntry> logEntryList) {
-    for (UpdateLogEntry logEntry: logEntryList) {
+  public void updateVirtualColumn(Iterable<UpdateLogEntry> logEntries) {
+    for (UpdateLogEntry logEntry: logEntries) {
       boolean updated = false;
       int docId = getDocIdFromSourceOffset(logEntry.getOffset());
       for (VirtualColumnLongValueReaderWriter readerWriter : _virtualColumnsReaderWriter) {
@@ -180,7 +181,7 @@ public class ImmutableUpsertSegmentImpl extends ImmutableSegmentImpl implements 
   @Override
   public void initVirtualColumn() throws IOException {
     long start = System.currentTimeMillis();
-    final List<UpdateLogEntry> updateLogEntries = _updateLogStorageProvider.getAllMessages(_tableNameWithType, _segmentName);
+    final UpdateLogEntrySet updateLogEntries = _updateLogStorageProvider.getAllMessages(_tableNameWithType, _segmentName);
     LOGGER.info("load {} update log entry from update log storage provider for segment {} in {} ms",
         updateLogEntries.size(), _segmentName, System.currentTimeMillis() - start);
 

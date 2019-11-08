@@ -20,7 +20,6 @@ package org.apache.pinot.grigio.common.storageProvider;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang.StringUtils;
@@ -142,18 +141,18 @@ public class UpdateLogStorageProvider {
     }
   }
 
-  public List<UpdateLogEntry> getAllMessages(String tableName, String segmentName) throws IOException {
+  public UpdateLogEntrySet getAllMessages(String tableName, String segmentName) throws IOException {
     if (_virtualColumnStorage.containsKey(tableName)) {
       SegmentUpdateLogStorageProvider provider = _virtualColumnStorage.get(tableName).get(segmentName);
       if (provider != null) {
         return provider.readAllMessagesFromFile();
       } else {
         LOGGER.warn("don't have data for segment {}", segmentName);
-        return ImmutableList.of();
+        return UpdateLogEntrySet.getEmptySet();
       }
     } else {
       LOGGER.error("don't have data for table {}", tableName);
-      return ImmutableList.of();
+      return UpdateLogEntrySet.getEmptySet();
     }
   }
 
