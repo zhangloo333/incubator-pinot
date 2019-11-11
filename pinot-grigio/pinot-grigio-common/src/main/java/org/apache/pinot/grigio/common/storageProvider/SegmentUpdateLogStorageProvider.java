@@ -58,6 +58,7 @@ public class SegmentUpdateLogStorageProvider {
   }
 
   public synchronized List<UpdateLogEntry> readAllMessagesFromFile() throws IOException {
+    long start = System.currentTimeMillis();
     int insertMessageCount = 0;
     int deleteMessageCount = 0;
     int fileLength = (int) _file.length();
@@ -76,7 +77,8 @@ public class SegmentUpdateLogStorageProvider {
         logs.add(logEntry);
       }
       buffer.clear();
-      LOGGER.info("loaded {} message from file, {} insert and {} delete", messageCount, insertMessageCount, deleteMessageCount);
+      LOGGER.info("loaded {} message from file, {} insert and {} delete in {} ms", messageCount, insertMessageCount,
+          deleteMessageCount, System.currentTimeMillis() - start);
       return logs;
     } else {
       return ImmutableList.of();
@@ -123,6 +125,7 @@ public class SegmentUpdateLogStorageProvider {
   }
 
   private synchronized void readFullyFromBeginning(File segmentUpdateFile, ByteBuffer buffer) throws IOException {
+    long start = System.currentTimeMillis();
     FileChannel channel = new RandomAccessFile(segmentUpdateFile, "r").getChannel();
     channel.position(0);
     long position = 0;
@@ -132,6 +135,8 @@ public class SegmentUpdateLogStorageProvider {
       position += byteRead;
     } while (byteRead != -1 && buffer.hasRemaining());
     buffer.flip();
+    LOGGER.info("read all data from segment update file {} to buffer in {} ms", segmentUpdateFile.getName(),
+        System.currentTimeMillis() - start);
   }
 
   /**

@@ -30,7 +30,8 @@ public class ValidFromInMemoryVirtualColumnProvider extends BaseLongVirtualColum
       @Override
       public boolean update(int docId, int value, LogEventType eventType) {
         if (eventType == LogEventType.INSERT) {
-          return updateValue(docId, value);
+          updateValue(docId, value);
+          return true;
         }
         return false;
       }

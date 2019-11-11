@@ -31,17 +31,19 @@ public abstract class VirtualColumnLongValueReaderWriter extends BaseVirtualColu
 
   private static final Logger LOGGER = LoggerFactory.getLogger(VirtualColumnLongValueReaderWriter.class);
 
-  private final VirtualColumnContext _context;
   private int _totalDocSize;
   private int _currentMaxDocId;
   private final int [] _values;
   private final int DEFAULT_NEW_VALUE = -1;
 
   public VirtualColumnLongValueReaderWriter(VirtualColumnContext context) {
-    _context = context;
-    _totalDocSize = context.getTotalDocCount();
+    this(context.getTotalDocCount(), context.isMutableSegment());
+  }
+
+  public VirtualColumnLongValueReaderWriter(int totalDocSize, boolean isMutableSegment) {
+    _totalDocSize = totalDocSize;
     _values = new int[_totalDocSize];
-    if (!_context.isMutableSegment()) {
+    if (!isMutableSegment) {
       Arrays.fill(_values, -1);
     }
   }
@@ -80,10 +82,11 @@ public abstract class VirtualColumnLongValueReaderWriter extends BaseVirtualColu
   }
 
   /**
-   * method to update the internal data to value at a given location
-   * synchronized to ensure the we will not modify the internal array at the same time from multiple threads
+   * update the internal data to value at a given location
+   * assume the update will be idempotent and we won't check if the existing data have been set
+   *
    */
-  protected synchronized boolean updateValue(int docId, int value) {
+  protected void updateValue(int docId, int value) {
     if (docId >= _totalDocSize) {
       throw new RuntimeException(String.format("new record docId %s is larger than capacity %s", docId, _totalDocSize));
     }
@@ -91,17 +94,12 @@ public abstract class VirtualColumnLongValueReaderWriter extends BaseVirtualColu
       throw new RuntimeException(String.format("failed to update virtual column: with value %s:%s we are trying to " +
               "update a value that has not been ingested yet, max doc id %s", docId, value, _currentMaxDocId));
     }
-    if (_values[docId] == value) {
-      return false;
-    } else {
-      _values[docId] = value;
-      return true;
-    }
+    _values[docId] = value;
   }
 
   // ensure backward compatibility
-  protected boolean updateValue(int docId, long value) {
-    return updateValue(docId, Math.toIntExact(value));
+  protected void updateValue(int docId, long value) {
+    updateValue(docId, Math.toIntExact(value));
   }
 
   public abstract boolean update(int docId, long value, LogEventType eventType);

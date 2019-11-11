@@ -22,7 +22,6 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import org.apache.pinot.grigio.common.metrics.GrigioGauge;
-import org.apache.pinot.grigio.common.metrics.GrigioMeter;
 import org.apache.pinot.grigio.common.metrics.GrigioMetrics;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
 import org.slf4j.Logger;
@@ -62,15 +61,15 @@ public class UpsertWaterMarkManager {
     }
     long version = logEntry.getValue();
     int partition = logEntry.getPartition();
-    Preconditions.checkState(partition >= 0, "logEntry has no partition info {} for table ", logEntry.toString(), table);
+    processVersionUpdate(table, partition, version);
+  }
 
+  public void processVersionUpdate(String table, int partition, long version) {
+    Preconditions.checkState(partition >= 0, "logEntry has invalid version {} for table {}",
+        version, table);
     Map<Integer, Long> partitionToHighWaterMark = _highWaterMarkTablePartitionMap.computeIfAbsent(table, t -> new ConcurrentHashMap<>());
     long currentVersion = partitionToHighWaterMark.getOrDefault(partition, -1L);  // assumes that valid version is non-negative
-    if (version < currentVersion) {
-      // We expect the version number to increase monotonically unless we are reprocessing previous seen messages.
-      _metrics.addMeteredGlobalValue(GrigioMeter.VERSION_LOWER_THAN_CURRENT, 1);
-      LOGGER.debug("The latest record {} has lower version than the current one for the table {} ", logEntry, table);
-    } else if (version > currentVersion) {
+    if (version > currentVersion) {
       partitionToHighWaterMark.put(partition, version);
       _metrics.setValueOfTableGauge(String.valueOf(partition), GrigioGauge.SERVER_VERSION_CONSUMED, version);
     }

@@ -30,7 +30,8 @@ public class ValidUntilInMemoryVirtualColumnProvider extends BaseLongVirtualColu
       @Override
       public boolean update(int docId, int offset, LogEventType eventType) {
         if (eventType == LogEventType.DELETE) {
-          return this.updateValue(docId, offset);
+          this.updateValue(docId, offset);
+          return true;
         }
         return false;
       }

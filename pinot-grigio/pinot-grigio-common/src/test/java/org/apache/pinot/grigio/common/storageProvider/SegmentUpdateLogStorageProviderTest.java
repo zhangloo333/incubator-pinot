@@ -115,6 +115,21 @@ public class SegmentUpdateLogStorageProviderTest {
       Assert.assertEquals(updateLogEntries.get(i * inputDataList.size() + 1), inputDataList.get(1));
       Assert.assertEquals(updateLogEntries.get(i * inputDataList.size() + 2), inputDataList.get(2));
     }
+  }
 
+  @Test
+  public void testReadMesssagePerf() throws IOException {
+    int totalMessageCount = 5_000_000;
+    List<UpdateLogEntry> inputMessages = new ArrayList<>(totalMessageCount * 2);
+    for (int i = 0; i < totalMessageCount; i++) {
+      inputMessages.add(new UpdateLogEntry(i, 50, LogEventType.INSERT, i%8));
+      inputMessages.add(new UpdateLogEntry(i, 100, LogEventType.DELETE, i%8));
+    }
+    long start = System.currentTimeMillis();
+    provider.addData(inputMessages);
+    System.out.println("write data takes ms: " + (System.currentTimeMillis() - start));
+    start = System.currentTimeMillis();
+    provider.readAllMessagesFromFile();
+    System.out.println("read data takes ms: " + (System.currentTimeMillis() - start));
   }
 }

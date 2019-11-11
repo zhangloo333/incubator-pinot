@@ -143,7 +143,6 @@ public class UpdateLogStorageProvider {
   }
 
   public List<UpdateLogEntry> getAllMessages(String tableName, String segmentName) throws IOException {
-    LOGGER.info("loading all message for table {} segment {}", tableName, segmentName);
     if (_virtualColumnStorage.containsKey(tableName)) {
       SegmentUpdateLogStorageProvider provider = _virtualColumnStorage.get(tableName).get(segmentName);
       if (provider != null) {
