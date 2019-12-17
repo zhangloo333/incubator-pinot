@@ -111,7 +111,8 @@ public class ImmutableUpsertSegmentImplTest {
     immutableUpsertSegment.initVirtualColumn();
     long runtime = System.currentTimeMillis() - start;
     System.out.println("run time is " + runtime);
-    Assert.assertTrue(runtime < 1_000L, "run time should be less than 1 second");
+    // on regular developer laptop this should take less 1 second, but on integration server this might be longer
+    Assert.assertTrue(runtime < 10_000L, "run time should be less than 10 second");
 
     VirtualColumnLongValueReaderWriter insertReaderWrite = _readerWriters.get(0);
     VirtualColumnLongValueReaderWriter deleteReaderWrite = _readerWriters.get(1);

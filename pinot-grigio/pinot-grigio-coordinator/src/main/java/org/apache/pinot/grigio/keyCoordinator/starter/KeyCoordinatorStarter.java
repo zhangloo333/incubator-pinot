@@ -39,6 +39,9 @@ import org.apache.pinot.grigio.keyCoordinator.helix.KeyCoordinatorClusterHelixMa
 import org.apache.pinot.grigio.keyCoordinator.helix.KeyCoordinatorPinotHelixSpectator;
 import org.apache.pinot.grigio.keyCoordinator.helix.State;
 import org.apache.pinot.grigio.keyCoordinator.internal.DistributedKeyCoordinatorCore;
+import org.apache.pinot.grigio.keyCoordinator.internal.MessageFetcher;
+import org.apache.pinot.grigio.keyCoordinator.internal.SegmentEventProcessor;
+import org.apache.pinot.grigio.keyCoordinator.internal.VersionMessageManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -132,9 +135,12 @@ public class KeyCoordinatorStarter {
 
   public void start() {
     LOGGER.info("starting key coordinator instance");
-    _keyCoordinatorCore
-        .init(_keyCoordinatorConf, _producer, _consumer, _versionMessageProducer, _messageResolveStrategy,
-            _keyCoordinatorClusterHelixManager, _retentionManager, _metrics);
+    final MessageFetcher fetcher = new MessageFetcher(_keyCoordinatorConf, _consumer, _metrics);
+    final VersionMessageManager versionMessageManager = new VersionMessageManager(_keyCoordinatorConf,
+        _versionMessageProducer, _keyCoordinatorClusterHelixManager.getControllerHelixManager(), _metrics);
+    final SegmentEventProcessor segmentEventProcessor = new SegmentEventProcessor(_keyCoordinatorConf, _producer,
+        _messageResolveStrategy, _retentionManager, versionMessageManager, _metrics);
+    _keyCoordinatorCore.init(_keyCoordinatorConf, segmentEventProcessor, fetcher, versionMessageManager, _metrics);
     LOGGER.info("finished init key coordinator instance, starting loop");
     _keyCoordinatorCore.start();
     LOGGER.info("starting web service");

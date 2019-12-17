@@ -18,11 +18,14 @@
  */
 package org.apache.pinot.grigio.common.rpcQueue;
 
+import java.util.Objects;
+
 /**
  * Class created to wrap around the kafka produce task object, so we can make the upsert (grigio) package stream independent
  * by using this implementation, we don't need to hard code kafka dependency in related package (pinot-server, pinot-core) etc
  */
 public class ProduceTask<K, V> {
+
   private volatile boolean _completed = false;
   private Exception _exception = null;
   private Callback _callback = null;
@@ -87,6 +90,30 @@ public class ProduceTask<K, V> {
         }
       }
     }
+  }
+
+  @Override
+  public String toString() {
+    return "ProduceTask{" +
+        "_topic='" + _topic + '\'' +
+        ", _key=" + _key +
+        ", _value=" + _value.toString() +
+        '}';
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+    ProduceTask<?, ?> that = (ProduceTask<?, ?>) o;
+    return Objects.equals(_topic, that._topic) &&
+        Objects.equals(_key, that._key) &&
+        Objects.equals(_value, that._value);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(_topic, _key, _value);
   }
 
   public interface Callback {

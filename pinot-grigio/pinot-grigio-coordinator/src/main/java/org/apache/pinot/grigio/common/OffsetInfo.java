@@ -18,13 +18,19 @@
  */
 package org.apache.pinot.grigio.common;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.pinot.grigio.common.rpcQueue.QueueConsumerRecord;
 
+import javax.annotation.concurrent.NotThreadSafe;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * class wrap around the queue offset information for pinot internal services to use without hardcoding kafka dep
+ */
+@NotThreadSafe
 public class OffsetInfo {
   private Map<TopicPartition, Long> _offsetMap;
 
@@ -32,6 +38,16 @@ public class OffsetInfo {
     _offsetMap = new HashMap<>();
   }
 
+  @VisibleForTesting
+  public OffsetInfo(Map<TopicPartition, Long> offsets) {
+    _offsetMap = new HashMap<>(offsets);
+  }
+
+  /**
+   * update the largest offset for the given partition with the current record,
+   * if it is already larger than current highest record
+   * @param record the current consumption record
+   */
   public void updateOffsetIfNecessary(QueueConsumerRecord record) {
     TopicPartition tp = getTopicPartitionFromRecord(record);
     long offset = record.getOffset() + 1;
@@ -40,6 +56,9 @@ public class OffsetInfo {
     }
   }
 
+  /**
+   * return the mapping of partition to the largest offset
+   */
   public Map<TopicPartition, OffsetAndMetadata> getOffsetMap() {
     Map<TopicPartition, OffsetAndMetadata> offsetAndMetadataMap = new HashMap<>();
     for (Map.Entry<TopicPartition, Long> entry: _offsetMap.entrySet()) {

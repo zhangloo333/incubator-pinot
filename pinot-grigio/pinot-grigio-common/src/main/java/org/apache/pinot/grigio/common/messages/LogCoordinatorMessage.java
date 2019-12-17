@@ -18,6 +18,8 @@
  */
 package org.apache.pinot.grigio.common.messages;
 
+import java.util.Objects;
+
 /**
  * this message contains the following 4 attributes:
  * 1. segmentName: the name of the segment for the pinot record we are going to update
@@ -56,6 +58,22 @@ public class LogCoordinatorMessage {
     this._value = newValue;
     this._updateEventType = updateEventType;
     this._kafkaOffset = kafkaOffset;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+    LogCoordinatorMessage that = (LogCoordinatorMessage) o;
+    return _value == that._value &&
+        _kafkaOffset == that._kafkaOffset &&
+        Objects.equals(_segmentName, that._segmentName) &&
+        _updateEventType == that._updateEventType;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(_segmentName, _value, _updateEventType, _kafkaOffset);
   }
 
   public String toString() {
