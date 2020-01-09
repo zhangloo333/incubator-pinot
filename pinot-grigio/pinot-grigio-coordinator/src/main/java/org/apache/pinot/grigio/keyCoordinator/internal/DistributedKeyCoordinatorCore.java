@@ -70,6 +70,7 @@ public class DistributedKeyCoordinatorCore {
     _conf = conf;
     _messageProcessThread = coreThread;
     _versionMessageManager = versionMessageManager;
+    _segmentEventProcessor = segmentEventProcessor;
     _messageFetcher = fetcher;
     _metrics = metrics;
 
