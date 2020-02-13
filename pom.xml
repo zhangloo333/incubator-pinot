@@ -30,7 +30,7 @@
 
   <groupId>org.apache.pinot</groupId>
   <artifactId>pinot</artifactId>
-  <version>0.2.2.5.61-SNAPSHOT</version>
+  <version>0.2.2.5.69-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>Pinot</name>
   <description>A realtime distributed OLAP datastore</description>

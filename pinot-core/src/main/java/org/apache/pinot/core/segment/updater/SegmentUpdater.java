@@ -21,7 +21,6 @@ package org.apache.pinot.core.segment.updater;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.Uninterruptibles;
-import io.netty.util.internal.ConcurrentSet;
 import org.apache.commons.configuration.Configuration;
 import org.apache.pinot.common.config.TableNameBuilder;
 import org.apache.pinot.common.utils.CommonConstants;
@@ -36,6 +35,7 @@ import org.apache.pinot.grigio.common.rpcQueue.QueueConsumerRecord;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
 import org.apache.pinot.grigio.common.storageProvider.retentionManager.UpdateLogRetentionManager;
+import org.apache.pinot.grigio.common.storageProvider.retentionManager.UpdateLogTableRetentionManager;
 import org.apache.pinot.grigio.common.utils.CommonUtils;
 import org.apache.pinot.grigio.servers.SegmentUpdaterProvider;
 import org.slf4j.Logger;
@@ -46,7 +46,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -75,7 +74,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
   private final String _topicPrefix;
   private final ExecutorService _ingestionExecutorService;
   private final QueueConsumer _consumer;
-  private final Map<String, Map<String, Set<UpsertSegmentDataManager>>> _tableSegmentMap = new ConcurrentHashMap<>();
+  private final SegmentUpdaterDataManagerHolder _dataManagersHolder = new SegmentUpdaterDataManagerHolder();
   private final Map<String, Map<Integer, Long>> _tablePartitionCreationTime = new ConcurrentHashMap<>();
   private final UpdateLogStorageProvider _updateLogStorageProvider;
   private final UpdateLogRetentionManager _retentionManager;
@@ -105,7 +104,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
 
 
   public void start() {
-    String listOfTables = Joiner.on(",").join(_tableSegmentMap.keySet());
+    String listOfTables = Joiner.on(",").join(_dataManagersHolder.getAllTables());
     LOGGER.info("starting segment updater main loop with the following table in server: {}", listOfTables);
     _ingestionExecutorService.submit(this::updateLoop);
   }
@@ -162,10 +161,9 @@ public class SegmentUpdater implements SegmentDeletionListener {
         for (Map.Entry<String, TableUpdateLogs> entry : tableSegmentToUpdateLogs.entrySet()) {
           String tableName = TableNameBuilder.ensureTableNameWithType(entry.getKey(), CommonConstants.Helix.TableType.REALTIME);
           int tableMessageCount = 0;
-          if (_tableSegmentMap.containsKey(tableName)) {
-            final Map<String, Set<UpsertSegmentDataManager>> segmentManagersMap = _tableSegmentMap.get(tableName);
+          if (_dataManagersHolder.hasTable(tableName)) {
             final TableUpdateLogs segment2UpdateLogsMap = entry.getValue();
-            updateSegmentVirtualColumns(tableName, segmentManagersMap, segment2UpdateLogsMap, timeToStoreUpdateLogs);
+            updateSegmentVirtualColumns(tableName, segment2UpdateLogsMap, timeToStoreUpdateLogs);
           } else {
             LOGGER.warn("got messages for table {} not in this server", tableName);
           }
@@ -202,12 +200,11 @@ public class SegmentUpdater implements SegmentDeletionListener {
   /**
    * Update the virtual columns of affected segments of a table.
    */
-  private void updateSegmentVirtualColumns(String tableName, Map<String, Set<UpsertSegmentDataManager>> segmentManagersMap,
-                                           TableUpdateLogs segment2UpdateLogsMap, AtomicLong timeToStoreUpdateLogs) throws IOException{
+  private void updateSegmentVirtualColumns(String tableName, TableUpdateLogs segment2UpdateLogsMap,
+                                           AtomicLong timeToStoreUpdateLogs) throws IOException{
     for (Map.Entry<String, List<UpdateLogEntry>> segmentEntry : segment2UpdateLogsMap.getSegments2UpdateLog().entrySet()) {
       final String segmentNameStr = segmentEntry.getKey();
       updateVirtualColumn(tableName, segmentNameStr,
-          segmentManagersMap.computeIfAbsent(segmentNameStr, sn -> new ConcurrentSet<>()),
           segment2UpdateLogsMap.get(segmentNameStr), timeToStoreUpdateLogs);
     }
   }
@@ -217,19 +214,21 @@ public class SegmentUpdater implements SegmentDeletionListener {
    * from consuming to online (mutable segment to immutable segment). In most of cases we expect only one segment manager
    * in this set of UpsertSegmentDataManager
    */
-  private void updateVirtualColumn(String table, String segment, Set<UpsertSegmentDataManager> segmentDataManagers,
+  private void updateVirtualColumn(String table, String segment,
                                    List<UpdateLogEntry> messages, AtomicLong timeToStoreUpdateLogs) throws IOException {
+    Set<UpsertSegmentDataManager> dataManagers = _dataManagersHolder.getDataManagers(table, segment);
     LOGGER.debug("updating segment {} with {} results for {} data managers", segment, messages.size(),
-        segmentDataManagers.size());
-    if (segmentDataManagers.size() > 0 || _retentionManager.getRetentionManagerForTable(table).shouldIngestForSegment(segment)) {
+        dataManagers.size());
+    if (dataManagers.size() > 0 || _retentionManager.getRetentionManagerForTable(table).shouldIngestForSegment(segment)) {
       storeUpdateLogs(table, segment, messages, timeToStoreUpdateLogs);
     }
     try {
-      for (UpsertSegmentDataManager dataManager: segmentDataManagers) {
+      // refetch the data managers from holder in case there are updates
+      for (UpsertSegmentDataManager dataManager: _dataManagersHolder.getDataManagers(table, segment)) {
         dataManager.updateVirtualColumns(messages);
       }
     } catch (Exception ex) {
-      LOGGER.error("failed to update virtual column for key ", ex);
+      LOGGER.error("failed to update virtual column for key", ex);
     }
   }
 
@@ -242,14 +241,11 @@ public class SegmentUpdater implements SegmentDeletionListener {
   public synchronized void addSegmentDataManager(String tableNameWithType, LLCSegmentName segmentName, UpsertSegmentDataManager dataManager) {
     // TODO get partition assignment from
     LOGGER.info("segment updater adding table {} segment {}", tableNameWithType, segmentName.getSegmentName());
-    if (!_tableSegmentMap.containsKey(tableNameWithType)) {
-      synchronized (_tableSegmentMap) {
-        _tableSegmentMap.put(tableNameWithType, new ConcurrentHashMap<>());
-      }
+    if (!_dataManagersHolder.hasTable(tableNameWithType)) {
       LOGGER.info("adding table {} to segment updater consumer", tableNameWithType);
       handleNewTableInServer(tableNameWithType);
     }
-    _tableSegmentMap.get(tableNameWithType).computeIfAbsent(segmentName.getSegmentName(), sn -> new HashSet<>()).add(dataManager);
+    _dataManagersHolder.addDataManager(tableNameWithType, segmentName.getSegmentName(), dataManager);
     synchronized (_tablePartitionCreationTime) {
       long creationTime = _tablePartitionCreationTime.computeIfAbsent(tableNameWithType, t -> new ConcurrentHashMap<>())
           .computeIfAbsent(segmentName.getPartitionId(), p -> segmentName.getCreationTimeStamp());
@@ -260,16 +256,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
 
   public synchronized void removeSegmentDataManager(String tableNameWithType, String segmentName, UpsertSegmentDataManager toDeleteManager) {
     LOGGER.info("segment updater removing table {} segment {}", tableNameWithType, segmentName);
-    Map<String, Set<UpsertSegmentDataManager>> segmentMap = _tableSegmentMap.get(tableNameWithType);
-    if (segmentMap != null) {
-      Set<UpsertSegmentDataManager> segmentDataManagers = segmentMap.get(segmentName);
-      if (segmentDataManagers != null) {
-        segmentDataManagers.remove(toDeleteManager);
-        if (segmentDataManagers.size() == 0) {
-          segmentMap.remove(segmentName);
-        }
-      }
-    }
+    _dataManagersHolder.removeDataManager(tableNameWithType, segmentName, toDeleteManager);
   }
 
   /**
@@ -298,22 +285,23 @@ public class SegmentUpdater implements SegmentDeletionListener {
   @Override
   public synchronized void onSegmentDeletion(String tableNameWithType, String segmentName) {
     LOGGER.info("deleting segment virtual column from local storage for table {} segment {}", tableNameWithType, segmentName);
-    Map<String, Set<UpsertSegmentDataManager>> segmentManagerMap = _tableSegmentMap.get(tableNameWithType);
-    if (segmentManagerMap != null) {
-      if (segmentManagerMap.containsKey(segmentName) && segmentManagerMap.get(segmentName).size() > 0) {
-        LOGGER.error("trying to remove segment storage with {} segment data manager", segmentManagerMap.get(segmentName).size());
+    if (_dataManagersHolder.hasTable(tableNameWithType)) {
+      boolean result = _dataManagersHolder.removeAllDataManagerForSegment(tableNameWithType, segmentName);
+      if (result) {
+        try {
+          UpdateLogTableRetentionManager retentionManager = _retentionManager.getRetentionManagerForTable(tableNameWithType);
+          if (retentionManager != null) {
+            retentionManager.notifySegmentDeletion(segmentName);
+          }
+          _updateLogStorageProvider.removeSegment(tableNameWithType, segmentName);
+        } catch (IOException e) {
+          throw new RuntimeException(String.format("failed to delete table %s segment %s", tableNameWithType, segmentName), e);
+        }
       }
-      try {
-        segmentManagerMap.remove(segmentName);
-        _retentionManager.getRetentionManagerForTable(tableNameWithType).notifySegmentDeletion(tableNameWithType);
-        _updateLogStorageProvider.removeSegment(tableNameWithType, segmentName);
-      } catch (IOException e) {
-        throw new RuntimeException(String.format("failed to delete table %s segment %s", tableNameWithType, segmentName), e);
-      }
-      if (segmentManagerMap.size() == 0) {
-        _tableSegmentMap.remove(tableNameWithType);
+      if (_dataManagersHolder.maybeRemoveTable(tableNameWithType)) {
         handleTableRemovalInServer(tableNameWithType);
       }
+
     } else {
       LOGGER.error("deleting a segment {}:{} from current server but don't have segment map on updater",
           tableNameWithType, segmentName);

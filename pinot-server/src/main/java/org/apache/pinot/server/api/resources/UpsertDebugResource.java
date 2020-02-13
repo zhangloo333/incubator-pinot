@@ -28,17 +28,22 @@ import org.apache.pinot.core.data.manager.SegmentDataManager;
 import org.apache.pinot.core.data.manager.TableDataManager;
 import org.apache.pinot.core.data.manager.UpsertSegmentDataManager;
 import org.apache.pinot.server.starter.ServerInstance;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 
 @Api(tags = "UpsertDebug")
 @Path("/")
 public class UpsertDebugResource {
+  private static final Logger LOGGER = LoggerFactory.getLogger(UpsertDebugResource.class);
 
   @Inject
   ServerInstance serverInstance;
@@ -73,8 +78,14 @@ public class UpsertDebugResource {
       if (!(segmentDataManager instanceof UpsertSegmentDataManager)) {
         return "it is not an upsert table";
       } else {
+        long offset = Long.parseLong(offsetStr);
+        LOGGER.info("getting virtual column for table {} segment {} offset {}", tableName, segmentName, offset);
         return ((UpsertSegmentDataManager) segmentDataManager).getVirtualColumnInfo(Long.parseLong(offsetStr));
       }
+    } catch (Exception ex) {
+      LOGGER.error("failed to fetch virtual column info", ex);
+      throw new WebApplicationException("Failed to fetch virtual column info" + ex.getMessage(),
+          Response.Status.INTERNAL_SERVER_ERROR);
     } finally {
       if (segmentDataManager != null) {
         tableDataManager.releaseSegment(segmentDataManager);

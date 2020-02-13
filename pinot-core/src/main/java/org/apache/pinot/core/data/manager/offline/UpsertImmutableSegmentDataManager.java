@@ -26,12 +26,15 @@ import org.apache.pinot.core.indexsegment.UpsertSegment;
 import org.apache.pinot.core.indexsegment.immutable.ImmutableSegment;
 import org.apache.pinot.core.segment.updater.SegmentUpdater;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
 
 public class UpsertImmutableSegmentDataManager extends ImmutableSegmentDataManager implements UpsertSegmentDataManager {
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(UpsertImmutableSegmentDataManager.class);
   private String _tableNameWithType;
 
   public UpsertImmutableSegmentDataManager(ImmutableSegment immutableSegment) throws IOException {
@@ -61,7 +64,9 @@ public class UpsertImmutableSegmentDataManager extends ImmutableSegmentDataManag
     // 1. add listener for update events
     // 2. load all existing messages
     // ensure the above orders so we can ensure all events are received by this data manager
+    LOGGER.info("adding data manager to listener for segment {}", getSegmentName());
     SegmentUpdater.getInstance().addSegmentDataManager(_tableNameWithType, new LLCSegmentName(getSegmentName()), this);
+    LOGGER.info("initializing virtual column for segment {}", getSegmentName());
     ((UpsertSegment) _immutableSegment).initVirtualColumn();
   }
 }
