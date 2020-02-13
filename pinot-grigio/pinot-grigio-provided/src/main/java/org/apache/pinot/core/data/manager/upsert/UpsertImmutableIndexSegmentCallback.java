@@ -130,9 +130,9 @@ public class UpsertImmutableIndexSegmentCallback implements IndexSegmentCallback
       throw new RuntimeException("unexpected forward reader type for kafka offset column " + reader.getClass());
     }
     LOGGER.info("built offset to DocId map for segment {} with {} documents in {} ms", _segmentName, _totalDoc, System.currentTimeMillis() - start);
+    LOGGER.info("immutable segment {} built offset map with minOffset {} and maxOffset {}", _segmentName, minOffset, maxOffset);
   }
 
-  @Override
   public void postProcessRecords(GenericRow row, int docId) {
     // do nothing
   }
@@ -150,7 +150,7 @@ public class UpsertImmutableIndexSegmentCallback implements IndexSegmentCallback
         updateLogEntries.size(), _segmentName, System.currentTimeMillis() - start);
 
     start = System.currentTimeMillis();
-    final long maxOffset = _totalDoc + _minSourceOffset;
+    final long maxOffset = _minSourceOffset + _sourceOffsetToDocIdArray.length;
     int unmatchedLogEntryCount = 0;
     try {
       Map<Integer, Long> partitionToHighestWatermark = new HashMap<>();
@@ -193,13 +193,19 @@ public class UpsertImmutableIndexSegmentCallback implements IndexSegmentCallback
   @Override
   public void updateVirtualColumn(Iterable<UpdateLogEntry> logEntries) {
     for (UpdateLogEntry logEntry: logEntries) {
-      boolean updated = false;
-      int docId = getDocIdFromSourceOffset(logEntry.getOffset());
-      for (VirtualColumnLongValueReaderWriter readerWriter : _virtualColumnsReaderWriter) {
-        updated = readerWriter.update(docId, logEntry.getValue(), logEntry.getType()) || updated;
-      }
-      if (updated) {
-        _upsertWatermarkManager.processMessage(_tableNameWithType, _segmentName, logEntry);
+      try {
+        boolean updated = false;
+        int docId = getDocIdFromSourceOffset(logEntry.getOffset());
+        if (docId != DEFAULT_DOC_ID_FOR_MISSING_ENTRY) {
+          for (VirtualColumnLongValueReaderWriter readerWriter : _virtualColumnsReaderWriter) {
+            updated = readerWriter.update(docId, logEntry.getValue(), logEntry.getType()) || updated;
+          }
+          if (updated) {
+            _upsertWatermarkManager.processMessage(_tableNameWithType, _segmentName, logEntry);
+          }
+        }
+      } catch (Exception ex) {
+        LOGGER.warn("failed to update virtual column, skipping the current record {}", logEntries.toString());
       }
     }
   }
@@ -207,11 +213,15 @@ public class UpsertImmutableIndexSegmentCallback implements IndexSegmentCallback
   @Override
   public String getVirtualColumnInfo(long offset) {
     int docId = getDocIdFromSourceOffset(offset);
-    StringBuilder result = new StringBuilder("matched: ");
-    for (VirtualColumnLongValueReaderWriter readerWriter : _virtualColumnsReaderWriter) {
-      result.append(readerWriter.getInt(docId)).append("; ");
+    if (docId != DEFAULT_DOC_ID_FOR_MISSING_ENTRY) {
+      StringBuilder result = new StringBuilder("matched: ");
+      for (VirtualColumnLongValueReaderWriter readerWriter : _virtualColumnsReaderWriter) {
+        result.append(readerWriter.getLong(docId)).append("; ");
+      }
+      return result.toString();
+    } else {
+      return "cannot found doc matching offset";
     }
-    return result.toString();
   }
 
   /**
@@ -222,14 +232,14 @@ public class UpsertImmutableIndexSegmentCallback implements IndexSegmentCallback
    */
   private int getDocIdFromSourceOffset(long offset) throws RuntimeException {
     if (offset < _minSourceOffset || offset - _minSourceOffset >= _sourceOffsetToDocIdArray.length) {
-      LOGGER.error("offset {} is outside range for current segment {} start offset {} size {}",
+      LOGGER.warn("offset {} is outside of range for current segment {} start offset {} size {}",
           offset, _segmentName, _minSourceOffset, _sourceOffsetToDocIdArray.length);
-      throw new RuntimeException("offset outside range");
+      return DEFAULT_DOC_ID_FOR_MISSING_ENTRY;
     } else {
       int position = Math.toIntExact(offset - _minSourceOffset);
       if (_sourceOffsetToDocIdArray[position] == DEFAULT_DOC_ID_FOR_MISSING_ENTRY) {
-        LOGGER.error("no docId associated with offset {} for segment {}", offset, _segmentName);
-        throw new RuntimeException("docId not found");
+        LOGGER.warn("no docId associated with offset {} for segment {}", offset, _segmentName);
+        return DEFAULT_DOC_ID_FOR_MISSING_ENTRY;
       } else {
         return _sourceOffsetToDocIdArray[position];
       }

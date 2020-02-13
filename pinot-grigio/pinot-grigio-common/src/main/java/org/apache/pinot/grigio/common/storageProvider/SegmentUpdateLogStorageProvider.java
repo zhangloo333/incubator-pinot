@@ -32,6 +32,7 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * provide the storage abstraction of storing upsert update event logs to a local disk so we can reload it
@@ -44,6 +45,7 @@ public class SegmentUpdateLogStorageProvider {
   protected final File _file;
   @VisibleForTesting
   protected final FileOutputStream _outputStream;
+  private AtomicInteger messageCountInFile = new AtomicInteger(0);
 
   public SegmentUpdateLogStorageProvider(File file)
       throws IOException {
@@ -60,6 +62,7 @@ public class SegmentUpdateLogStorageProvider {
       ByteBuffer buffer = ByteBuffer.allocate(fileLength);
       readFullyFromBeginning(_file, buffer);
       int messageCount = fileLength / UpdateLogEntry.SIZE;
+      LOGGER.info("read {} messages from file {}", messageCount, _file.getName());
       return new UpdateLogEntrySet(buffer, messageCount);
     } else {
       return UpdateLogEntrySet.getEmptySet();
@@ -74,7 +77,8 @@ public class SegmentUpdateLogStorageProvider {
     buffer.flip();
     _outputStream.write(buffer.array());
     _outputStream.flush();
-
+    messageCountInFile.getAndAdd(messages.size());
+    LOGGER.debug("file {} message count {}", _file.getName(), messageCountInFile.get());
   }
 
   public synchronized void destroy() throws IOException {
@@ -102,6 +106,7 @@ public class SegmentUpdateLogStorageProvider {
           segmentUpdateFile.length(), newSize);
       channel.truncate(newSize);
       channel.force(false);
+      messageCountInFile.set(Math.toIntExact(newSize / UpdateLogEntry.SIZE));
     }
   }
 
@@ -116,7 +121,7 @@ public class SegmentUpdateLogStorageProvider {
       position += byteRead;
     } while (byteRead != -1 && buffer.hasRemaining());
     buffer.flip();
-    LOGGER.info("read all data from segment update file {} to buffer in {} ms", segmentUpdateFile.getName(),
+    LOGGER.info("read {} bytes from segment update file {} to buffer in {} ms", position, segmentUpdateFile.getName(),
         System.currentTimeMillis() - start);
   }
 

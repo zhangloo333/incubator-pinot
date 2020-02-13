@@ -27,6 +27,7 @@ import org.apache.commons.configuration.PropertiesConfiguration;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Scanner;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * command line tools for debug pinot server by allowing us to interatively explore the update log data in pinot server/kc
@@ -52,24 +53,38 @@ public class UpdateLogStorageExplorer {
     String[] inputSplits = input.split(" ");
     Preconditions.checkState(inputSplits.length == 2, "expect input data to be 'tableName segmentName'");
     String tableName = inputSplits[0];
+    if (!tableName.endsWith("_REALTIME")) {
+      tableName = tableName + "_REALTIME";
+    }
     String segmentName = inputSplits[1];
 
     provider.loadTable(tableName);
     UpdateLogEntrySet updateLogEntrySet = provider.getAllMessages(tableName, segmentName);
-    Multimap<Long, UpdateLogEntry> map = ArrayListMultimap.create();
+    Multimap<Long, UpdateLogAndPos> map = ArrayListMultimap.create();
     System.out.println("update log size: " + updateLogEntrySet.size());
+    AtomicInteger pos = new AtomicInteger(0);
     updateLogEntrySet.forEach(u -> {
-      map.put(u.getOffset(), u);
+      map.put(u.getOffset(), new UpdateLogAndPos(u, pos.getAndIncrement()));
     });
 
     while (true) {
       System.out.println("input the offset");
       long offset = reader.nextLong();
-      Collection<UpdateLogEntry> result = map.get(offset);
+      Collection<UpdateLogAndPos> result = map.get(offset);
       System.out.println("associated update logs size: " + result.size());
-      for (UpdateLogEntry entry: result) {
-        System.out.println("content: " + entry.toString());
+      for (UpdateLogAndPos entry: result) {
+        System.out.println("content: " + entry.logEntry.toString() + " pos " + entry.pos);
       }
+    }
+  }
+
+  static class UpdateLogAndPos {
+    public UpdateLogEntry logEntry;
+    public int pos;
+
+    public UpdateLogAndPos(UpdateLogEntry entry, int pos) {
+      this.logEntry = entry;
+      this.pos = pos;
     }
   }
 }

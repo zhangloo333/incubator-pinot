@@ -64,7 +64,12 @@ public abstract class VirtualColumnLongValueReaderWriter extends BaseVirtualColu
 
   @Override
   public long getLong(int row) {
-    return _values[row];
+    if (row >= 0 && row < _totalDocSize) {
+      return _values[row];
+    } else {
+      throw new RuntimeException(String.format("trying to fetch row %d while we only have total row count %d", row,
+          _totalDocSize));
+    }
   }
 
   @Override
