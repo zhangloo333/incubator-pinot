@@ -34,6 +34,7 @@ import org.apache.pinot.common.config.SegmentPartitionConfig;
 import org.apache.pinot.common.segment.SegmentMetadata;
 import org.apache.pinot.core.indexsegment.IndexSegmentUtils;
 import org.apache.pinot.core.io.reader.DataFileReader;
+import org.apache.pinot.core.io.readerwriter.BaseSingleColumnSingleValueReaderWriter;
 import org.apache.pinot.core.io.readerwriter.PinotDataBufferMemoryManager;
 import org.apache.pinot.core.io.readerwriter.impl.FixedByteSingleColumnMultiValueReaderWriter;
 import org.apache.pinot.core.io.readerwriter.impl.FixedByteSingleColumnSingleValueReaderWriter;
@@ -384,8 +385,8 @@ public class MutableSegmentImpl implements MutableSegment {
       Object value = row.getValue(column);
       if (fieldSpec.isSingleValueField()) {
         // SV column
-        FixedByteSingleColumnSingleValueReaderWriter indexReaderWriter =
-            (FixedByteSingleColumnSingleValueReaderWriter) _indexReaderWriterMap.get(column);
+        BaseSingleColumnSingleValueReaderWriter indexReaderWriter =
+            (BaseSingleColumnSingleValueReaderWriter) _indexReaderWriterMap.get(column);
         Integer dictId = (Integer) dictIdMap.get(column);
         if (dictId != null) {
           // SV column with dictionary
