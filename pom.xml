@@ -51,6 +51,7 @@
     <module>pinot-perf</module>
     <module>pinot-integration-tests</module>
     <module>pinot-distribution</module>
+    <module>pinot-grigio</module>
   </modules>
 
   <licenses>
@@ -311,6 +312,16 @@
       <dependency>
         <groupId>org.apache.pinot</groupId>
         <artifactId>pinot-perf</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.pinot</groupId>
+        <artifactId>pinot-grigio-common</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.pinot</groupId>
+        <artifactId>pinot-grigio-coordinator</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
