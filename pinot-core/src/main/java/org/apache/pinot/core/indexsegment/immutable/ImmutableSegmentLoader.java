@@ -44,6 +44,8 @@ import org.apache.pinot.spi.data.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nonnull;
+
 
 public class ImmutableSegmentLoader {
   private ImmutableSegmentLoader() {
@@ -70,9 +72,23 @@ public class ImmutableSegmentLoader {
   }
 
   public static ImmutableSegment load(File indexDir, IndexLoadingConfig indexLoadingConfig, @Nullable Schema schema)
-      throws Exception {
-    Preconditions
-        .checkArgument(indexDir.isDirectory(), "Index directory: {} does not exist or is not a directory", indexDir);
+          throws Exception {
+    return loadHelper(indexDir, indexLoadingConfig, schema);
+  }
+
+  /**
+   * to load upsert related segment
+   */
+  public static ImmutableUpsertSegmentImpl loadUpsertSegment(File indexDir, IndexLoadingConfig indexLoadingConfig,
+                                                             Schema schema) throws Exception {
+    ImmutableSegmentImpl segment = loadHelper(indexDir, indexLoadingConfig, schema);
+    return ImmutableUpsertSegmentImpl.copyOf(segment);
+  }
+
+  private static ImmutableSegmentImpl loadHelper(File indexDir, IndexLoadingConfig indexLoadingConfig,
+                                                 @Nullable Schema schema) throws Exception {
+    Preconditions.checkArgument(indexDir.isDirectory(), "Index directory: {} does not exist or is not a directory",
+        indexDir);
 
     // Convert segment version if necessary
     // NOTE: this step may modify the segment metadata
@@ -100,7 +116,7 @@ public class ImmutableSegmentLoader {
     }
 
     // Load the metadata again since converter and pre-processor may have changed it
-    SegmentMetadataImpl segmentMetadata = new SegmentMetadataImpl(indexDir);
+    SegmentMetadataImpl segmentMetadata = new SegmentMetadataImpl(indexDir, schema);
 
     // Load the segment
     ReadMode readMode = indexLoadingConfig.getReadMode();
@@ -125,7 +141,7 @@ public class ImmutableSegmentLoader {
         String columnName = fieldSpec.getName();
         VirtualColumnProvider provider =
             VirtualColumnProviderFactory.buildProvider(fieldSpec.getVirtualColumnProvider());
-        VirtualColumnContext context = new VirtualColumnContext(fieldSpec, segmentMetadata.getTotalDocs());
+        VirtualColumnContext context = new VirtualColumnContext(fieldSpec, segmentMetadata.getTotalDocs(), false);
         indexContainerMap.put(columnName, provider.buildColumnIndexContainer(context));
         segmentMetadata.getColumnMetadataMap().put(columnName, provider.buildMetadata(context));
       }
@@ -141,4 +157,5 @@ public class ImmutableSegmentLoader {
 
     return new ImmutableSegmentImpl(segmentDirectory, segmentMetadata, indexContainerMap, starTreeIndexContainer);
   }
+
 }

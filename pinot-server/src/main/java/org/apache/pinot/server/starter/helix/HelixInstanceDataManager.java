@@ -20,10 +20,7 @@ package org.apache.pinot.server.starter.helix;
 
 import com.google.common.base.Preconditions;
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import javax.annotation.Nullable;
@@ -48,6 +45,7 @@ import org.apache.pinot.core.indexsegment.immutable.ImmutableSegment;
 import org.apache.pinot.core.indexsegment.immutable.ImmutableSegmentLoader;
 import org.apache.pinot.core.segment.index.loader.IndexLoadingConfig;
 import org.apache.pinot.core.segment.index.loader.LoaderUtils;
+import org.apache.pinot.core.segment.updater.UpsertWaterMarkManager;
 import org.apache.pinot.spi.data.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -301,6 +299,11 @@ public class HelixInstanceDataManager implements InstanceDataManager {
         }
       }
     }
+  }
+
+  @Override
+  public Map<String, Map<Integer, Long>> getLowWaterMarks() {
+    return UpsertWaterMarkManager.getInstance().getHighWaterMarkTablePartitionMap();
   }
 
   @Override

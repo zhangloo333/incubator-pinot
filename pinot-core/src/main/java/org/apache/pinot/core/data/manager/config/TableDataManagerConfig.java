@@ -19,12 +19,14 @@
 package org.apache.pinot.core.data.manager.config;
 
 import com.google.common.base.Preconditions;
-import javax.annotation.Nonnull;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.PropertiesConfiguration;
 import org.apache.pinot.common.config.TableConfig;
 import org.apache.pinot.common.config.TableNameBuilder;
+import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.CommonConstants.Helix.TableType;
+
+import javax.annotation.Nonnull;
 
 
 /**
@@ -35,6 +37,7 @@ public class TableDataManagerConfig {
   private static final String TABLE_DATA_MANAGER_DATA_DIRECTORY = "directory";
   private static final String TABLE_DATA_MANAGER_CONSUMER_DIRECTORY = "consumerDirectory";
   private static final String TABLE_DATA_MANAGER_NAME = "name";
+  private static final String TABLE_UPDATE_SEMANTIC = "updateSemantic";
 
   private final Configuration _tableDataManagerConfig;
 
@@ -62,6 +65,10 @@ public class TableDataManagerConfig {
     return _tableDataManagerConfig.getString(TABLE_DATA_MANAGER_NAME);
   }
 
+  public CommonConstants.UpdateSemantic getUpdateSemantic() {
+    return CommonConstants.UpdateSemantic.getUpdateSemantic(_tableDataManagerConfig.getString(TABLE_UPDATE_SEMANTIC));
+  }
+
   public static TableDataManagerConfig getDefaultHelixTableDataManagerConfig(
       @Nonnull InstanceDataManagerConfig instanceDataManagerConfig, @Nonnull String tableNameWithType) {
     Configuration defaultConfig = new PropertiesConfiguration();
@@ -83,5 +90,6 @@ public class TableDataManagerConfig {
     // If we wish to override some table level configs using table config, override them here
     // Note: the configs in TableDataManagerConfig is immutable once the table is created, which mean it will not pick
     // up the latest table config
+    _tableDataManagerConfig.setProperty(TABLE_UPDATE_SEMANTIC, tableConfig.getUpdateSemantic().toString());
   }
 }

@@ -83,7 +83,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Segment data manager for low level consumer realtime segments, which manages consumption and segment completion.
  */
-public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
+public abstract class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
   protected enum State {
     // The state machine starts off with this state. While in this state we consume stream events
     // and index them in memory. We continue to be in this state until the end criteria is satisfied
@@ -202,7 +202,7 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
   private final int _segmentMaxRowCount;
   private final String _resourceDataDir;
   private final IndexLoadingConfig _indexLoadingConfig;
-  private final Schema _schema;
+  protected final Schema _schema;
   // Semaphore for each partitionId only, which is to prevent two different Kafka consumers
   // from consuming with the same partitionId in parallel in the same host.
   // See the comments in {@link RealtimeTableDataManager}.
@@ -212,20 +212,21 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
   // modify the permit. This boolean make sure the semaphore gets released only once when the partition stops consuming.
   private final AtomicBoolean _acquiredConsumerSemaphore;
   private final String _metricKeyName;
-  private final ServerMetrics _serverMetrics;
-  private final MutableSegmentImpl _realtimeSegment;
+  protected final ServerMetrics _serverMetrics;
+  protected final MutableSegmentImpl _realtimeSegment;
   private volatile long _currentOffset;
-  private volatile State _state;
+  protected volatile State _state;
   private volatile int _numRowsConsumed = 0;
   private volatile int _numRowsIndexed = 0; // Can be different from _numRowsConsumed when metrics update is enabled.
   private volatile int _numRowsErrored = 0;
   private volatile int consecutiveErrorCount = 0;
   private long _startTimeMs = 0;
-  private final String _segmentNameStr;
   private final SegmentVersion _segmentVersion;
   private final SegmentBuildTimeLeaseExtender _leaseExtender;
   private SegmentBuildDescriptor _segmentBuildDescriptor;
   private StreamConsumerFactory _streamConsumerFactory;
+
+  protected final String _segmentNameStr;
 
   // Segment end criteria
   private volatile long _consumeEndTime = 0;
@@ -238,14 +239,14 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
 
   private Thread _consumerThread;
   private final String _streamTopic;
-  private final int _streamPartitionId;
+  protected final int _streamPartitionId;
   final String _clientId;
-  private final LLCSegmentName _llcSegmentName;
+  protected final LLCSegmentName _llcSegmentName;
   private final RecordTransformer _recordTransformer;
   private PartitionLevelConsumer _partitionLevelConsumer = null;
   private StreamMetadataProvider _streamMetadataProvider = null;
   private final File _resourceTmpDir;
-  private final String _tableNameWithType;
+  protected final String _tableNameWithType;
   private final String _timeColumnName;
   private final List<String> _invertedIndexColumns;
   private final List<String> _textIndexColumns;
@@ -253,7 +254,7 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
   private final List<String> _varLengthDictionaryColumns;
   private final StarTreeIndexSpec _starTreeIndexSpec;
   private final String _sortedColumn;
-  private Logger segmentLogger;
+  protected Logger segmentLogger;
   private final String _tableStreamName;
   private final PinotDataBufferMemoryManager _memoryManager;
   private AtomicLong _lastUpdatedRowsIndexed = new AtomicLong(0);
@@ -466,16 +467,19 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
           GenericRow transformedRow = _recordTransformer.transform(decodedRow);
 
           if (transformedRow != null) {
-            realtimeRowsConsumedMeter = _serverMetrics
-                .addMeteredTableValue(_metricKeyName, ServerMeter.REALTIME_ROWS_CONSUMED, 1, realtimeRowsConsumedMeter);
+            processTransformedRow(transformedRow, _currentOffset);
+            realtimeRowsConsumedMeter =
+                _serverMetrics.addMeteredTableValue(_metricKeyName, ServerMeter.REALTIME_ROWS_CONSUMED, 1,
+                    realtimeRowsConsumedMeter);
             indexedMessageCount++;
+
+            canTakeMore = _realtimeSegment.index(transformedRow, msgMetadata);
+            postIndexProcessing(transformedRow, _currentOffset);
           } else {
             realtimeRowsDroppedMeter = _serverMetrics
                 .addMeteredTableValue(_metricKeyName, ServerMeter.INVALID_REALTIME_ROWS_DROPPED, 1,
                     realtimeRowsDroppedMeter);
           }
-
-          canTakeMore = _realtimeSegment.index(transformedRow, msgMetadata);
         } catch (Exception e) {
           segmentLogger.error("Caught exception while transforming the record: {}", decodedRow, e);
           _numRowsErrored++;
@@ -500,6 +504,11 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
       Uninterruptibles.sleepUninterruptibly(idlePipeSleepTimeMillis, TimeUnit.MILLISECONDS);
     }
   }
+
+  protected abstract void processTransformedRow(GenericRow row, long offset);
+
+
+  protected abstract void postIndexProcessing(GenericRow row, long offset);
 
   public class PartitionConsumer implements Runnable {
     public void run() {
@@ -795,7 +804,7 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
       return false;
     }
 
-    _realtimeTableDataManager.replaceLLSegment(_segmentNameStr, _indexLoadingConfig);
+    _realtimeTableDataManager.replaceLLSegment(_segmentNameStr, _indexLoadingConfig, _schema);
     removeSegmentFile();
     return true;
   }
@@ -828,7 +837,7 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
       return false;
     }
 
-    _realtimeTableDataManager.replaceLLSegment(_segmentNameStr, _indexLoadingConfig);
+    _realtimeTableDataManager.replaceLLSegment(_segmentNameStr, _indexLoadingConfig, _schema);
     return true;
   }
 
@@ -977,7 +986,7 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
 
   protected void downloadSegmentAndReplace(LLCRealtimeSegmentZKMetadata metadata) {
     closeKafkaConsumers();
-    _realtimeTableDataManager.downloadAndReplaceSegment(_segmentNameStr, metadata, _indexLoadingConfig);
+    _realtimeTableDataManager.downloadAndReplaceSegment(_segmentNameStr, metadata, _indexLoadingConfig, _schema);
   }
 
   protected long now() {
@@ -1132,7 +1141,8 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
     // Start new realtime segment
     String consumerDir = realtimeTableDataManager.getConsumerDir();
     RealtimeSegmentConfig.Builder realtimeSegmentConfigBuilder =
-        new RealtimeSegmentConfig.Builder().setSegmentName(_segmentNameStr).setStreamName(_streamTopic)
+        new RealtimeSegmentConfig.Builder().setTableName(_tableNameWithType)
+            .setSegmentName(_segmentNameStr).setStreamName(_streamTopic)
             .setSchema(_schema).setCapacity(_segmentMaxRowCount)
             .setAvgNumMultiValues(indexLoadingConfig.getRealtimeAvgMultiValueCount())
             .setNoDictionaryColumns(indexLoadingConfig.getNoDictionaryColumns())
@@ -1175,7 +1185,7 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
       }
     }
 
-    _realtimeSegment = new MutableSegmentImpl(realtimeSegmentConfigBuilder.build());
+    _realtimeSegment = createMutableSegment(realtimeSegmentConfigBuilder.build());
     _startOffset = _segmentZKMetadata.getStartOffset();
     _currentOffset = _startOffset;
     _resourceTmpDir = new File(resourceDataDir, "_tmp");
@@ -1210,6 +1220,8 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
             _segmentMaxRowCount, new DateTime(_consumeEndTime, DateTimeZone.UTC).toString());
     start();
   }
+
+  protected abstract MutableSegmentImpl createMutableSegment(RealtimeSegmentConfig config);
 
   /**
    * Creates a new stream consumer

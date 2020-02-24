@@ -59,6 +59,6 @@ public class MutableSegmentImplTestUtils {
             .setRealtimeSegmentZKMetadata(new RealtimeSegmentZKMetadata())
             .setMemoryManager(new DirectMemoryManager(SEGMENT_NAME)).setStatsHistory(statsHistory)
             .setAggregateMetrics(aggregateMetrics).setNullHandlingEnabled(nullHandlingEnabled).build();
-    return new MutableSegmentImpl(realtimeSegmentConfig);
+    return new MutableAppendSegmentImpl(realtimeSegmentConfig);
   }
 }

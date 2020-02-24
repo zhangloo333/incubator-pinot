@@ -21,6 +21,9 @@ package org.apache.pinot.core.segment.virtualcolumn;
 import org.apache.pinot.core.segment.index.ColumnMetadata;
 import org.apache.pinot.core.segment.index.column.ColumnIndexContainer;
 import org.apache.pinot.spi.data.FieldSpec;
+import org.apache.pinot.core.io.reader.DataFileReader;
+import org.apache.pinot.core.segment.index.readers.Dictionary;
+import org.apache.pinot.core.segment.index.readers.InvertedIndexReader;
 
 
 /**
@@ -38,5 +41,20 @@ public abstract class BaseVirtualColumnProvider implements VirtualColumnProvider
   @Override
   public ColumnIndexContainer buildColumnIndexContainer(VirtualColumnContext context) {
     return new VirtualColumnIndexContainer(buildReader(context), buildInvertedIndex(context), buildDictionary(context));
+  }
+
+  @Override
+  public ColumnIndexContainer buildColumnIndexContainer(VirtualColumnContext context, DataFileReader fileReader,
+                                                        Dictionary dictionary, InvertedIndexReader invertedIndexReader) {
+    if (fileReader == null) {
+      fileReader = buildReader(context);
+    }
+    if (dictionary == null) {
+      dictionary = buildDictionary(context);
+    }
+    if (invertedIndexReader == null) {
+      invertedIndexReader = buildInvertedIndex(context);
+    }
+    return new VirtualColumnIndexContainer(fileReader, invertedIndexReader, dictionary);
   }
 }

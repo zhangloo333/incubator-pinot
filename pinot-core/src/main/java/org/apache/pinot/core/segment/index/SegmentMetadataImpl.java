@@ -22,6 +22,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Preconditions;
+import org.apache.commons.configuration.ConfigurationException;
+import org.apache.commons.configuration.PropertiesConfiguration;
+import org.apache.commons.lang.StringEscapeUtils;
+import org.joda.time.Duration;
+import org.joda.time.Interval;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nullable;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -39,10 +48,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
-import javax.annotation.Nullable;
-import org.apache.commons.configuration.ConfigurationException;
-import org.apache.commons.configuration.PropertiesConfiguration;
-import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.pinot.spi.data.MetricFieldSpec;
 import org.apache.pinot.spi.data.Schema;
 import org.apache.pinot.common.metadata.segment.RealtimeSegmentZKMetadata;
@@ -58,10 +63,6 @@ import org.apache.pinot.core.startree.v2.StarTreeV2Constants;
 import org.apache.pinot.core.startree.v2.StarTreeV2Metadata;
 import org.apache.pinot.startree.hll.HllConstants;
 import org.joda.time.DateTimeZone;
-import org.joda.time.Duration;
-import org.joda.time.Interval;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static org.apache.pinot.core.segment.creator.impl.V1Constants.MetadataKeys.Segment.*;
 import static org.apache.pinot.core.segment.creator.impl.V1Constants.MetadataKeys.StarTree.*;
@@ -108,6 +109,15 @@ public class SegmentMetadataImpl implements SegmentMetadata {
    */
   public SegmentMetadataImpl(File indexDir)
       throws IOException {
+    this(indexDir, null);
+  }
+
+   /**
+   * For segments on disk and segment is upsert, will use the sechema hint to init virtual column
+   * <p>Index directory passed in should be top level segment directory.
+   * <p>If segment metadata file exists in multiple segment version, load the one in highest segment version.
+   */
+  public SegmentMetadataImpl(File indexDir, Schema schemaHint) throws IOException {
     _indexDir = indexDir;
     PropertiesConfiguration segmentMetadataPropertiesConfiguration = getPropertiesConfiguration(indexDir);
     _columnMetadataMap = new HashMap<>();
@@ -115,6 +125,9 @@ public class SegmentMetadataImpl implements SegmentMetadata {
     _schema = new Schema();
 
     init(segmentMetadataPropertiesConfiguration);
+    // adding necessary schema hints for upsert table
+    _schema.withSchemaHint(schemaHint);
+
     File creationMetaFile = SegmentDirectoryPaths.findCreationMetaFile(indexDir);
     if (creationMetaFile != null) {
       loadCreationMeta(creationMetaFile);

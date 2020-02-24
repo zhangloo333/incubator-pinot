@@ -16,35 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.core.segment.virtualcolumn;
+package org.apache.pinot.core.segment.virtualcolumn.mutable;
 
-import org.apache.pinot.spi.data.FieldSpec;
+import org.apache.pinot.core.io.reader.BaseSingleColumnSingleValueReader;
+import org.apache.pinot.core.io.reader.ReaderContext;
 
+public abstract class BaseVirtualColumnSingleValueReaderWriter<E extends ReaderContext> extends BaseSingleColumnSingleValueReader<E> {
 
-/**
- * Miscellaneous context information about the virtual column.
- * It will be used to build various components (dictionary, reader, etc) in the virtual column provider.
- */
-public class VirtualColumnContext {
-  private FieldSpec _fieldSpec;
-  private int _totalDocCount;
-  private boolean _isMutableSegment;
-
-  public VirtualColumnContext(FieldSpec fieldSpec, int totalDocCount, boolean isMutableSegment) {
-    _fieldSpec = fieldSpec;
-    _totalDocCount = totalDocCount;
-    _isMutableSegment = isMutableSegment;
-  }
-
-  public FieldSpec getFieldSpec() {
-    return _fieldSpec;
-  }
-
-  public int getTotalDocCount() {
-    return _totalDocCount;
-  }
-
-  public boolean isMutableSegment() {
-    return _isMutableSegment;
+  public void addNewRecord(int docId) {
+    // default do nothing
   }
 }

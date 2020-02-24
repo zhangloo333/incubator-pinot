@@ -16,35 +16,22 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.core.segment.virtualcolumn;
+package org.apache.pinot.core.indexsegment.mutable;
 
-import org.apache.pinot.spi.data.FieldSpec;
+import org.apache.pinot.core.realtime.impl.RealtimeSegmentConfig;
+import org.apache.pinot.spi.data.readers.GenericRow;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+public class MutableAppendSegmentImpl extends MutableSegmentImpl {
+  private static final Logger LOGGER = LoggerFactory.getLogger(MutableUpsertSegmentImpl.class);
 
-/**
- * Miscellaneous context information about the virtual column.
- * It will be used to build various components (dictionary, reader, etc) in the virtual column provider.
- */
-public class VirtualColumnContext {
-  private FieldSpec _fieldSpec;
-  private int _totalDocCount;
-  private boolean _isMutableSegment;
-
-  public VirtualColumnContext(FieldSpec fieldSpec, int totalDocCount, boolean isMutableSegment) {
-    _fieldSpec = fieldSpec;
-    _totalDocCount = totalDocCount;
-    _isMutableSegment = isMutableSegment;
+  public MutableAppendSegmentImpl(RealtimeSegmentConfig config) {
+    super(config);
   }
 
-  public FieldSpec getFieldSpec() {
-    return _fieldSpec;
-  }
-
-  public int getTotalDocCount() {
-    return _totalDocCount;
-  }
-
-  public boolean isMutableSegment() {
-    return _isMutableSegment;
+  @Override
+  protected void postProcessRecords(GenericRow row, int docId) {
+    // nothing
   }
 }

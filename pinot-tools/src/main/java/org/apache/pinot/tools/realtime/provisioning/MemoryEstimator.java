@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.pinot.common.config.TableConfig;
+import org.apache.pinot.core.indexsegment.mutable.MutableAppendSegmentImpl;
 import org.apache.pinot.spi.data.FieldSpec;
 import org.apache.pinot.common.metadata.segment.RealtimeSegmentZKMetadata;
 import org.apache.pinot.spi.utils.DataSize;
@@ -135,7 +136,7 @@ public class MemoryEstimator {
             .setStatsHistory(sampleStatsHistory);
 
     // create mutable segment impl
-    MutableSegmentImpl mutableSegmentImpl = new MutableSegmentImpl(realtimeSegmentConfigBuilder.build());
+    MutableSegmentImpl mutableSegmentImpl = new MutableAppendSegmentImpl(realtimeSegmentConfigBuilder.build());
 
     // read all rows and index them
     try (PinotSegmentRecordReader segmentRecordReader = new PinotSegmentRecordReader(_sampleCompletedSegment);) {
@@ -235,7 +236,7 @@ public class MemoryEstimator {
               .setOffHeap(true).setMemoryManager(memoryManager).setStatsHistory(statsHistory);
 
       // create mutable segment impl
-      MutableSegmentImpl mutableSegmentImpl = new MutableSegmentImpl(realtimeSegmentConfigBuilder.build());
+      MutableSegmentImpl mutableSegmentImpl = new MutableAppendSegmentImpl(realtimeSegmentConfigBuilder.build());
       long memoryForConsumingSegmentPerPartition = memoryManager.getTotalAllocatedBytes();
       mutableSegmentImpl.destroy();
       FileUtils.deleteQuietly(statsFileCopy);

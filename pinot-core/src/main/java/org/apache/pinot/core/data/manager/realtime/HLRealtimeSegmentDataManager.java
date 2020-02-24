@@ -30,6 +30,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.io.FileUtils;
 import org.apache.pinot.common.config.IndexingConfig;
 import org.apache.pinot.common.config.TableConfig;
+import org.apache.pinot.core.indexsegment.mutable.MutableAppendSegmentImpl;
 import org.apache.pinot.spi.data.Schema;
 import org.apache.pinot.common.metadata.instance.InstanceZKMetadata;
 import org.apache.pinot.common.metadata.segment.RealtimeSegmentZKMetadata;
@@ -101,9 +102,9 @@ public class HLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
   // An instance of this class exists only for the duration of the realtime segment that is currently being consumed.
   // Once the segment is committed, the segment is handled by OfflineSegmentDataManager
   public HLRealtimeSegmentDataManager(final RealtimeSegmentZKMetadata realtimeSegmentZKMetadata,
-      final TableConfig tableConfig, InstanceZKMetadata instanceMetadata,
-      final RealtimeTableDataManager realtimeTableDataManager, final String resourceDataDir,
-      final IndexLoadingConfig indexLoadingConfig, final Schema schema, final ServerMetrics serverMetrics)
+                                      final TableConfig tableConfig, InstanceZKMetadata instanceMetadata,
+                                      final RealtimeTableDataManager realtimeTableDataManager, final String resourceDataDir,
+                                      final IndexLoadingConfig indexLoadingConfig, final Schema schema, final ServerMetrics serverMetrics)
       throws Exception {
     super();
     _segmentVersion = indexLoadingConfig.getSegmentVersion();
@@ -194,7 +195,8 @@ public class HLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
                 indexLoadingConfig.isDirectRealtimeOffheapAllocation(), serverMetrics))
             .setStatsHistory(realtimeTableDataManager.getStatsHistory())
             .setNullHandlingEnabled(indexingConfig.isNullHandlingEnabled()).build();
-    realtimeSegment = new MutableSegmentImpl(realtimeSegmentConfig);
+    realtimeSegment = new MutableAppendSegmentImpl(realtimeSegmentConfig);
+
 
     notifier = realtimeTableDataManager;
 

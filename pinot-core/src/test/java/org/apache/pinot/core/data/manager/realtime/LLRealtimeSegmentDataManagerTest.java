@@ -696,7 +696,7 @@ public class LLRealtimeSegmentDataManagerTest {
     Assert.assertEquals(secondSegmentDataManager.get().getPartitionConsumerSemaphore().availablePermits(), 1);
   }
 
-  public static class FakeLLRealtimeSegmentDataManager extends LLRealtimeSegmentDataManager {
+  public static class FakeLLRealtimeSegmentDataManager extends AppendLLRealtimeSegmentDataManager {
 
     public Field _state;
     public Field _shouldStop;

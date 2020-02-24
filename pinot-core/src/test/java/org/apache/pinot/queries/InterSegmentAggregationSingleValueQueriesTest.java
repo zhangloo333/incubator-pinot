@@ -18,8 +18,6 @@
  */
 package org.apache.pinot.queries;
 
-import java.io.Serializable;
-import java.util.function.Function;
 import org.apache.pinot.common.response.broker.BrokerResponseNative;
 import org.apache.pinot.common.response.broker.SelectionResults;
 import org.apache.pinot.spi.utils.BytesUtils;
@@ -28,6 +26,9 @@ import org.apache.pinot.core.startree.hll.HllUtil;
 import org.apache.pinot.pql.parsers.Pql2Compiler;
 import org.testng.Assert;
 import org.testng.annotations.Test;
+
+import java.io.Serializable;
+import java.util.function.Function;
 
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;

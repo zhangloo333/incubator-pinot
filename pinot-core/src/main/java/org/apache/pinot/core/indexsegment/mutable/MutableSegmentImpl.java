@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
+
 import org.apache.pinot.common.config.SegmentPartitionConfig;
 import org.apache.pinot.common.segment.SegmentMetadata;
 import org.apache.pinot.core.indexsegment.IndexSegmentUtils;
@@ -56,6 +57,7 @@ import org.apache.pinot.core.segment.index.data.source.ColumnDataSource;
 import org.apache.pinot.core.segment.index.readers.BloomFilterReader;
 import org.apache.pinot.core.segment.index.readers.InvertedIndexReader;
 import org.apache.pinot.core.segment.index.readers.NullValueVectorReader;
+import org.apache.pinot.core.segment.index.readers.Dictionary;
 import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnContext;
 import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnProvider;
 import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnProviderFactory;
@@ -74,7 +76,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
-public class MutableSegmentImpl implements MutableSegment {
+public abstract class MutableSegmentImpl implements MutableSegment {
   // For multi-valued column, forward-index.
   // Maximum number of multi-values per row. We assert on this.
   private static final int MAX_MULTI_VALUES_PER_ROW = 1000;
@@ -86,11 +88,12 @@ public class MutableSegmentImpl implements MutableSegment {
   private static final int NODICT_VARIABLE_WIDTH_ESTIMATED_AVERAGE_VALUE_LENGTH_DEFAULT = 100;
   private static final int NODICT_VARIABLE_WIDTH_ESTIMATED_NUMBER_OF_VALUES_DEFAULT = 100_000;
 
-  private final Logger _logger;
+  protected final Logger _logger;
   private final long _startTimeMillis = System.currentTimeMillis();
 
-  private final String _segmentName;
-  private final Schema _schema;
+  protected final String _tableName;
+  protected final String _segmentName;
+  protected final Schema _schema;
   private final int _capacity;
   private final SegmentMetadata _segmentMetadata;
   private final boolean _offHeap;
@@ -108,17 +111,22 @@ public class MutableSegmentImpl implements MutableSegment {
   private final IdMap<FixedIntArray> _recordIdMap;
   private boolean _aggregateMetrics;
 
-  private volatile int _numDocsIndexed = 0;
+  protected volatile int _numDocsIndexed = 0;
 
   // to compute the rolling interval
-  private volatile long _minTime = Long.MAX_VALUE;
-  private volatile long _maxTime = Long.MIN_VALUE;
-  private final int _numKeyColumns;
+  protected volatile long _minTime = Long.MAX_VALUE;
+  protected volatile long _maxTime = Long.MIN_VALUE;
+  protected final int _numKeyColumns;
 
   // Cache the physical (non-virtual) field specs
   private final Collection<FieldSpec> _physicalFieldSpecs;
   private final Collection<DimensionFieldSpec> _physicalDimensionFieldSpecs;
   private final Collection<MetricFieldSpec> _physicalMetricFieldSpecs;
+
+  // Cache some virtual columns
+  protected final Map<String, VirtualColumnProvider> _virtualColumnProviderMap = new HashMap<>();
+  protected final Map<String, Dictionary> _virtualColumnDictionary = new HashMap<>();
+  protected final Map<String, DataFileReader> _virtualColumnIndexReader = new HashMap<>();
 
   // default message metadata
   private volatile long _lastIndexedTimeMs = Long.MIN_VALUE;
@@ -127,6 +135,7 @@ public class MutableSegmentImpl implements MutableSegment {
   private RealtimeLuceneReaders _realtimeLuceneReaders;
 
   public MutableSegmentImpl(RealtimeSegmentConfig config) {
+    _tableName = config.getTableName();
     _segmentName = config.getSegmentName();
     _schema = config.getSchema();
     _capacity = config.getCapacity();
@@ -161,6 +170,7 @@ public class MutableSegmentImpl implements MutableSegment {
 
     Collection<FieldSpec> allFieldSpecs = _schema.getAllFieldSpecs();
     List<FieldSpec> physicalFieldSpecs = new ArrayList<>(allFieldSpecs.size());
+    List<FieldSpec> virtualFieldSpecs = new ArrayList<>(allFieldSpecs.size());
     List<DimensionFieldSpec> physicalDimensionFieldSpecs = new ArrayList<>(_schema.getDimensionNames().size());
     List<MetricFieldSpec> physicalMetricFieldSpecs = new ArrayList<>(_schema.getMetricNames().size());
 
@@ -174,6 +184,9 @@ public class MutableSegmentImpl implements MutableSegment {
         } else if (fieldType == FieldSpec.FieldType.METRIC) {
           physicalMetricFieldSpecs.add((MetricFieldSpec) fieldSpec);
         }
+      } else {
+        virtualFieldSpecs.add(fieldSpec);
+
       }
     }
     _physicalFieldSpecs = Collections.unmodifiableCollection(physicalFieldSpecs);
@@ -190,6 +203,7 @@ public class MutableSegmentImpl implements MutableSegment {
     Set<String> textIndexColumns = config.getTextIndexColumns();
 
     int avgNumMultiValues = config.getAvgNumMultiValues();
+
 
     // Initialize for each column
     for (FieldSpec fieldSpec : _physicalFieldSpecs) {
@@ -269,6 +283,7 @@ public class MutableSegmentImpl implements MutableSegment {
 
       _indexReaderWriterMap.put(column, indexReaderWriter);
 
+
       if (invertedIndexColumns.contains(column)) {
         _invertedIndexMap.put(column, new RealtimeInvertedIndexReader());
       }
@@ -285,6 +300,21 @@ public class MutableSegmentImpl implements MutableSegment {
         }
         _realtimeLuceneReaders.addReader(realtimeLuceneIndexReader);
       }
+    }
+
+    for (FieldSpec fieldSpec : _physicalFieldSpecs) {
+      String column = fieldSpec.getName();
+      VirtualColumnContext virtualColumnContext = new VirtualColumnContext(fieldSpec, _capacity, true);
+      final VirtualColumnProvider provider =
+              VirtualColumnProviderFactory.buildProvider(fieldSpec.getVirtualColumnProvider());
+      if (provider == null) {
+        throw new RuntimeException(String.format("failed to create virtual segment provider for field %s", fieldSpec.getName()));
+      }
+      DataFileReader reader = provider.buildReader(virtualColumnContext);
+      Dictionary dictionary = provider.buildDictionary(virtualColumnContext);
+      _virtualColumnProviderMap.put(column, provider);
+      _virtualColumnIndexReader.put(column, reader);
+      _virtualColumnDictionary.put(column, dictionary);
     }
 
     if (_realtimeLuceneReaders != null) {
@@ -347,6 +377,7 @@ public class MutableSegmentImpl implements MutableSegment {
 
       // Update number of document indexed at last to make the latest record queryable
       canTakeMore = _numDocsIndexed++ < _capacity;
+      postProcessRecords(row, docId);
     } else {
       Preconditions
           .checkState(_aggregateMetrics, "Invalid document-id during indexing: " + docId + " expected: " + numDocs);
@@ -491,6 +522,8 @@ public class MutableSegmentImpl implements MutableSegment {
     }
   }
 
+  protected abstract void postProcessRecords(GenericRow row, int docId);
+
   private boolean aggregateMetrics(GenericRow row, int docId) {
     for (MetricFieldSpec metricFieldSpec : _physicalMetricFieldSpecs) {
       String column = metricFieldSpec.getName();
@@ -556,9 +589,9 @@ public class MutableSegmentImpl implements MutableSegment {
   public ColumnDataSource getDataSource(String columnName) {
     FieldSpec fieldSpec = _schema.getFieldSpecFor(columnName);
     if (fieldSpec.isVirtualColumn()) {
-      VirtualColumnContext virtualColumnContext = new VirtualColumnContext(fieldSpec, _numDocsIndexed);
-      VirtualColumnProvider virtualColumnProvider =
-          VirtualColumnProviderFactory.buildProvider(_schema.getFieldSpecFor(columnName).getVirtualColumnProvider());
+      // FIXME
+      VirtualColumnContext virtualColumnContext = new VirtualColumnContext(fieldSpec, _numDocsIndexed, true);
+      VirtualColumnProvider virtualColumnProvider = _virtualColumnProviderMap.get(columnName);
       return new ColumnDataSource(virtualColumnProvider.buildColumnIndexContainer(virtualColumnContext),
           virtualColumnProvider.buildMetadata(virtualColumnContext));
     } else {

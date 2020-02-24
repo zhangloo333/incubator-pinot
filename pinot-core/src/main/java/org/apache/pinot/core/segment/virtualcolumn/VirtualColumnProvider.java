@@ -30,6 +30,7 @@ import org.apache.pinot.core.segment.index.readers.InvertedIndexReader;
  * comprise a proper column.
  */
 public interface VirtualColumnProvider {
+
   DataFileReader buildReader(VirtualColumnContext context);
 
   Dictionary buildDictionary(VirtualColumnContext context);
@@ -39,4 +40,7 @@ public interface VirtualColumnProvider {
   InvertedIndexReader buildInvertedIndex(VirtualColumnContext context);
 
   ColumnIndexContainer buildColumnIndexContainer(VirtualColumnContext context);
+
+  ColumnIndexContainer buildColumnIndexContainer(VirtualColumnContext context, DataFileReader reader,
+                                                 Dictionary dictionary, InvertedIndexReader invertedIndexReader);
 }
