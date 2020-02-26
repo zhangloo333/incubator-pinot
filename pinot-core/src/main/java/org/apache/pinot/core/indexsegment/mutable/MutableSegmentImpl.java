@@ -191,7 +191,6 @@ public class MutableSegmentImpl implements MutableSegment {
         }
       } else {
         virtualFieldSpecs.add(fieldSpec);
-
       }
     }
     _physicalFieldSpecs = Collections.unmodifiableCollection(physicalFieldSpecs);
