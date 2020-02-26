@@ -26,6 +26,13 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import org.apache.commons.lang.RandomStringUtils;
+import org.apache.pinot.core.io.reader.DataFileReader;
+import org.apache.pinot.core.segment.index.ColumnMetadata;
+import org.apache.pinot.core.segment.index.column.ColumnIndexContainer;
+import org.apache.pinot.core.segment.index.readers.Dictionary;
+import org.apache.pinot.core.segment.index.readers.InvertedIndexReader;
+import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnContext;
+import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnProvider;
 import org.apache.pinot.spi.data.DimensionFieldSpec;
 import org.apache.pinot.spi.data.FieldSpec;
 import org.apache.pinot.spi.data.MetricFieldSpec;
@@ -58,10 +65,10 @@ public class MutableSegmentImplAggregateMetricsTest {
         .build();
     // Add virtual columns, which should not be aggregated
     DimensionFieldSpec virtualDimensionFieldSpec =
-        new DimensionFieldSpec("$virtualDimension", FieldSpec.DataType.INT, true, Object.class);
+        new DimensionFieldSpec("$virtualDimension", FieldSpec.DataType.INT, true, mockVCProvider.class);
     schema.addField(virtualDimensionFieldSpec);
     MetricFieldSpec virtualMetricFieldSpec = new MetricFieldSpec("$virtualMetric", FieldSpec.DataType.INT);
-    virtualMetricFieldSpec.setVirtualColumnProvider("provider.class");
+    virtualMetricFieldSpec.setVirtualColumnProvider(mockVCProvider.class.getName());
     schema.addField(virtualMetricFieldSpec);
 
     _mutableSegmentImpl = MutableSegmentImplTestUtils
@@ -126,5 +133,40 @@ public class MutableSegmentImplAggregateMetricsTest {
   @AfterClass
   public void tearDown() {
     _mutableSegmentImpl.destroy();
+  }
+
+  public static class mockVCProvider implements VirtualColumnProvider {
+
+    public mockVCProvider() {}
+
+    @Override
+    public DataFileReader buildReader(VirtualColumnContext context) {
+      return null;
+    }
+
+    @Override
+    public Dictionary buildDictionary(VirtualColumnContext context) {
+      return null;
+    }
+
+    @Override
+    public ColumnMetadata buildMetadata(VirtualColumnContext context) {
+      return null;
+    }
+
+    @Override
+    public InvertedIndexReader buildInvertedIndex(VirtualColumnContext context) {
+      return null;
+    }
+
+    @Override
+    public ColumnIndexContainer buildColumnIndexContainer(VirtualColumnContext context) {
+      return null;
+    }
+
+    @Override
+    public ColumnIndexContainer buildColumnIndexContainer(VirtualColumnContext context, DataFileReader reader, Dictionary dictionary, InvertedIndexReader invertedIndexReader) {
+      return null;
+    }
   }
 }
