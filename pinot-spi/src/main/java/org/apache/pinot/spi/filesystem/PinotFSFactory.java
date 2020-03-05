@@ -38,6 +38,7 @@ public class PinotFSFactory {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(PinotFSFactory.class);
   private static final String LOCAL_PINOT_FS_SCHEME = "file";
+  private static final String JAR_PINOT_FS_SCHEME = "jar";
   private static final String CLASS = "class";
 
   private static Map<String, PinotFS> PINOT_FS_MAP = new HashMap<>();
@@ -70,6 +71,10 @@ public class PinotFSFactory {
     if (!PINOT_FS_MAP.containsKey(LOCAL_PINOT_FS_SCHEME)) {
       LOGGER.info("LocalPinotFS not configured, adding as default");
       PINOT_FS_MAP.put(LOCAL_PINOT_FS_SCHEME, new LocalPinotFS());
+    }
+    if (!PINOT_FS_MAP.containsKey(JAR_PINOT_FS_SCHEME)) {
+      LOGGER.info("JarPinotFS not configured, adding as default");
+      PINOT_FS_MAP.put(JAR_PINOT_FS_SCHEME, new LocalPinotFS());
     }
   }
 
