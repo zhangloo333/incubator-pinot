@@ -41,11 +41,11 @@ import org.apache.pinot.core.data.manager.SegmentDataManager;
 import org.apache.pinot.core.data.manager.TableDataManager;
 import org.apache.pinot.core.data.manager.config.TableDataManagerConfig;
 import org.apache.pinot.core.data.manager.offline.TableDataManagerProvider;
+import org.apache.pinot.core.data.manager.upsert.DataManagerCallback;
 import org.apache.pinot.core.indexsegment.immutable.ImmutableSegment;
 import org.apache.pinot.core.indexsegment.immutable.ImmutableSegmentLoader;
 import org.apache.pinot.core.segment.index.loader.IndexLoadingConfig;
 import org.apache.pinot.core.segment.index.loader.LoaderUtils;
-import org.apache.pinot.core.segment.updater.UpsertWaterMarkManager;
 import org.apache.pinot.spi.data.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -219,12 +219,18 @@ public class HelixInstanceDataManager implements InstanceDataManager {
       // Copy from segment backup directory back to index directory
       FileUtils.copyDirectory(segmentBackupDir, indexDir);
 
+      final TableDataManager tableDataManager = _tableDataManagerMap.get(tableNameWithType);
+      final DataManagerCallback dataManagerCallback = tableDataManager.getTableDataManagerCallback()
+          .getDataManagerCallback(tableNameWithType, segmentName, schema, _serverMetrics, false);
+
       // Load from index directory
-      ImmutableSegment immutableSegment = ImmutableSegmentLoader
-          .load(indexDir, new IndexLoadingConfig(_instanceDataManagerConfig, tableConfig), schema);
+      ImmutableSegment immutableSegment = ImmutableSegmentLoader.load(indexDir,
+          new IndexLoadingConfig(_instanceDataManagerConfig, tableConfig),
+          dataManagerCallback,
+          schema);
 
       // Replace the old segment in memory
-      _tableDataManagerMap.get(tableNameWithType).addSegment(immutableSegment);
+      _tableDataManagerMap.get(tableNameWithType).addSegment(immutableSegment, dataManagerCallback);
 
       // Rename segment backup directory to segment temporary directory (atomic)
       // The reason to first rename then delete is that, renaming is an atomic operation, but deleting is not. When we
@@ -301,10 +307,12 @@ public class HelixInstanceDataManager implements InstanceDataManager {
     }
   }
 
+  /*
   @Override
   public Map<String, Map<Integer, Long>> getLowWaterMarks() {
     return UpsertWaterMarkManager.getInstance().getHighWaterMarkTablePartitionMap();
   }
+   */
 
   @Override
   public String getSegmentDataDirectory() {

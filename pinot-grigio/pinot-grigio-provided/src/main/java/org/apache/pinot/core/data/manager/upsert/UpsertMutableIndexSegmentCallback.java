@@ -16,18 +16,21 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.core.indexsegment.mutable;
+package org.apache.pinot.core.data.manager.upsert;
 
 import com.google.common.base.Preconditions;
-import org.apache.pinot.core.indexsegment.UpsertSegment;
+import org.apache.pinot.common.config.TableNameBuilder;
+import org.apache.pinot.common.segment.SegmentMetadata;
+import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.core.io.reader.DataFileReader;
-import org.apache.pinot.core.realtime.impl.RealtimeSegmentConfig;
-import org.apache.pinot.core.segment.updater.UpsertWaterMarkManager;
+import org.apache.pinot.core.segment.index.column.ColumnIndexContainer;
+import org.apache.pinot.core.segment.updater.UpsertWatermarkManager;
 import org.apache.pinot.core.segment.virtualcolumn.mutable.VirtualColumnLongValueReaderWriter;
 import org.apache.pinot.grigio.common.messages.LogEventType;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntrySet;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogStorageProvider;
+import org.apache.pinot.spi.data.Schema;
 import org.apache.pinot.spi.data.readers.GenericRow;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,13 +41,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class MutableUpsertSegmentImpl extends MutableSegmentImpl implements UpsertSegment {
+public class UpsertMutableIndexSegmentCallback implements IndexSegmentCallback {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(MutableUpsertSegmentImpl.class);
-  private final UpsertWaterMarkManager upsertWaterMarkManager;
+  private static final Logger LOGGER = LoggerFactory.getLogger(UpsertMutableIndexSegmentCallback.class);
 
-  private final String _kafkaOffsetColumnName;
-
+  private String _tableName;
+  private String _segmentName;
+  private Schema _schema;
+  private UpsertWatermarkManager _upsertWatermarkManager;
+  private String _offsetColumnName;
   private final List<VirtualColumnLongValueReaderWriter> _mutableSegmentReaderWriters = new ArrayList<>();
   // use map for mapping between kafka offset and docId because we at-most have 1 mutable segment per consumer
   // will use more memory, but we can update this later
@@ -54,23 +59,31 @@ public class MutableUpsertSegmentImpl extends MutableSegmentImpl implements Upse
   private final Map<Long, UpdateLogEntry> _unmatchedInsertRecords = new ConcurrentHashMap<>();
   private final Map<Long, UpdateLogEntry> _unmatchedDeleteRecords = new ConcurrentHashMap<>();
 
-  public MutableUpsertSegmentImpl(RealtimeSegmentConfig config) {
-    super(config);
-    _kafkaOffsetColumnName = _schema.getOffsetKey();
+  @Override
+  public void init(SegmentMetadata segmentMetadata, Map<String, DataFileReader> virtualColumnIndexReader) {
+    _tableName = TableNameBuilder.ensureTableNameWithType(segmentMetadata.getTableName(),
+        CommonConstants.Helix.TableType.REALTIME);
+    _segmentName = segmentMetadata.getName();
+    _schema = segmentMetadata.getSchema();
+    _offsetColumnName = _schema.getOffsetKey();
     Preconditions.checkState(_schema.isTableForUpsert(), "table should be upsert");
-    for (Map.Entry<String, DataFileReader> entry: _virtualColumnIndexReader.entrySet()) {
+    for (Map.Entry<String, DataFileReader> entry: virtualColumnIndexReader.entrySet()) {
       String column = entry.getKey();
       DataFileReader reader = entry.getValue();
       if (reader instanceof VirtualColumnLongValueReaderWriter) {
-        _logger.info("adding virtual column {} to updatable reader writer list", column);
+        LOGGER.info("adding virtual column {} to updatable reader writer list", column);
         _mutableSegmentReaderWriters.add((VirtualColumnLongValueReaderWriter) reader);
       }
     }
-    upsertWaterMarkManager = UpsertWaterMarkManager.getInstance();
+    _upsertWatermarkManager = UpsertWatermarkManager.getInstance();
     LOGGER.info("starting upsert segment with {} reader writer", _mutableSegmentReaderWriters.size());
   }
 
   @Override
+  public void initOffsetColumn(ColumnIndexContainer offsetColumnContainer) {
+    // do nothing
+  }
+
   public synchronized void updateVirtualColumn(Iterable<UpdateLogEntry> logEntries) {
     for (UpdateLogEntry logEntry: logEntries) {
       boolean updated = false;
@@ -83,7 +96,7 @@ public class MutableUpsertSegmentImpl extends MutableSegmentImpl implements Upse
         }
         if (updated) {
           // only update high water mark if it indeed updated something
-          upsertWaterMarkManager.processMessage(_tableName, _segmentName, logEntry);
+          _upsertWatermarkManager.processMessage(_tableName, _segmentName, logEntry);
         }
       }
       if (!offsetFound) {
@@ -92,7 +105,6 @@ public class MutableUpsertSegmentImpl extends MutableSegmentImpl implements Upse
     }
   }
 
-  @Override
   public String getVirtualColumnInfo(long offset) {
     Integer docId = _sourceOffsetToDocId.get(offset);
     StringBuilder result = new StringBuilder("matched: ");
@@ -113,8 +125,8 @@ public class MutableUpsertSegmentImpl extends MutableSegmentImpl implements Upse
   }
 
   @Override
-  protected synchronized void postProcessRecords(GenericRow row, int docId) {
-    final Long offset = (Long) row.getValue(_kafkaOffsetColumnName);
+  public synchronized void postProcessRecords(GenericRow row, int docId) {
+    final Long offset = (Long) row.getValue(_offsetColumnName);
     for (VirtualColumnLongValueReaderWriter readerWriter: _mutableSegmentReaderWriters) {
       readerWriter.addNewRecord(docId);
     }
@@ -123,15 +135,14 @@ public class MutableUpsertSegmentImpl extends MutableSegmentImpl implements Upse
     checkForOutstandingRecords(_unmatchedInsertRecords, offset, docId);
   }
 
-  @Override
   public void initVirtualColumn() throws IOException {
-    Preconditions.checkState(_numDocsIndexed == 0, "should init virtual column before ingestion");
     UpdateLogEntrySet updateLogEntries = UpdateLogStorageProvider.getInstance().getAllMessages(_tableName, _segmentName);
     LOGGER.info("got {} update log entries for current segment {}", updateLogEntries.size(), _segmentName);
     // some physical data might have been ingested when we init virtual column, we will go through the normal update
     // flow to ensure we wont miss records
     updateVirtualColumn(updateLogEntries);
   }
+
 
   private void checkForOutstandingRecords(Map<Long, UpdateLogEntry> unmatchRecordsMap, Long offset, int docId) {
     UpdateLogEntry unmatchedEntry = unmatchRecordsMap.remove(offset);
@@ -141,7 +152,7 @@ public class MutableUpsertSegmentImpl extends MutableSegmentImpl implements Upse
         updated = readerWriter.update(docId, unmatchedEntry.getValue(), unmatchedEntry.getType()) || updated;
       }
       if (updated) {
-        upsertWaterMarkManager.processMessage(_tableName, _segmentName, unmatchedEntry);
+        _upsertWatermarkManager.processMessage(_tableName, _segmentName, unmatchedEntry);
       }
     }
   }

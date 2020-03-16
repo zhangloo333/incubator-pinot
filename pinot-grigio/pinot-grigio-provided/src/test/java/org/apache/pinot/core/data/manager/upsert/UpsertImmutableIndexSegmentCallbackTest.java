@@ -16,9 +16,9 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.core.indexsegment.immutable;
+package org.apache.pinot.core.data.manager.upsert;
 
-import org.apache.pinot.core.segment.updater.UpsertWaterMarkManager;
+import org.apache.pinot.core.segment.updater.UpsertWatermarkManager;
 import org.apache.pinot.core.segment.virtualcolumn.mutable.VirtualColumnLongValueReaderWriter;
 import org.apache.pinot.grigio.common.messages.LogEventType;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
@@ -38,16 +38,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 
-public class ImmutableUpsertSegmentImplTest {
-
+public class UpsertImmutableIndexSegmentCallbackTest {
   UpdateLogStorageProvider _mockProvider;
-  UpsertWaterMarkManager _mockUpsertWaterMarkManager;
+  UpsertWatermarkManager _mockUpsertWatermarkManager;
   List<VirtualColumnLongValueReaderWriter> _readerWriters = new ArrayList<>();
 
   @BeforeMethod
   public void init() {
     _mockProvider = mock(UpdateLogStorageProvider.class);
-    _mockUpsertWaterMarkManager = mock(UpsertWaterMarkManager.class);
+    _mockUpsertWatermarkManager = mock(UpsertWatermarkManager.class);
   }
 
   @Test
@@ -105,10 +104,10 @@ public class ImmutableUpsertSegmentImplTest {
 
     start = System.currentTimeMillis();
 
-    ImmutableUpsertSegmentImpl immutableUpsertSegment = new ImmutableUpsertSegmentImpl(_readerWriters, totalDocs,
-        _mockUpsertWaterMarkManager, _mockProvider, minOffset, offsetToDocId);
+    UpsertImmutableIndexSegmentCallback callback = new UpsertImmutableIndexSegmentCallback();
+    callback.init(_readerWriters, totalDocs, _mockUpsertWatermarkManager, _mockProvider, minOffset, offsetToDocId);
+    callback.initVirtualColumn();
 
-    immutableUpsertSegment.initVirtualColumn();
     long runtime = System.currentTimeMillis() - start;
     System.out.println("run time is " + runtime);
     // on regular developer laptop this should take less 1 second, but on integration server this might be longer

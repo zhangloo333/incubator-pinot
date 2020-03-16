@@ -36,6 +36,9 @@ import org.apache.pinot.common.segment.SegmentMetadata;
 import org.apache.pinot.core.data.manager.config.TableDataManagerConfig;
 import org.apache.pinot.core.data.manager.offline.ImmutableSegmentDataManager;
 import org.apache.pinot.core.data.manager.offline.OfflineTableDataManager;
+import org.apache.pinot.core.data.manager.upsert.DefaultDataManagerCallbackImpl;
+import org.apache.pinot.core.data.manager.upsert.DefaultIndexSegmentCallback;
+import org.apache.pinot.core.data.manager.upsert.DefaultTableDataManagerCallbackImpl;
 import org.apache.pinot.core.indexsegment.immutable.ImmutableSegment;
 import org.testng.Assert;
 import org.testng.annotations.AfterSuite;
@@ -100,7 +103,7 @@ public class BaseTableDataManagerTest {
 
   private TableDataManager makeTestableManager()
       throws Exception {
-    TableDataManager tableDataManager = new OfflineTableDataManager();
+    TableDataManager tableDataManager = new OfflineTableDataManager(new DefaultTableDataManagerCallbackImpl());
     TableDataManagerConfig config;
     {
       config = mock(TableDataManagerConfig.class);
@@ -139,7 +142,7 @@ public class BaseTableDataManagerTest {
     // Add the segment, get it for use, remove the segment, and then return it.
     // Make sure that the segment is not destroyed before return.
     ImmutableSegment immutableSegment = makeImmutableSegment(segmentName, totalDocs);
-    tableDataManager.addSegment(immutableSegment);
+    tableDataManager.addSegment(immutableSegment, DefaultDataManagerCallbackImpl.INSTANCE);
     SegmentDataManager segmentDataManager = tableDataManager.acquireSegment(segmentName);
     Assert.assertEquals(segmentDataManager.getReferenceCount(), 2);
     tableDataManager.removeSegment(segmentName);
@@ -161,7 +164,7 @@ public class BaseTableDataManagerTest {
     // Add a new segment and remove it in order this time.
     final String anotherSeg = "AnotherSegment";
     ImmutableSegment ix1 = makeImmutableSegment(anotherSeg, totalDocs);
-    tableDataManager.addSegment(ix1);
+    tableDataManager.addSegment(ix1, DefaultDataManagerCallbackImpl.INSTANCE);
     SegmentDataManager sdm1 = tableDataManager.acquireSegment(anotherSeg);
     Assert.assertNotNull(sdm1);
     Assert.assertEquals(sdm1.getReferenceCount(), 2);
@@ -178,7 +181,7 @@ public class BaseTableDataManagerTest {
     Assert.assertEquals(sdm1.getReferenceCount(), 1);
     // Now replace the segment with another one.
     ImmutableSegment ix2 = makeImmutableSegment(anotherSeg, totalDocs + 1);
-    tableDataManager.addSegment(ix2);
+    tableDataManager.addSegment(ix2, DefaultDataManagerCallbackImpl.INSTANCE);
     // Now the previous one should have been destroyed, and
     Assert.assertEquals(sdm1.getReferenceCount(), 0);
     verify(ix1, times(1)).destroy();
@@ -222,7 +225,8 @@ public class BaseTableDataManagerTest {
 
     for (int i = _lo; i <= _hi; i++) {
       final String segName = SEGMENT_PREFIX + i;
-      tableDataManager.addSegment(makeImmutableSegment(segName, random.nextInt()));
+      tableDataManager.addSegment(makeImmutableSegment(segName, random.nextInt()),
+          DefaultDataManagerCallbackImpl.INSTANCE);
       _allSegManagers.add(_internalSegMap.get(segName));
     }
 
@@ -409,7 +413,8 @@ public class BaseTableDataManagerTest {
     private void addSegment() {
       final int segmentToAdd = _hi + 1;
       final String segName = SEGMENT_PREFIX + segmentToAdd;
-      _tableDataManager.addSegment(makeImmutableSegment(segName, _random.nextInt()));
+      _tableDataManager.addSegment(makeImmutableSegment(segName, _random.nextInt()),
+          DefaultDataManagerCallbackImpl.INSTANCE);
       _allSegManagers.add(_internalSegMap.get(segName));
       _hi = segmentToAdd;
     }
@@ -418,7 +423,8 @@ public class BaseTableDataManagerTest {
     private void replaceSegment() {
       int segToReplace = _random.nextInt(_hi - _lo + 1) + _lo;
       final String segName = SEGMENT_PREFIX + segToReplace;
-      _tableDataManager.addSegment(makeImmutableSegment(segName, _random.nextInt()));
+      _tableDataManager.addSegment(makeImmutableSegment(segName, _random.nextInt()),
+          DefaultDataManagerCallbackImpl.INSTANCE);
       _allSegManagers.add(_internalSegMap.get(segName));
     }
 

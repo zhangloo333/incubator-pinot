@@ -29,6 +29,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
 import org.apache.commons.io.FileUtils;
+import org.apache.pinot.core.data.manager.upsert.DefaultDataManagerCallbackImpl;
+import org.apache.pinot.core.data.manager.upsert.DefaultIndexSegmentCallback;
 import org.apache.pinot.spi.data.FieldSpec.DataType;
 import org.apache.pinot.spi.data.Schema;
 import org.apache.pinot.common.response.broker.AggregationResult;

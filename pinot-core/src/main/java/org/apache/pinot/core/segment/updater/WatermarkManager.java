@@ -16,22 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.core.indexsegment.mutable;
+package org.apache.pinot.core.segment.updater;
 
-import org.apache.pinot.core.realtime.impl.RealtimeSegmentConfig;
-import org.apache.pinot.spi.data.readers.GenericRow;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.commons.configuration.Configuration;
+import org.apache.pinot.grigio.common.metrics.GrigioMeter;
+import org.apache.pinot.grigio.common.metrics.GrigioMetrics;
 
-public class MutableAppendSegmentImpl extends MutableSegmentImpl {
-  private static final Logger LOGGER = LoggerFactory.getLogger(MutableUpsertSegmentImpl.class);
+import java.util.Map;
 
-  public MutableAppendSegmentImpl(RealtimeSegmentConfig config) {
-    super(config);
-  }
+public interface WatermarkManager {
 
-  @Override
-  protected void postProcessRecords(GenericRow row, int docId) {
-    // nothing
-  }
+  void init(Configuration config, GrigioMetrics metrics);
+
+  Map<String, Map<Integer, Long>> getHighWaterMarkTablePartitionMap();
+
 }

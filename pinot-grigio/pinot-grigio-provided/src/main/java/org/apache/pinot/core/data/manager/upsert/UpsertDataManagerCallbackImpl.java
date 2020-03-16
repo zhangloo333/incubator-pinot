@@ -16,20 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.core.data.manager.realtime;
+package org.apache.pinot.core.data.manager.upsert;
 
 import com.google.common.base.Preconditions;
-import org.apache.pinot.common.config.TableConfig;
-import org.apache.pinot.common.metadata.segment.RealtimeSegmentZKMetadata;
+import org.apache.pinot.common.config.TableNameBuilder;
 import org.apache.pinot.common.metrics.ServerMeter;
 import org.apache.pinot.common.metrics.ServerMetrics;
+import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.LLCSegmentName;
-import org.apache.pinot.core.data.manager.UpsertSegmentDataManager;
-import org.apache.pinot.core.indexsegment.UpsertSegment;
-import org.apache.pinot.core.indexsegment.mutable.MutableSegmentImpl;
-import org.apache.pinot.core.indexsegment.mutable.MutableUpsertSegmentImpl;
-import org.apache.pinot.core.realtime.impl.RealtimeSegmentConfig;
-import org.apache.pinot.core.segment.index.loader.IndexLoadingConfig;
 import org.apache.pinot.core.segment.updater.SegmentUpdater;
 import org.apache.pinot.grigio.common.messages.KeyCoordinatorQueueMsg;
 import org.apache.pinot.grigio.common.rpcQueue.ProduceTask;
@@ -40,71 +34,74 @@ import org.apache.pinot.spi.data.DimensionFieldSpec;
 import org.apache.pinot.spi.data.Schema;
 import org.apache.pinot.spi.data.TimeFieldSpec;
 import org.apache.pinot.spi.data.readers.GenericRow;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.concurrent.Semaphore;
 
-/**
- * class design is pretty bad right now, need to rework inheritance to abstract the base class or use composition instead
- */
-public class UpsertLLRealtimeSegmentDataManager extends LLRealtimeSegmentDataManager implements UpsertSegmentDataManager {
+public class UpsertDataManagerCallbackImpl implements DataManagerCallback {
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(UpsertDataManagerCallbackImpl.class);
+
+  private final String _tableNameWithType;
   private final QueueProducer _keyCoordinatorQueueProducer;
+  private final String _segmentName;
+  private final Schema _schema;
+  private final ServerMetrics _serverMetrics;
+  private IndexSegmentCallback _indexSegmentCallback;
 
-  public UpsertLLRealtimeSegmentDataManager(RealtimeSegmentZKMetadata segmentZKMetadata, TableConfig tableConfig,
-      RealtimeTableDataManager realtimeTableDataManager, String resourceDataDir, IndexLoadingConfig indexLoadingConfig,
-      Schema schema, LLCSegmentName llcSegmentName, Semaphore partitionConsumerSemaphore, ServerMetrics serverMetrics) throws Exception {
-    super(segmentZKMetadata, tableConfig, realtimeTableDataManager, resourceDataDir, indexLoadingConfig, schema,
-            llcSegmentName, partitionConsumerSemaphore, serverMetrics);
-    Preconditions.checkState(_schema.getPrimaryKeyFieldSpec() != null, "primary key not found");
-    Preconditions.checkState(_schema.getOffsetKeyFieldSpec() != null, "offset key not found");
+  public UpsertDataManagerCallbackImpl(String tableNameWithType, String segmentName, Schema schema,
+      ServerMetrics serverMetrics, boolean isMutable) {
+    Preconditions.checkState(schema.getPrimaryKeyFieldSpec() != null, "primary key not found");
+    Preconditions.checkState(schema.getOffsetKeyFieldSpec() != null, "offset key not found");
+    _tableNameWithType = TableNameBuilder.ensureTableNameWithType(tableNameWithType,
+        CommonConstants.Helix.TableType.REALTIME);
+    _segmentName = segmentName;
+    _schema = schema;
+    _serverMetrics = serverMetrics;
     _keyCoordinatorQueueProducer = KeyCoordinatorProvider.getInstance().getCachedProducer(_tableNameWithType);
-    initVirtualColumns();
-  }
-
-  public String getSegmentName() {
-    return _segmentNameStr;
-  }
-
-  @Override
-  public void updateVirtualColumns(List<UpdateLogEntry> messages) {
-    ((UpsertSegment) _realtimeSegment).updateVirtualColumn(messages);
+    if (isMutable) {
+      _indexSegmentCallback = new UpsertMutableIndexSegmentCallback();
+    } else {
+      _indexSegmentCallback = new UpsertImmutableIndexSegmentCallback();
+    }
   }
 
   @Override
-  public String getVirtualColumnInfo(long offset) {
-    return ((UpsertSegment) _realtimeSegment).getVirtualColumnInfo(offset);
+  public synchronized IndexSegmentCallback getIndexSegmentCallback() {
+    return _indexSegmentCallback;
   }
 
   @Override
-  public void destroy() {
-    SegmentUpdater.getInstance().removeSegmentDataManager(_tableNameWithType, _llcSegmentName.getSegmentName(), this);
-    super.destroy();
+  public void processTransformedRow(GenericRow row, long offset) {
+    row.putValue(_schema.getOffsetKey(), offset);
   }
 
   @Override
-  protected MutableSegmentImpl createMutableSegment(RealtimeSegmentConfig config) {
-    return new MutableUpsertSegmentImpl(config);
-  }
-
-  @Override
-  protected void processTransformedRow(GenericRow row, long offset) {
-    row.putField(_schema.getOffsetKey(), offset);
-  }
-
-  @Override
-  protected void postIndexProcessing(GenericRow row, long offset) {
+  public void postIndexProcessing(GenericRow row, long offset) {
     emitEventToKeyCoordinator(row, offset);
   }
 
   @Override
-  protected boolean consumeLoop() throws Exception {
-    boolean result = super.consumeLoop();
-    segmentLogger.info("flushing kafka producer");
+  public void postConsumeLoop() {
     _keyCoordinatorQueueProducer.flush();
-    segmentLogger.info("done flushing kafka producer");
-    return result;
+  }
+
+  public void updateVirtualColumns(List<UpdateLogEntry> messages) {
+    _indexSegmentCallback.updateVirtualColumn(messages);
+  }
+
+  public String getVirtualColumnInfo(long offset) {
+    return _indexSegmentCallback.getVirtualColumnInfo(offset);
+  }
+
+  public void destroy() {
+    try {
+      SegmentUpdater.getInstance().removeSegmentDataManager(_tableNameWithType, _segmentName, this);
+    } catch (Exception ex) {
+      LOGGER.error("failed to destroy data manager callback");
+    }
   }
 
   /**
@@ -116,7 +113,7 @@ public class UpsertLLRealtimeSegmentDataManager extends LLRealtimeSegmentDataMan
     final byte[] primaryKeyBytes = getPrimaryKeyBytesFromRow(row);
     final long timestampMillis = getTimestampFromRow(row);
     ProduceTask<byte[], KeyCoordinatorQueueMsg> task = new ProduceTask<>(primaryKeyBytes,
-        new KeyCoordinatorQueueMsg(primaryKeyBytes, _segmentNameStr, timestampMillis, offset));
+        new KeyCoordinatorQueueMsg(primaryKeyBytes, _segmentName, timestampMillis, offset));
     task.setCallback(new ProduceTask.Callback() {
       @Override
       public void onSuccess() {
@@ -143,11 +140,12 @@ public class UpsertLLRealtimeSegmentDataManager extends LLRealtimeSegmentDataMan
     return spec.getIncomingGranularitySpec().toMillis(row.getValue(spec.getIncomingTimeColumnName()));
   }
 
-
-  private void initVirtualColumns() throws IOException {
+  @Override
+  public void initVirtualColumns() throws IOException {
     // 1. ensure the data manager can capture all update events
     // 2. load all existing messages
-    SegmentUpdater.getInstance().addSegmentDataManager(_tableNameWithType, _llcSegmentName, this);
-    ((UpsertSegment) _realtimeSegment).initVirtualColumn();
+    SegmentUpdater.getInstance().addSegmentDataManager(_tableNameWithType, new LLCSegmentName(_segmentName), this);
+    _indexSegmentCallback.initVirtualColumn();
   }
+
 }

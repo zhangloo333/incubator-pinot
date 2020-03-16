@@ -132,8 +132,8 @@ public interface InstanceDataManager {
    */
   ZkHelixPropertyStore<ZNRecord> getPropertyStore();
 
-  /**
-   * Return the mappings from partition -> low water marks of all the tables hosted in this server.
-   */
-  Map<String, Map<Integer, Long>> getLowWaterMarks();
+//  /**
+//   * Return the mappings from partition -> low water marks of all the tables hosted in this server.
+//   */
+//  Map<String, Map<Integer, Long>> getLowWaterMarks();
 }

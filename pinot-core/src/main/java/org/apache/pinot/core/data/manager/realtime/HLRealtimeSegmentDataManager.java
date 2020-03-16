@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.io.FileUtils;
 import org.apache.pinot.common.config.IndexingConfig;
 import org.apache.pinot.common.config.TableConfig;
-import org.apache.pinot.core.indexsegment.mutable.MutableAppendSegmentImpl;
+import org.apache.pinot.core.data.manager.upsert.DefaultDataManagerCallbackImpl;
 import org.apache.pinot.spi.data.Schema;
 import org.apache.pinot.common.metadata.instance.InstanceZKMetadata;
 import org.apache.pinot.common.metadata.segment.RealtimeSegmentZKMetadata;
@@ -195,7 +195,8 @@ public class HLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
                 indexLoadingConfig.isDirectRealtimeOffheapAllocation(), serverMetrics))
             .setStatsHistory(realtimeTableDataManager.getStatsHistory())
             .setNullHandlingEnabled(indexingConfig.isNullHandlingEnabled()).build();
-    realtimeSegment = new MutableAppendSegmentImpl(realtimeSegmentConfig);
+    realtimeSegment = new MutableSegmentImpl(realtimeSegmentConfig,
+        DefaultDataManagerCallbackImpl.INSTANCE.getIndexSegmentCallback());
 
 
     notifier = realtimeTableDataManager;

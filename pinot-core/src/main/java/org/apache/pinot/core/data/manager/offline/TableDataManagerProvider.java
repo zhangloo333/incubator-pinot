@@ -18,6 +18,8 @@
  */
 package org.apache.pinot.core.data.manager.offline;
 
+import com.google.common.base.Preconditions;
+import org.apache.commons.configuration.PropertiesConfiguration;
 import org.apache.helix.ZNRecord;
 import org.apache.helix.store.zk.ZkHelixPropertyStore;
 import org.apache.pinot.common.metrics.ServerMetrics;
@@ -25,8 +27,8 @@ import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.core.data.manager.TableDataManager;
 import org.apache.pinot.core.data.manager.config.InstanceDataManagerConfig;
 import org.apache.pinot.core.data.manager.config.TableDataManagerConfig;
-import org.apache.pinot.core.data.manager.realtime.AppendRealtimeTableDataManager;
-import org.apache.pinot.core.data.manager.realtime.UpsertRealtimeTableDataManager;
+import org.apache.pinot.core.data.manager.realtime.RealtimeTableDataManager;
+import org.apache.pinot.core.data.manager.upsert.TableDataManagerCallbackProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,11 +43,18 @@ public class TableDataManagerProvider {
   private static final Logger LOGGER = LoggerFactory.getLogger(TableDataManagerProvider.class);
 
   private static Semaphore _segmentBuildSemaphore;
+  private static TableDataManagerCallbackProvider _tableDataManagerCallbackProvider;
 
   private TableDataManagerProvider() {
   }
 
   public static void init(InstanceDataManagerConfig instanceDataManagerConfig) {
+    init(instanceDataManagerConfig, new TableDataManagerCallbackProvider(new PropertiesConfiguration()));
+  }
+
+  public static void init(InstanceDataManagerConfig instanceDataManagerConfig,
+                          TableDataManagerCallbackProvider callbackProvider) {
+    _tableDataManagerCallbackProvider = callbackProvider;
     int maxParallelBuilds = instanceDataManagerConfig.getMaxParallelSegmentBuilds();
     if (maxParallelBuilds > 0) {
       _segmentBuildSemaphore = new Semaphore(maxParallelBuilds, true);
@@ -55,17 +64,16 @@ public class TableDataManagerProvider {
   public static TableDataManager getTableDataManager(@Nonnull TableDataManagerConfig tableDataManagerConfig,
       @Nonnull String instanceId, @Nonnull ZkHelixPropertyStore<ZNRecord> propertyStore,
       @Nonnull ServerMetrics serverMetrics) {
-    TableDataManager tableDataManager;
+    Preconditions.checkNotNull(_tableDataManagerCallbackProvider, "callback provider is not init");
+    final TableDataManager tableDataManager;
     switch (CommonConstants.Helix.TableType.valueOf(tableDataManagerConfig.getTableDataManagerType())) {
       case OFFLINE:
-        tableDataManager = new OfflineTableDataManager();
+        tableDataManager = new OfflineTableDataManager(
+            _tableDataManagerCallbackProvider.getDefaultTableDataManagerCallback());
         break;
       case REALTIME:
-        if (tableDataManagerConfig.getUpdateSemantic() == CommonConstants.UpdateSemantic.UPSERT) {
-          tableDataManager = new UpsertRealtimeTableDataManager(_segmentBuildSemaphore);
-        } else {
-          tableDataManager = new AppendRealtimeTableDataManager(_segmentBuildSemaphore);
-        }
+        tableDataManager = new RealtimeTableDataManager(_segmentBuildSemaphore,
+            _tableDataManagerCallbackProvider.getTableDataManagerCallback(tableDataManagerConfig));
         break;
       default:
         throw new IllegalStateException();

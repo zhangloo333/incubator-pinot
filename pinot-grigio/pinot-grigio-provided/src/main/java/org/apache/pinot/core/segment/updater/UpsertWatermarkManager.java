@@ -21,6 +21,7 @@ package org.apache.pinot.core.segment.updater;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
+import org.apache.commons.configuration.Configuration;
 import org.apache.pinot.grigio.common.metrics.GrigioGauge;
 import org.apache.pinot.grigio.common.metrics.GrigioMetrics;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
@@ -30,26 +31,26 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class UpsertWaterMarkManager {
+public class UpsertWatermarkManager implements WatermarkManager {
 
   private final Map<String, Map<Integer, Long>> _highWaterMarkTablePartitionMap = new ConcurrentHashMap<>();
   private final GrigioMetrics _metrics;
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(UpsertWaterMarkManager.class);
-  private static volatile UpsertWaterMarkManager _instance;
+  private static final Logger LOGGER = LoggerFactory.getLogger(UpsertWatermarkManager.class);
+  private static volatile UpsertWatermarkManager _instance;
 
-  private UpsertWaterMarkManager(GrigioMetrics metrics) {
+  private UpsertWatermarkManager(GrigioMetrics metrics) {
     _metrics = metrics;
   }
 
   public static void init(GrigioMetrics metrics) {
-    synchronized (UpsertWaterMarkManager.class) {
+    synchronized (UpsertWatermarkManager.class) {
       Preconditions.checkState(_instance == null, "upsert water mark manager is already init");
-      _instance = new UpsertWaterMarkManager(metrics);
+      _instance = new UpsertWatermarkManager(metrics);
     }
   }
 
-  public static UpsertWaterMarkManager getInstance() {
+  public static UpsertWatermarkManager getInstance() {
     Preconditions.checkState(_instance != null, "upsert water mark manager is not yet init");
     return _instance;
   }
@@ -77,6 +78,11 @@ public class UpsertWaterMarkManager {
 
   public Map<Integer, Long> getHighWaterMarkForTable(String tableName) {
     return ImmutableMap.copyOf(_highWaterMarkTablePartitionMap.getOrDefault(tableName, ImmutableMap.of()));
+  }
+
+  @Override
+  public void init(Configuration config, GrigioMetrics metrics) {
+
   }
 
   public Map<String, Map<Integer, Long>> getHighWaterMarkTablePartitionMap() {

@@ -26,7 +26,7 @@ import org.apache.commons.configuration.Configuration;
 import org.apache.pinot.common.config.TableNameBuilder;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.LLCSegmentName;
-import org.apache.pinot.core.data.manager.UpsertSegmentDataManager;
+import org.apache.pinot.core.data.manager.upsert.DataManagerCallback;
 import org.apache.pinot.grigio.common.messages.LogCoordinatorMessage;
 import org.apache.pinot.grigio.common.metrics.GrigioMeter;
 import org.apache.pinot.grigio.common.metrics.GrigioMetrics;
@@ -75,7 +75,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
   private final String _topicPrefix;
   private final ExecutorService _ingestionExecutorService;
   private final QueueConsumer _consumer;
-  private final Map<String, Map<String, Set<UpsertSegmentDataManager>>> _tableSegmentMap = new ConcurrentHashMap<>();
+  private final Map<String, Map<String, Set<DataManagerCallback>>> _tableSegmentMap = new ConcurrentHashMap<>();
   private final Map<String, Map<Integer, Long>> _tablePartitionCreationTime = new ConcurrentHashMap<>();
   private final UpdateLogStorageProvider _updateLogStorageProvider;
   private final UpdateLogRetentionManager _retentionManager;
@@ -91,7 +91,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
     _topicPrefix = conf.getString(SegmentUpdaterConfig.INPUT_TOPIC_PREFIX);
     _updateSleepMs = conf.getInt(SegmentUpdaterConfig.SEGMENT_UDPATE_SLEEP_MS,
         SegmentUpdaterConfig.SEGMENT_UDPATE_SLEEP_MS_DEFAULT);
-    UpsertWaterMarkManager.init(metrics);
+    UpsertWatermarkManager.init(metrics);
     _consumer = provider.getConsumer();
     _ingestionExecutorService = Executors.newFixedThreadPool(1);
     _updateLogStorageProvider = UpdateLogStorageProvider.getInstance();
@@ -163,7 +163,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
           String tableName = TableNameBuilder.ensureTableNameWithType(entry.getKey(), CommonConstants.Helix.TableType.REALTIME);
           int tableMessageCount = 0;
           if (_tableSegmentMap.containsKey(tableName)) {
-            final Map<String, Set<UpsertSegmentDataManager>> segmentManagersMap = _tableSegmentMap.get(tableName);
+            final Map<String, Set<DataManagerCallback>> segmentManagersMap = _tableSegmentMap.get(tableName);
             final TableUpdateLogs segment2UpdateLogsMap = entry.getValue();
             updateSegmentVirtualColumns(tableName, segmentManagersMap, segment2UpdateLogsMap, timeToStoreUpdateLogs);
           } else {
@@ -179,7 +179,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
           if (System.currentTimeMillis() - lastReportedTime > LOGGER_TIME_GAP_MS) {
             lastReportedTime = System.currentTimeMillis();
             LOGGER.info("processed {} messages in {} ms", eventCount, System.currentTimeMillis() - loopStartTime);
-            LOGGER.info("latest high water mark is {}", UpsertWaterMarkManager.getInstance().toString());
+            LOGGER.info("latest high water mark is {}", UpsertWatermarkManager.getInstance().toString());
           }
           _consumer.ackOffset();
           _metrics.addTimedValueMs(GrigioTimer.SEGMENT_UPDATER_LOOP_TIME, System.currentTimeMillis() - loopStartTime);
@@ -202,7 +202,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
   /**
    * Update the virtual columns of affected segments of a table.
    */
-  private void updateSegmentVirtualColumns(String tableName, Map<String, Set<UpsertSegmentDataManager>> segmentManagersMap,
+  private void updateSegmentVirtualColumns(String tableName, Map<String, Set<DataManagerCallback>> segmentManagersMap,
                                            TableUpdateLogs segment2UpdateLogsMap, AtomicLong timeToStoreUpdateLogs) throws IOException{
     for (Map.Entry<String, List<UpdateLogEntry>> segmentEntry : segment2UpdateLogsMap.getSegments2UpdateLog().entrySet()) {
       final String segmentNameStr = segmentEntry.getKey();
@@ -217,7 +217,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
    * from consuming to online (mutable segment to immutable segment). In most of cases we expect only one segment manager
    * in this set of UpsertSegmentDataManager
    */
-  private void updateVirtualColumn(String table, String segment, Set<UpsertSegmentDataManager> segmentDataManagers,
+  private void updateVirtualColumn(String table, String segment, Set<DataManagerCallback> segmentDataManagers,
                                    List<UpdateLogEntry> messages, AtomicLong timeToStoreUpdateLogs) throws IOException {
     LOGGER.debug("updating segment {} with {} results for {} data managers", segment, messages.size(),
         segmentDataManagers.size());
@@ -225,7 +225,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
       storeUpdateLogs(table, segment, messages, timeToStoreUpdateLogs);
     }
     try {
-      for (UpsertSegmentDataManager dataManager: segmentDataManagers) {
+      for (DataManagerCallback dataManager: segmentDataManagers) {
         dataManager.updateVirtualColumns(messages);
       }
     } catch (Exception ex) {
@@ -239,7 +239,8 @@ public class SegmentUpdater implements SegmentDeletionListener {
    * @param segmentName
    * @param dataManager the data manager for the current given table/segment combination
    */
-  public synchronized void addSegmentDataManager(String tableNameWithType, LLCSegmentName segmentName, UpsertSegmentDataManager dataManager) {
+  public synchronized void addSegmentDataManager(String tableNameWithType, LLCSegmentName segmentName,
+      DataManagerCallback dataManager) {
     // TODO get partition assignment from
     LOGGER.info("segment updater adding table {} segment {}", tableNameWithType, segmentName.getSegmentName());
     if (!_tableSegmentMap.containsKey(tableNameWithType)) {
@@ -258,11 +259,12 @@ public class SegmentUpdater implements SegmentDeletionListener {
     }
   }
 
-  public synchronized void removeSegmentDataManager(String tableNameWithType, String segmentName, UpsertSegmentDataManager toDeleteManager) {
+  public synchronized void removeSegmentDataManager(String tableNameWithType, String segmentName,
+      DataManagerCallback toDeleteManager) {
     LOGGER.info("segment updater removing table {} segment {}", tableNameWithType, segmentName);
-    Map<String, Set<UpsertSegmentDataManager>> segmentMap = _tableSegmentMap.get(tableNameWithType);
+    Map<String, Set<DataManagerCallback>> segmentMap = _tableSegmentMap.get(tableNameWithType);
     if (segmentMap != null) {
-      Set<UpsertSegmentDataManager> segmentDataManagers = segmentMap.get(segmentName);
+      Set<DataManagerCallback> segmentDataManagers = segmentMap.get(segmentName);
       if (segmentDataManagers != null) {
         segmentDataManagers.remove(toDeleteManager);
         if (segmentDataManagers.size() == 0) {
@@ -298,7 +300,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
   @Override
   public synchronized void onSegmentDeletion(String tableNameWithType, String segmentName) {
     LOGGER.info("deleting segment virtual column from local storage for table {} segment {}", tableNameWithType, segmentName);
-    Map<String, Set<UpsertSegmentDataManager>> segmentManagerMap = _tableSegmentMap.get(tableNameWithType);
+    Map<String, Set<DataManagerCallback>> segmentManagerMap = _tableSegmentMap.get(tableNameWithType);
     if (segmentManagerMap != null) {
       if (segmentManagerMap.containsKey(segmentName) && segmentManagerMap.get(segmentName).size() > 0) {
         LOGGER.error("trying to remove segment storage with {} segment data manager", segmentManagerMap.get(segmentName).size());

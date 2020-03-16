@@ -50,6 +50,7 @@ import org.apache.pinot.common.protocols.SegmentCompletionProtocol;
 import org.apache.pinot.common.utils.CommonConstants.Segment.Realtime.CompletionMode;
 import org.apache.pinot.common.utils.LLCSegmentName;
 import org.apache.pinot.common.utils.TarGzCompressionUtils;
+import org.apache.pinot.core.data.manager.upsert.DataManagerCallback;
 import org.apache.pinot.core.data.recordtransformer.CompositeTransformer;
 import org.apache.pinot.core.data.recordtransformer.RecordTransformer;
 import org.apache.pinot.core.indexsegment.generator.SegmentVersion;
@@ -83,7 +84,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Segment data manager for low level consumer realtime segments, which manages consumption and segment completion.
  */
-public abstract class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
+public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
   protected enum State {
     // The state machine starts off with this state. While in this state we consume stream events
     // and index them in memory. We continue to be in this state until the end criteria is satisfied
@@ -272,6 +273,9 @@ public abstract class LLRealtimeSegmentDataManager extends RealtimeSegmentDataMa
   private final boolean _nullHandlingEnabled;
   private final SegmentCommitterFactory _segmentCommitterFactory;
 
+  // upsert/append related components
+  private final DataManagerCallback _dataManagerCallback;
+
   // TODO each time this method is called, we print reason for stop. Good to print only once.
   private boolean endCriteriaReached() {
     Preconditions.checkState(_state.shouldConsume(), "Incorrect state %s", _state);
@@ -416,6 +420,7 @@ public abstract class LLRealtimeSegmentDataManager extends RealtimeSegmentDataMa
       _serverMetrics.addMeteredTableValue(_metricKeyName, ServerMeter.ROWS_WITH_ERRORS, _numRowsErrored);
       _serverMetrics.addMeteredTableValue(_tableStreamName, ServerMeter.ROWS_WITH_ERRORS, _numRowsErrored);
     }
+    _dataManagerCallback.postConsumeLoop();
     return true;
   }
 
@@ -467,14 +472,14 @@ public abstract class LLRealtimeSegmentDataManager extends RealtimeSegmentDataMa
           GenericRow transformedRow = _recordTransformer.transform(decodedRow);
 
           if (transformedRow != null) {
-            processTransformedRow(transformedRow, _currentOffset);
+            _dataManagerCallback.processTransformedRow(transformedRow, _currentOffset);
             realtimeRowsConsumedMeter =
                 _serverMetrics.addMeteredTableValue(_metricKeyName, ServerMeter.REALTIME_ROWS_CONSUMED, 1,
                     realtimeRowsConsumedMeter);
             indexedMessageCount++;
 
             canTakeMore = _realtimeSegment.index(transformedRow, msgMetadata);
-            postIndexProcessing(transformedRow, _currentOffset);
+            _dataManagerCallback.postIndexProcessing(transformedRow, _currentOffset);
           } else {
             realtimeRowsDroppedMeter = _serverMetrics
                 .addMeteredTableValue(_metricKeyName, ServerMeter.INVALID_REALTIME_ROWS_DROPPED, 1,
@@ -504,11 +509,6 @@ public abstract class LLRealtimeSegmentDataManager extends RealtimeSegmentDataMa
       Uninterruptibles.sleepUninterruptibly(idlePipeSleepTimeMillis, TimeUnit.MILLISECONDS);
     }
   }
-
-  protected abstract void processTransformedRow(GenericRow row, long offset);
-
-
-  protected abstract void postIndexProcessing(GenericRow row, long offset);
 
   public class PartitionConsumer implements Runnable {
     public void run() {
@@ -1017,6 +1017,7 @@ public abstract class LLRealtimeSegmentDataManager extends RealtimeSegmentDataMa
   }
 
   public void destroy() {
+    _dataManagerCallback.destroy();
     try {
       stop();
     } catch (InterruptedException e) {
@@ -1054,7 +1055,8 @@ public abstract class LLRealtimeSegmentDataManager extends RealtimeSegmentDataMa
   // If the transition is OFFLINE to ONLINE, the caller should have downloaded the segment and we don't reach here.
   public LLRealtimeSegmentDataManager(RealtimeSegmentZKMetadata segmentZKMetadata, TableConfig tableConfig,
       RealtimeTableDataManager realtimeTableDataManager, String resourceDataDir, IndexLoadingConfig indexLoadingConfig,
-      Schema schema, LLCSegmentName llcSegmentName, Semaphore partitionConsumerSemaphore, ServerMetrics serverMetrics) {
+      Schema schema, LLCSegmentName llcSegmentName, Semaphore partitionConsumerSemaphore, ServerMetrics serverMetrics,
+      DataManagerCallback dataManagerCallback) {
     _segBuildSemaphore = realtimeTableDataManager.getSegmentBuildSemaphore();
     _segmentZKMetadata = (LLCRealtimeSegmentZKMetadata) segmentZKMetadata;
     _tableConfig = tableConfig;
@@ -1064,6 +1066,7 @@ public abstract class LLRealtimeSegmentDataManager extends RealtimeSegmentDataMa
     _indexLoadingConfig = indexLoadingConfig;
     _schema = schema;
     _serverMetrics = serverMetrics;
+    _dataManagerCallback = dataManagerCallback;
     _segmentVersion = indexLoadingConfig.getSegmentVersion();
     _instanceId = _realtimeTableDataManager.getServerInstance();
     _leaseExtender = SegmentBuildTimeLeaseExtender.getLeaseExtender(_instanceId);
@@ -1185,7 +1188,8 @@ public abstract class LLRealtimeSegmentDataManager extends RealtimeSegmentDataMa
       }
     }
 
-    _realtimeSegment = createMutableSegment(realtimeSegmentConfigBuilder.build());
+    _realtimeSegment = new MutableSegmentImpl(realtimeSegmentConfigBuilder.build(),
+        _dataManagerCallback.getIndexSegmentCallback());
     _startOffset = _segmentZKMetadata.getStartOffset();
     _currentOffset = _startOffset;
     _resourceTmpDir = new File(resourceDataDir, "_tmp");
@@ -1220,8 +1224,6 @@ public abstract class LLRealtimeSegmentDataManager extends RealtimeSegmentDataMa
             _segmentMaxRowCount, new DateTime(_consumeEndTime, DateTimeZone.UTC).toString());
     start();
   }
-
-  protected abstract MutableSegmentImpl createMutableSegment(RealtimeSegmentConfig config);
 
   /**
    * Creates a new stream consumer

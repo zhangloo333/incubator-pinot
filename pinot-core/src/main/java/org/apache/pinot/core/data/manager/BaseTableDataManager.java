@@ -33,6 +33,7 @@ import org.apache.pinot.common.metrics.ServerMeter;
 import org.apache.pinot.common.metrics.ServerMetrics;
 import org.apache.pinot.core.data.manager.config.TableDataManagerConfig;
 import org.apache.pinot.core.data.manager.offline.ImmutableSegmentDataManager;
+import org.apache.pinot.core.data.manager.upsert.DataManagerCallback;
 import org.apache.pinot.core.indexsegment.immutable.ImmutableSegment;
 import org.apache.pinot.core.segment.index.loader.IndexLoadingConfig;
 import org.slf4j.Logger;
@@ -108,14 +109,14 @@ public abstract class BaseTableDataManager implements TableDataManager {
    * @param immutableSegment Immutable segment to add
    */
   @Override
-  public void addSegment(ImmutableSegment immutableSegment) {
+  public void addSegment(ImmutableSegment immutableSegment, DataManagerCallback dataManagerCallback) {
     String segmentName = immutableSegment.getSegmentName();
     _logger.info("Adding immutable segment: {} to table: {}", segmentName, _tableNameWithType);
     _serverMetrics.addValueToTableGauge(_tableNameWithType, ServerGauge.DOCUMENT_COUNT,
         immutableSegment.getSegmentMetadata().getTotalRawDocs());
     _serverMetrics.addValueToTableGauge(_tableNameWithType, ServerGauge.SEGMENT_COUNT, 1L);
 
-    ImmutableSegmentDataManager newSegmentManager = getImmutableSegmentDataManager(immutableSegment);
+    ImmutableSegmentDataManager newSegmentManager = getImmutableSegmentDataManager(immutableSegment, dataManagerCallback);
     SegmentDataManager oldSegmentManager = _segmentDataManagerMap.put(segmentName, newSegmentManager);
     if (oldSegmentManager == null) {
       _logger.info("Added new immutable segment: {} to table: {}", segmentName, _tableNameWithType);
@@ -212,7 +213,8 @@ public abstract class BaseTableDataManager implements TableDataManager {
     return _tableNameWithType;
   }
 
-  protected ImmutableSegmentDataManager getImmutableSegmentDataManager(ImmutableSegment immutableSegment) {
-    return new ImmutableSegmentDataManager(immutableSegment);
+  protected ImmutableSegmentDataManager getImmutableSegmentDataManager(ImmutableSegment immutableSegment,
+      DataManagerCallback callback) {
+    return new ImmutableSegmentDataManager(immutableSegment, callback);
   }
 }

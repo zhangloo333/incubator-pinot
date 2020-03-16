@@ -24,6 +24,8 @@ import java.util.HashMap;
 import java.util.Map;
 import javax.annotation.Nullable;
 import org.apache.pinot.common.segment.ReadMode;
+import org.apache.pinot.core.data.manager.upsert.DefaultDataManagerCallbackImpl;
+import org.apache.pinot.core.data.manager.upsert.DataManagerCallback;
 import org.apache.pinot.core.indexsegment.generator.SegmentVersion;
 import org.apache.pinot.core.segment.index.ColumnMetadata;
 import org.apache.pinot.core.segment.index.SegmentMetadataImpl;
@@ -44,8 +46,6 @@ import org.apache.pinot.spi.data.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nonnull;
-
 
 public class ImmutableSegmentLoader {
   private ImmutableSegmentLoader() {
@@ -60,7 +60,7 @@ public class ImmutableSegmentLoader {
       throws Exception {
     IndexLoadingConfig defaultIndexLoadingConfig = new IndexLoadingConfig();
     defaultIndexLoadingConfig.setReadMode(readMode);
-    return load(indexDir, defaultIndexLoadingConfig, null);
+    return load(indexDir, defaultIndexLoadingConfig, DefaultDataManagerCallbackImpl.INSTANCE, null);
   }
 
   /**
@@ -68,25 +68,18 @@ public class ImmutableSegmentLoader {
    */
   public static ImmutableSegment load(File indexDir, IndexLoadingConfig indexLoadingConfig)
       throws Exception {
-    return load(indexDir, indexLoadingConfig, null);
+    return load(indexDir, indexLoadingConfig, DefaultDataManagerCallbackImpl.INSTANCE, null);
   }
 
-  public static ImmutableSegment load(File indexDir, IndexLoadingConfig indexLoadingConfig, @Nullable Schema schema)
+  public static ImmutableSegment load(File indexDir, IndexLoadingConfig indexLoadingConfig,
+                                      DataManagerCallback dataManagerCallback, @Nullable Schema schema)
           throws Exception {
-    return loadHelper(indexDir, indexLoadingConfig, schema);
+    return loadHelper(indexDir, indexLoadingConfig, dataManagerCallback, schema);
   }
 
-  /**
-   * to load upsert related segment
-   */
-  public static ImmutableUpsertSegmentImpl loadUpsertSegment(File indexDir, IndexLoadingConfig indexLoadingConfig,
-                                                             Schema schema) throws Exception {
-    ImmutableSegmentImpl segment = loadHelper(indexDir, indexLoadingConfig, schema);
-    return ImmutableUpsertSegmentImpl.copyOf(segment);
-  }
 
   private static ImmutableSegmentImpl loadHelper(File indexDir, IndexLoadingConfig indexLoadingConfig,
-                                                 @Nullable Schema schema) throws Exception {
+                                                 DataManagerCallback dataManagerCallback, @Nullable Schema schema) throws Exception {
     Preconditions.checkArgument(indexDir.isDirectory(), "Index directory: {} does not exist or is not a directory",
         indexDir);
 
@@ -155,7 +148,8 @@ public class ImmutableSegmentLoader {
               indexContainerMap, readMode);
     }
 
-    return new ImmutableSegmentImpl(segmentDirectory, segmentMetadata, indexContainerMap, starTreeIndexContainer);
+    return new ImmutableSegmentImpl(segmentDirectory, segmentMetadata, indexContainerMap, starTreeIndexContainer,
+        dataManagerCallback.getIndexSegmentCallback());
   }
 
 }

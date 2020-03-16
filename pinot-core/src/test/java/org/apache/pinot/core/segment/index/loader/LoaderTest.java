@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.FileFileFilter;
+import org.apache.pinot.core.data.manager.upsert.DefaultDataManagerCallbackImpl;
 import org.apache.pinot.core.segment.creator.impl.inv.text.LuceneTextIndexCreator;
 import org.apache.pinot.spi.data.DimensionFieldSpec;
 import org.apache.pinot.spi.data.FieldSpec;
@@ -225,12 +226,14 @@ public class LoaderTest {
     schema.addField(new DimensionFieldSpec("SVString", FieldSpec.DataType.STRING, true, ""));
     schema.addField(new DimensionFieldSpec("MVString", FieldSpec.DataType.STRING, false, ""));
 
-    IndexSegment indexSegment = ImmutableSegmentLoader.load(_indexDir, _v1IndexLoadingConfig, schema);
+    IndexSegment indexSegment = ImmutableSegmentLoader
+        .load(_indexDir, _v1IndexLoadingConfig, DefaultDataManagerCallbackImpl.INSTANCE, schema);
     Assert.assertEquals(indexSegment.getDataSource("SVString").getDictionary().get(0), "");
     Assert.assertEquals(indexSegment.getDataSource("MVString").getDictionary().get(0), "");
     indexSegment.destroy();
 
-    indexSegment = ImmutableSegmentLoader.load(_indexDir, _v3IndexLoadingConfig, schema);
+    indexSegment = ImmutableSegmentLoader
+        .load(_indexDir, _v3IndexLoadingConfig, DefaultDataManagerCallbackImpl.INSTANCE, schema);
     Assert.assertEquals(indexSegment.getDataSource("SVString").getDictionary().get(0), "");
     Assert.assertEquals(indexSegment.getDataSource("MVString").getDictionary().get(0), "");
     indexSegment.destroy();
@@ -245,7 +248,8 @@ public class LoaderTest {
 
     FieldSpec byteMetric = new MetricFieldSpec(newColumnName, FieldSpec.DataType.BYTES, defaultValue);
     schema.addField(byteMetric);
-    IndexSegment indexSegment = ImmutableSegmentLoader.load(_indexDir, _v3IndexLoadingConfig, schema);
+    IndexSegment indexSegment = ImmutableSegmentLoader
+        .load(_indexDir, _v3IndexLoadingConfig, DefaultDataManagerCallbackImpl.INSTANCE, schema);
     Assert
         .assertEquals(BytesUtils.toHexString((byte[]) indexSegment.getDataSource(newColumnName).getDictionary().get(0)),
             defaultValue);

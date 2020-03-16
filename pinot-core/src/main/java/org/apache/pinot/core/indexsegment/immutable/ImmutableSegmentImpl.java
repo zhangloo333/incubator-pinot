@@ -19,10 +19,11 @@
 package org.apache.pinot.core.indexsegment.immutable;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import javax.annotation.Nullable;
+
+import org.apache.pinot.core.data.manager.upsert.IndexSegmentCallback;
+import org.apache.pinot.core.segment.virtualcolumn.mutable.VirtualColumnLongValueReaderWriter;
 import org.apache.pinot.spi.data.FieldSpec;
 import org.apache.pinot.spi.data.Schema;
 import org.apache.pinot.spi.data.readers.GenericRow;
@@ -43,18 +44,33 @@ import org.slf4j.LoggerFactory;
 public class ImmutableSegmentImpl implements ImmutableSegment {
   private static final Logger LOGGER = LoggerFactory.getLogger(ImmutableSegmentImpl.class);
 
-  protected final SegmentDirectory _segmentDirectory;
-  protected final SegmentMetadataImpl _segmentMetadata;
-  protected final Map<String, ColumnIndexContainer> _indexContainerMap;
-  protected final StarTreeIndexContainer _starTreeIndexContainer;
+  private final SegmentDirectory _segmentDirectory;
+  private final SegmentMetadataImpl _segmentMetadata;
+  private final Map<String, ColumnIndexContainer> _indexContainerMap;
+  private final StarTreeIndexContainer _starTreeIndexContainer;
+  private final IndexSegmentCallback _segmentCallback;
+
 
   public ImmutableSegmentImpl(SegmentDirectory segmentDirectory, SegmentMetadataImpl segmentMetadata,
       Map<String, ColumnIndexContainer> columnIndexContainerMap,
-      @Nullable StarTreeIndexContainer starTreeIndexContainer) {
+      @Nullable StarTreeIndexContainer starTreeIndexContainer, IndexSegmentCallback segmentCallback) {
     _segmentDirectory = segmentDirectory;
     _segmentMetadata = segmentMetadata;
     _indexContainerMap = columnIndexContainerMap;
     _starTreeIndexContainer = starTreeIndexContainer;
+    _segmentCallback = segmentCallback;
+
+    // create virtualColumnReaderWriter
+    Map<String, DataFileReader> virtualColumnsReaderWriter = new HashMap<>();
+    for (Map.Entry<String, ColumnIndexContainer> entry: columnIndexContainerMap.entrySet()) {
+      String columnName = entry.getKey();
+      ColumnIndexContainer container = entry.getValue();
+      if (segmentMetadata.getSchema().isVirtualColumn(columnName) && (container.getForwardIndex() instanceof VirtualColumnLongValueReaderWriter)) {
+        virtualColumnsReaderWriter.put(columnName, container.getForwardIndex());
+      }
+    }
+    _segmentCallback.init(segmentMetadata, virtualColumnsReaderWriter);
+    _segmentCallback.initOffsetColumn(columnIndexContainerMap.get(segmentMetadata.getSchema().getOffsetKey()));
   }
 
   @Override

@@ -22,22 +22,38 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-  <parent>
-    <artifactId>pinot</artifactId>
-    <groupId>org.apache.pinot</groupId>
-    <version>0.3.0-SNAPSHOT</version>
-  </parent>
-  <modelVersion>4.0.0</modelVersion>
-  <artifactId>pinot-grigio</artifactId>
-    <packaging>pom</packaging>
-    <name>Pinot Grigio</name>
-  <url>http://maven.apache.org</url>
-    <modules>
-      <module>pinot-grigio-common</module>
-      <module>pinot-grigio-coordinator</module>
-      <module>pinot-grigio-provided</module>
-    </modules>
+    <parent>
+        <artifactId>pinot-grigio</artifactId>
+        <groupId>org.apache.pinot</groupId>
+        <version>0.3.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>pinot-grigio-provided</artifactId>
+    <name>Pinot Grigio Provided components</name>
     <properties>
-    <pinot.root>${basedir}/..</pinot.root>
-  </properties>
+        <pinot.root>${basedir}/../..</pinot.root>
+    </properties>
+    <dependencies>
+        <dependency>
+            <groupId>org.apache.pinot</groupId>
+            <artifactId>pinot-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.pinot</groupId>
+            <artifactId>pinot-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+
+
 </project>
