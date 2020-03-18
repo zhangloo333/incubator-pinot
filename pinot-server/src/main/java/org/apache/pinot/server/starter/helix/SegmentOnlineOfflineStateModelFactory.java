@@ -19,8 +19,6 @@
 package org.apache.pinot.server.starter.helix;
 
 import com.google.common.base.Preconditions;
-import java.io.File;
-import java.util.concurrent.locks.Lock;
 import org.apache.commons.io.FileUtils;
 import org.apache.helix.NotificationContext;
 import org.apache.helix.model.Message;
@@ -39,9 +37,12 @@ import org.apache.pinot.core.data.manager.InstanceDataManager;
 import org.apache.pinot.core.data.manager.SegmentDataManager;
 import org.apache.pinot.core.data.manager.TableDataManager;
 import org.apache.pinot.core.data.manager.realtime.LLRealtimeSegmentDataManager;
-import org.apache.pinot.server.upsert.SegmentDeletionHandler;
+import org.apache.pinot.core.segment.updater.SegmentDeletionHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.util.concurrent.locks.Lock;
 
 
 /**
@@ -56,17 +57,18 @@ public class SegmentOnlineOfflineStateModelFactory extends StateModelFactory<Sta
   private final SegmentFetcherAndLoader _fetcherAndLoader;
   private final SegmentDeletionHandler _segmentDeletionHandler;
 
+
   public SegmentOnlineOfflineStateModelFactory(String instanceId, InstanceDataManager instanceDataManager,
       SegmentFetcherAndLoader fetcherAndLoader) {
-    this(instanceId, instanceDataManager, fetcherAndLoader, new SegmentDeletionHandler());
+      this(instanceId, instanceDataManager, fetcherAndLoader, new SegmentDeletionHandler());
   }
 
   public SegmentOnlineOfflineStateModelFactory(String instanceId, InstanceDataManager instanceDataManager,
-      SegmentFetcherAndLoader fetcherAndLoader, SegmentDeletionHandler segmentDeletionHandler) {
+      SegmentFetcherAndLoader fetcherAndLoader, SegmentDeletionHandler deletionHandler) {
     _instanceId = instanceId;
     _instanceDataManager = instanceDataManager;
     _fetcherAndLoader = fetcherAndLoader;
-    _segmentDeletionHandler = segmentDeletionHandler;
+    _segmentDeletionHandler = deletionHandler;
   }
 
   public static String getStateModelName() {

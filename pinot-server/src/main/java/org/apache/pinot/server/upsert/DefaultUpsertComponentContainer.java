@@ -18,20 +18,25 @@
  */
 package org.apache.pinot.server.upsert;
 
-import com.codahale.metrics.MetricRegistry;
+import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.commons.configuration.Configuration;
+import org.apache.helix.HelixManager;
+import org.apache.pinot.core.segment.updater.DefaultWaterMarkManager;
+import org.apache.pinot.core.segment.updater.SegmentDeletionHandler;
+import org.apache.pinot.core.segment.updater.UpsertComponentContainer;
+import org.apache.pinot.core.segment.updater.WaterMarkManager;
 
 public class DefaultUpsertComponentContainer implements UpsertComponentContainer {
 
   private final SegmentDeletionHandler deletionHandler = new SegmentDeletionHandler();
+  private final WaterMarkManager watermarkManager = new DefaultWaterMarkManager();
 
   @Override
-  public void registerMetrics(MetricRegistry registry) {
-
+  public void registerMetrics(String prefix, MetricsRegistry registry) {
   }
 
   @Override
-  public void init(Configuration config) {
+  public void init(Configuration config, HelixManager helixManager, String clusterName, String instanceName) {
   }
 
   @Override
@@ -40,10 +45,29 @@ public class DefaultUpsertComponentContainer implements UpsertComponentContainer
   }
 
   @Override
-  public void start() {
+  public WaterMarkManager getWatermarkManager() {
+    return watermarkManager;
   }
 
   @Override
-  public void stop() {
+  public boolean isUpsertEnabled() {
+    return false;
   }
+
+  @Override
+  public void startBackgroundThread() {
+
+  }
+
+  @Override
+  public void stopBackgroundThread() {
+
+  }
+
+  @Override
+  public void shutdown() {
+
+  }
+
+
 }

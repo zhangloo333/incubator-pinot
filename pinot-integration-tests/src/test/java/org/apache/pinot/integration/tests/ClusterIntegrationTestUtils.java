@@ -332,6 +332,8 @@ public class ClusterIntegrationTestUtils {
     properties.put("serializer.class", "kafka.serializer.DefaultEncoder");
     properties.put("request.required.acks", "1");
     properties.put("partitioner.class", "kafka.producer.ByteArrayPartitioner");
+    properties.put("max.request.size", "300000000");
+    properties.put("buffer.memory", "300000000");
 
     StreamDataProducer producer =
         StreamDataProvider.getStreamDataProducer(KafkaStarterUtils.KAFKA_PRODUCER_CLASS_NAME, properties);

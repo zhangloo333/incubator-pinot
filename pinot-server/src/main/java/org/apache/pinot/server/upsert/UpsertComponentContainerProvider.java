@@ -19,10 +19,10 @@
 package org.apache.pinot.server.upsert;
 
 import com.google.common.base.Preconditions;
-import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang3.exception.ExceptionUtils;
-import org.apache.pinot.core.segment.updater.WatermarkManager;
-import org.apache.pinot.grigio.common.metrics.GrigioMetrics;
+import org.apache.pinot.core.segment.updater.UpsertComponentContainer;
+import org.apache.pinot.core.segment.updater.WaterMarkManager;
+import org.apache.pinot.server.conf.ServerConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,22 +30,16 @@ public class UpsertComponentContainerProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(UpsertComponentContainerProvider.class);
 
-  public static final String UPSERT_COMPONENT_CONFIG_KEY = "watermarkManager.class";
-  public static final String UPSERT_COMPONENT_CONFIG_DEFAULT = DefaultUpsertComponentContainer.class.getName();
-
-  private final Configuration _conf;
   private UpsertComponentContainer _instance;
 
-  public UpsertComponentContainerProvider(Configuration conf, GrigioMetrics metrics) {
-    _conf = conf;
-    String className = _conf.getString(UPSERT_COMPONENT_CONFIG_KEY, UPSERT_COMPONENT_CONFIG_DEFAULT);
+  public UpsertComponentContainerProvider(ServerConf serverConf) {
+    String className = serverConf.getUpsertComponentContainerClassName();
     LOGGER.info("creating watermark manager with class {}", className);
     try {
       Class<UpsertComponentContainer> comonentContainerClass = (Class<UpsertComponentContainer>) Class.forName(className);
-      Preconditions.checkState(comonentContainerClass.isAssignableFrom(WatermarkManager.class),
+      Preconditions.checkState(comonentContainerClass.isAssignableFrom(WaterMarkManager.class),
           "configured class not assignable from Callback class");
       _instance = comonentContainerClass.newInstance();
-      _instance.init(_conf);
     } catch (Exception e) {
       LOGGER.error("failed to load watermark manager class", className, e);
       ExceptionUtils.rethrow(e);

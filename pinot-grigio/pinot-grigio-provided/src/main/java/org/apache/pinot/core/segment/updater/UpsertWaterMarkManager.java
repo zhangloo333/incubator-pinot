@@ -31,26 +31,26 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class UpsertWatermarkManager implements WatermarkManager {
+public class UpsertWaterMarkManager implements WaterMarkManager {
 
   private final Map<String, Map<Integer, Long>> _highWaterMarkTablePartitionMap = new ConcurrentHashMap<>();
   private final GrigioMetrics _metrics;
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(UpsertWatermarkManager.class);
-  private static volatile UpsertWatermarkManager _instance;
+  private static final Logger LOGGER = LoggerFactory.getLogger(UpsertWaterMarkManager.class);
+  private static volatile UpsertWaterMarkManager _instance;
 
-  private UpsertWatermarkManager(GrigioMetrics metrics) {
+  private UpsertWaterMarkManager(GrigioMetrics metrics) {
     _metrics = metrics;
   }
 
   public static void init(GrigioMetrics metrics) {
-    synchronized (UpsertWatermarkManager.class) {
+    synchronized (UpsertWaterMarkManager.class) {
       Preconditions.checkState(_instance == null, "upsert water mark manager is already init");
-      _instance = new UpsertWatermarkManager(metrics);
+      _instance = new UpsertWaterMarkManager(metrics);
     }
   }
 
-  public static UpsertWatermarkManager getInstance() {
+  public static UpsertWaterMarkManager getInstance() {
     Preconditions.checkState(_instance != null, "upsert water mark manager is not yet init");
     return _instance;
   }

@@ -29,7 +29,7 @@ import org.apache.pinot.core.io.reader.BaseSingleColumnSingleValueReader;
 import org.apache.pinot.core.io.reader.DataFileReader;
 import org.apache.pinot.core.segment.index.column.ColumnIndexContainer;
 import org.apache.pinot.core.segment.index.readers.Dictionary;
-import org.apache.pinot.core.segment.updater.UpsertWatermarkManager;
+import org.apache.pinot.core.segment.updater.UpsertWaterMarkManager;
 import org.apache.pinot.core.segment.virtualcolumn.mutable.VirtualColumnLongValueReaderWriter;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntrySet;
@@ -50,7 +50,7 @@ public class UpsertImmutableIndexSegmentCallback implements IndexSegmentCallback
   private String _segmentName;
   private int _totalDoc;
   private long _minSourceOffset;
-  private UpsertWatermarkManager _upsertWatermarkManager;
+  private UpsertWaterMarkManager _upsertWatermarkManager;
   private UpdateLogStorageProvider _updateLogStorageProvider;
   // use array for mapping bewteen offset to docId, where actual offset = min_offset + array_index
   // use 4 bytes per record
@@ -67,7 +67,7 @@ public class UpsertImmutableIndexSegmentCallback implements IndexSegmentCallback
         CommonConstants.Helix.TableType.REALTIME);
     _segmentName = segmentMetadata.getName();
     _totalDoc = segmentMetadata.getTotalDocs();
-    _upsertWatermarkManager = UpsertWatermarkManager.getInstance();
+    _upsertWatermarkManager = UpsertWaterMarkManager.getInstance();
     _updateLogStorageProvider = UpdateLogStorageProvider.getInstance();
     _virtualColumnsReaderWriter = new ArrayList<>();
     for (DataFileReader reader: virtualColumnIndexReader.values()) {
@@ -80,7 +80,7 @@ public class UpsertImmutableIndexSegmentCallback implements IndexSegmentCallback
    */
   @VisibleForTesting
   protected void init(List<VirtualColumnLongValueReaderWriter> readerWriters,
-      int totalDoc, UpsertWatermarkManager manager,
+      int totalDoc, UpsertWaterMarkManager manager,
       UpdateLogStorageProvider updateLogStorageProvider,
       long minSourceOffset, int[] offsetToDocId) {
     _tableNameWithType = "testTable";

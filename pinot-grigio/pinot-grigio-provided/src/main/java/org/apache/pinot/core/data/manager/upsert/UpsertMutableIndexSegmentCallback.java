@@ -24,7 +24,7 @@ import org.apache.pinot.common.segment.SegmentMetadata;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.core.io.reader.DataFileReader;
 import org.apache.pinot.core.segment.index.column.ColumnIndexContainer;
-import org.apache.pinot.core.segment.updater.UpsertWatermarkManager;
+import org.apache.pinot.core.segment.updater.UpsertWaterMarkManager;
 import org.apache.pinot.core.segment.virtualcolumn.mutable.VirtualColumnLongValueReaderWriter;
 import org.apache.pinot.grigio.common.messages.LogEventType;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
@@ -48,7 +48,7 @@ public class UpsertMutableIndexSegmentCallback implements IndexSegmentCallback {
   private String _tableName;
   private String _segmentName;
   private Schema _schema;
-  private UpsertWatermarkManager _upsertWatermarkManager;
+  private UpsertWaterMarkManager _upsertWatermarkManager;
   private String _offsetColumnName;
   private final List<VirtualColumnLongValueReaderWriter> _mutableSegmentReaderWriters = new ArrayList<>();
   // use map for mapping between kafka offset and docId because we at-most have 1 mutable segment per consumer
@@ -75,7 +75,7 @@ public class UpsertMutableIndexSegmentCallback implements IndexSegmentCallback {
         _mutableSegmentReaderWriters.add((VirtualColumnLongValueReaderWriter) reader);
       }
     }
-    _upsertWatermarkManager = UpsertWatermarkManager.getInstance();
+    _upsertWatermarkManager = UpsertWaterMarkManager.getInstance();
     LOGGER.info("starting upsert segment with {} reader writer", _mutableSegmentReaderWriters.size());
   }
 

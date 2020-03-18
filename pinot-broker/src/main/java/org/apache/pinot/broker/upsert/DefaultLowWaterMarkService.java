@@ -16,20 +16,32 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.server.upsert;
+package org.apache.pinot.broker.upsert;
 
-import com.codahale.metrics.MetricRegistry;
-import org.apache.commons.configuration.Configuration;
+import com.google.common.collect.ImmutableMap;
+import org.apache.helix.HelixDataAccessor;
+import org.apache.pinot.common.metrics.BrokerMetrics;
+import org.apache.pinot.core.segment.updater.LowWaterMarkService;
 
-public interface UpsertComponentContainer {
+import java.util.Map;
 
-  void registerMetrics(MetricRegistry registry);
+public class DefaultLowWaterMarkService implements LowWaterMarkService {
 
-  void init(Configuration config);
+  @Override
+  public void init(HelixDataAccessor helixDataAccessor, String helixClusterName, int serverPollingInterval,
+      int serverPort){
+  }
 
-  SegmentDeletionHandler getSegmentDeletionHandler();
+  @Override
+  public Map<Integer, Long> getLowWaterMarks(String tableName) {
+    return ImmutableMap.of();
+  }
 
-  void start();
+  @Override
+  public void shutDown() {
+  }
 
-  void stop();
+  @Override
+  public void start(BrokerMetrics brokerMetrics) {
+  }
 }

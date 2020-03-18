@@ -16,10 +16,9 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.server.upsert;
+package org.apache.pinot.core.segment.updater;
 
 import com.google.common.collect.ImmutableList;
-import org.apache.pinot.core.segment.updater.SegmentDeletionListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

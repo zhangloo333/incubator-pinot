@@ -18,16 +18,25 @@
  */
 package org.apache.pinot.core.segment.updater;
 
-import org.apache.commons.configuration.Configuration;
-import org.apache.pinot.grigio.common.metrics.GrigioMeter;
-import org.apache.pinot.grigio.common.metrics.GrigioMetrics;
+import org.apache.helix.HelixDataAccessor;
+import org.apache.pinot.common.metrics.BrokerMetrics;
 
 import java.util.Map;
 
-public interface WatermarkManager {
+/**
+ * LowWaterMarkService keeps records of the low water mark (i.e., the stream ingestion progress) for each partition of
+ * an input table.
+ */
+public interface LowWaterMarkService {
 
-  void init(Configuration config, GrigioMetrics metrics);
+    void init(HelixDataAccessor helixDataAccessor, String helixClusterName, int serverPollingInterval, int serverPort);
 
-  Map<String, Map<Integer, Long>> getHighWaterMarkTablePartitionMap();
+    // Return the low water mark mapping from partition id to the corresponding low water mark of a given table.
+    Map<Integer, Long> getLowWaterMarks(String tableName);
 
+    // Shutdown the service.
+    void shutDown();
+
+    // start
+    void start(BrokerMetrics brokerMetrics);
 }

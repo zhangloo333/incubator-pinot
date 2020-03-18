@@ -38,6 +38,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
+import org.apache.pinot.core.segment.updater.LowWaterMarkService;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.helix.ZNRecord;
@@ -76,6 +77,10 @@ import org.apache.pinot.pql.parsers.pql2.ast.FunctionCallAstNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.pinot.common.utils.CommonConstants.Broker.CONFIG_OF_BROKER_LWM_REWRITE_ENABLE;
+import static org.apache.pinot.common.utils.CommonConstants.Broker.CONFIG_OF_BROKER_LWM_REWRITE_ENABLE_DEFAULT;
+import static org.apache.pinot.common.utils.CommonConstants.Broker.Request.DISABLE_REWRITE;
+
 
 @ThreadSafe
 public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
@@ -87,6 +92,7 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
   protected final AccessControlFactory _accessControlFactory;
   protected final QueryQuotaManager _queryQuotaManager;
   protected final BrokerMetrics _brokerMetrics;
+  protected final LowWaterMarkService _lwmService;
 
   protected final AtomicLong _requestIdGenerator = new AtomicLong();
   protected final BrokerRequestOptimizer _brokerRequestOptimizer = new BrokerRequestOptimizer();
@@ -96,6 +102,7 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
   protected final long _brokerTimeoutMs;
   protected final int _queryResponseLimit;
   protected final int _queryLogLength;
+  protected final boolean _enableQueryRewrite;
 
   private final RateLimiter _queryLogRateLimiter;
 
@@ -108,13 +115,15 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
 
   public BaseBrokerRequestHandler(Configuration config, RoutingTable routingTable,
       TimeBoundaryService timeBoundaryService, AccessControlFactory accessControlFactory,
-      QueryQuotaManager queryQuotaManager, BrokerMetrics brokerMetrics, ZkHelixPropertyStore<ZNRecord> propertyStore) {
+      QueryQuotaManager queryQuotaManager, BrokerMetrics brokerMetrics, ZkHelixPropertyStore<ZNRecord> propertyStore,
+      LowWaterMarkService lowWaterMarkService) {
     _config = config;
     _routingTable = routingTable;
     _timeBoundaryService = timeBoundaryService;
     _accessControlFactory = accessControlFactory;
     _queryQuotaManager = queryQuotaManager;
     _brokerMetrics = brokerMetrics;
+    _lwmService = lowWaterMarkService;
 
     _enableCaseInsensitivePql = _config.getBoolean(CommonConstants.Helix.ENABLE_CASE_INSENSITIVE_PQL_KEY, false);
     if (_enableCaseInsensitivePql) {
@@ -124,6 +133,10 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
     }
 
     _enableQueryLimitOverride = _config.getBoolean(Broker.CONFIG_OF_ENABLE_QUERY_LIMIT_OVERRIDE, false);
+
+    // query rewrite for upsert feature
+    _enableQueryRewrite = config.getBoolean(CONFIG_OF_BROKER_LWM_REWRITE_ENABLE,
+        CONFIG_OF_BROKER_LWM_REWRITE_ENABLE_DEFAULT);
 
     _brokerId = config.getString(Broker.CONFIG_OF_BROKER_ID, getDefaultBrokerId());
     _brokerTimeoutMs = config.getLong(Broker.CONFIG_OF_BROKER_TIMEOUT_MS, Broker.DEFAULT_BROKER_TIMEOUT_MS);
@@ -285,6 +298,11 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
       requestStatistics.setFanoutType(RequestStatistics.FanoutType.REALTIME);
     }
 
+    if (shouldEnableLowWaterMarkRewrite(request)) {
+      // Augment the realtime request with LowWaterMark constraints.
+      addLowWaterMarkToQuery(realtimeBrokerRequest, rawTableName);
+    }
+
     // Calculate routing table for the query
     long routingStartTimeNs = System.nanoTime();
     Map<ServerInstance, List<String>> offlineRoutingTable = null;
@@ -366,6 +384,21 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
       _numDroppedLog.incrementAndGet();
     }
     return brokerResponse;
+  }
+
+  private boolean shouldEnableLowWaterMarkRewrite(JsonNode request) {
+    if (_enableQueryRewrite) {
+      try {
+        if (request.has(DISABLE_REWRITE)) {
+          return !request.get(DISABLE_REWRITE).asBoolean();
+        } else {
+          return true;
+        }
+      } catch (Exception ex) {
+        LOGGER.warn("cannot parse the disable rewrite option: [{}] to boolean from request json", DISABLE_REWRITE, ex);
+      }
+    }
+    return false;
   }
 
   /**
@@ -751,6 +784,18 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
       brokerRequest.setFilterQuery(timeFilterQuery);
       brokerRequest.setFilterSubQueryMap(filterSubQueryMap);
     }
+  }
+
+  private void addLowWaterMarkToQuery(BrokerRequest realtimeBrokerRequest, String rawTableName) {
+    final String realtimeTableName = rawTableName + "_REALTIME";
+    Map<Integer, Long> lowWaterMarks = _lwmService.getLowWaterMarks(realtimeTableName);
+    if (lowWaterMarks == null || lowWaterMarks.size() == 0) {
+      LOGGER.info("No low water marks info found for table {}", realtimeTableName);
+      return;
+    }
+    LOGGER.info("Found low water marks {} for table {}", String.valueOf(lowWaterMarks), realtimeTableName);
+    LowWaterMarkQueryWriter.addLowWaterMarkToQuery(realtimeBrokerRequest, lowWaterMarks);
+    LOGGER.info("Query augmented with LWMS info for table {} : {}", realtimeTableName, realtimeBrokerRequest);
   }
 
   /**

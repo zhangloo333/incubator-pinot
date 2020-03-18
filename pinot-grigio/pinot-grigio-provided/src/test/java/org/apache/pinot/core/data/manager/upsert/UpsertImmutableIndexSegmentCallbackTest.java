@@ -18,7 +18,7 @@
  */
 package org.apache.pinot.core.data.manager.upsert;
 
-import org.apache.pinot.core.segment.updater.UpsertWatermarkManager;
+import org.apache.pinot.core.segment.updater.UpsertWaterMarkManager;
 import org.apache.pinot.core.segment.virtualcolumn.mutable.VirtualColumnLongValueReaderWriter;
 import org.apache.pinot.grigio.common.messages.LogEventType;
 import org.apache.pinot.grigio.common.storageProvider.UpdateLogEntry;
@@ -40,13 +40,13 @@ import static org.mockito.Mockito.when;
 
 public class UpsertImmutableIndexSegmentCallbackTest {
   UpdateLogStorageProvider _mockProvider;
-  UpsertWatermarkManager _mockUpsertWatermarkManager;
+  UpsertWaterMarkManager _mockUpsertWatermarkManager;
   List<VirtualColumnLongValueReaderWriter> _readerWriters = new ArrayList<>();
 
   @BeforeMethod
   public void init() {
     _mockProvider = mock(UpdateLogStorageProvider.class);
-    _mockUpsertWatermarkManager = mock(UpsertWatermarkManager.class);
+    _mockUpsertWatermarkManager = mock(UpsertWaterMarkManager.class);
   }
 
   @Test

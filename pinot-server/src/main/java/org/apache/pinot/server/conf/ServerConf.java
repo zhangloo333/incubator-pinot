@@ -20,8 +20,8 @@ package org.apache.pinot.server.conf;
 
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.ConfigurationException;
-import org.apache.pinot.common.metrics.ServerMetrics;
 import org.apache.pinot.common.utils.CommonConstants;
+import org.apache.pinot.server.upsert.DefaultUpsertComponentContainer;
 
 
 /**
@@ -44,6 +44,11 @@ public class ServerConf {
   private static final String PINOT_SERVER_TRANSFORM_FUNCTIONS = "pinot.server.transforms";
 
   private static final String PINOT_QUERY_SCHEDULER_PREFIX = "pinot.query.scheduler";
+
+  public static final String UPSERT_CONFIG_PARENT = "pinot.server.upsert";
+  public static final String UPSERT_COMPONENT_CONFIG_KEY = "pinot.server.upsertComponent.class";
+  public static final String UPSERT_COMPONENT_CONFIG_DEFAULT = DefaultUpsertComponentContainer.class.getName();
+
 
   private Configuration _serverConf;
 
@@ -90,6 +95,14 @@ public class ServerConf {
 
   public Configuration getSchedulerConfig() {
     return _serverConf.subset(PINOT_QUERY_SCHEDULER_PREFIX);
+  }
+
+  public String getUpsertComponentContainerClassName() {
+    return _serverConf.getString(UPSERT_COMPONENT_CONFIG_KEY, UPSERT_COMPONENT_CONFIG_DEFAULT);
+  }
+
+  public Configuration getUpsertConfig() {
+    return _serverConf.subset(UPSERT_CONFIG_PARENT);
   }
 
   /**

@@ -91,7 +91,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
     _topicPrefix = conf.getString(SegmentUpdaterConfig.INPUT_TOPIC_PREFIX);
     _updateSleepMs = conf.getInt(SegmentUpdaterConfig.SEGMENT_UDPATE_SLEEP_MS,
         SegmentUpdaterConfig.SEGMENT_UDPATE_SLEEP_MS_DEFAULT);
-    UpsertWatermarkManager.init(metrics);
+    UpsertWaterMarkManager.init(metrics);
     _consumer = provider.getConsumer();
     _ingestionExecutorService = Executors.newFixedThreadPool(1);
     _updateLogStorageProvider = UpdateLogStorageProvider.getInstance();
@@ -179,7 +179,7 @@ public class SegmentUpdater implements SegmentDeletionListener {
           if (System.currentTimeMillis() - lastReportedTime > LOGGER_TIME_GAP_MS) {
             lastReportedTime = System.currentTimeMillis();
             LOGGER.info("processed {} messages in {} ms", eventCount, System.currentTimeMillis() - loopStartTime);
-            LOGGER.info("latest high water mark is {}", UpsertWatermarkManager.getInstance().toString());
+            LOGGER.info("latest high water mark is {}", UpsertWaterMarkManager.getInstance().toString());
           }
           _consumer.ackOffset();
           _metrics.addTimedValueMs(GrigioTimer.SEGMENT_UPDATER_LOOP_TIME, System.currentTimeMillis() - loopStartTime);

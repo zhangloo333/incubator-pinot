@@ -307,13 +307,6 @@ public class HelixInstanceDataManager implements InstanceDataManager {
     }
   }
 
-  /*
-  @Override
-  public Map<String, Map<Integer, Long>> getLowWaterMarks() {
-    return UpsertWaterMarkManager.getInstance().getHighWaterMarkTablePartitionMap();
-  }
-   */
-
   @Override
   public String getSegmentDataDirectory() {
     return _instanceDataManagerConfig.getInstanceDataDir();

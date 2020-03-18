@@ -19,8 +19,8 @@
 package org.apache.pinot.broker.broker;
 
 import com.google.common.base.Preconditions;
+import org.apache.pinot.core.segment.updater.LowWaterMarkService;
 import com.yammer.metrics.core.MetricsRegistry;
-import java.util.concurrent.atomic.AtomicReference;
 import org.apache.commons.configuration.Configuration;
 import org.apache.helix.ZNRecord;
 import org.apache.helix.store.zk.ZkHelixPropertyStore;
@@ -35,6 +35,8 @@ import org.apache.pinot.common.utils.CommonConstants.Broker;
 import org.apache.pinot.common.utils.CommonConstants.Helix;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.atomic.AtomicReference;
 
 
 public class BrokerServerBuilder {
@@ -57,9 +59,11 @@ public class BrokerServerBuilder {
   private final BrokerMetrics _brokerMetrics;
   private final BrokerRequestHandler _brokerRequestHandler;
   private final BrokerAdminApiApplication _brokerAdminApplication;
+  private final LowWaterMarkService _lwmService;
 
   public BrokerServerBuilder(Configuration config, RoutingTable routingTable, TimeBoundaryService timeBoundaryService,
-      QueryQuotaManager queryQuotaManager, ZkHelixPropertyStore<ZNRecord> propertyStore) {
+      QueryQuotaManager queryQuotaManager, ZkHelixPropertyStore<ZNRecord> propertyStore,
+                             LowWaterMarkService lowWaterMarkService) {
     _config = config;
     _delayedShutdownTimeMs =
         config.getLong(Broker.CONFIG_OF_DELAY_SHUTDOWN_TIME_MS, Broker.DEFAULT_DELAY_SHUTDOWN_TIME_MS);
@@ -77,8 +81,10 @@ public class BrokerServerBuilder {
     _brokerMetrics.initializeGlobalMeters();
     _brokerRequestHandler =
         new SingleConnectionBrokerRequestHandler(_config, _routingTable, _timeBoundaryService, _accessControlFactory,
-            queryQuotaManager, _brokerMetrics, _propertyStore);
+            queryQuotaManager, _brokerMetrics, _propertyStore, lowWaterMarkService);
     _brokerAdminApplication = new BrokerAdminApiApplication(this);
+
+    _lwmService = lowWaterMarkService;
   }
 
   public void start() {

@@ -20,11 +20,6 @@ package org.apache.pinot.broker.broker.helix;
 
 import com.google.common.collect.ImmutableList;
 import com.yammer.metrics.core.MetricsRegistry;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import javax.annotation.Nullable;
 import org.apache.commons.configuration.BaseConfiguration;
 import org.apache.commons.configuration.Configuration;
 import org.apache.helix.ConfigAccessor;
@@ -49,6 +44,8 @@ import org.apache.pinot.broker.broker.BrokerServerBuilder;
 import org.apache.pinot.broker.queryquota.HelixExternalViewBasedQueryQuotaManager;
 import org.apache.pinot.broker.requesthandler.BrokerRequestHandler;
 import org.apache.pinot.broker.routing.HelixExternalViewBasedRouting;
+import org.apache.pinot.core.segment.updater.LowWaterMarkService;
+import org.apache.pinot.broker.upsert.LowWaterMarkServiceProvider;
 import org.apache.pinot.common.Utils;
 import org.apache.pinot.common.config.TagNameUtils;
 import org.apache.pinot.common.metadata.ZKMetadataProvider;
@@ -61,6 +58,12 @@ import org.apache.pinot.common.utils.NetUtil;
 import org.apache.pinot.common.utils.ServiceStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 
 @SuppressWarnings("unused")
@@ -92,6 +95,8 @@ public class HelixBrokerStarter {
   // Participant Helix manager handles Helix functionality such as state transitions and messages
   private HelixManager _participantHelixManager;
   private TimeboundaryRefreshMessageHandlerFactory _tbiMessageHandler;
+
+  private LowWaterMarkService _lwmService;
 
   public HelixBrokerStarter(Configuration brokerConf, String clusterName, String zkServer)
       throws Exception {
@@ -168,6 +173,11 @@ public class HelixBrokerStarter {
     _helixDataAccessor = _spectatorHelixManager.getHelixDataAccessor();
     ConfigAccessor configAccessor = _spectatorHelixManager.getConfigAccessor();
 
+    // start lwm service
+    LowWaterMarkServiceProvider provider = new LowWaterMarkServiceProvider(_brokerConf,
+        _spectatorHelixManager.getHelixDataAccessor(), _clusterName);
+    _lwmService = provider.getInstance();
+
     // Set up the broker server builder
     LOGGER.info("Setting up broker server builder");
     _helixExternalViewBasedRouting =
@@ -184,12 +194,16 @@ public class HelixBrokerStarter {
     String enableQueryLimitOverride = configAccessor.get(helixConfigScope, Broker.CONFIG_OF_ENABLE_QUERY_LIMIT_OVERRIDE);
     _brokerConf.setProperty(Broker.CONFIG_OF_ENABLE_QUERY_LIMIT_OVERRIDE, Boolean.valueOf(enableQueryLimitOverride));
     _brokerServerBuilder = new BrokerServerBuilder(_brokerConf, _helixExternalViewBasedRouting,
-        _helixExternalViewBasedRouting.getTimeBoundaryService(), _helixExternalViewBasedQueryQuotaManager, _propertyStore);
+        _helixExternalViewBasedRouting.getTimeBoundaryService(), _helixExternalViewBasedQueryQuotaManager,
+        _propertyStore, _lwmService);
     BrokerRequestHandler brokerRequestHandler = _brokerServerBuilder.getBrokerRequestHandler();
     BrokerMetrics brokerMetrics = _brokerServerBuilder.getBrokerMetrics();
     _helixExternalViewBasedRouting.setBrokerMetrics(brokerMetrics);
     _helixExternalViewBasedQueryQuotaManager.setBrokerMetrics(brokerMetrics);
     _brokerServerBuilder.start();
+
+    // start lwm service
+    _lwmService.start(brokerMetrics);
 
     // Initialize the cluster change mediator
     LOGGER.info("Initializing cluster change mediator");
@@ -240,6 +254,7 @@ public class HelixBrokerStarter {
         .addCallbackGauge(Helix.INSTANCE_CONNECTED_METRIC_NAME, () -> _participantHelixManager.isConnected() ? 1L : 0L);
     _participantHelixManager
         .addPreConnectCallback(() -> brokerMetrics.addMeteredGlobalValue(BrokerMeter.HELIX_ZOOKEEPER_RECONNECTS, 1L));
+
 
     // Register the service status handler
     registerServiceStatusHandler();
@@ -315,6 +330,10 @@ public class HelixBrokerStarter {
       _spectatorHelixManager.disconnect();
     }
 
+    if (_lwmService != null) {
+      LOGGER.info("Shutting down low water mark service");
+      _lwmService.shutDown();
+    }
     LOGGER.info("Finish shutting down Pinot broker");
   }
 
@@ -345,6 +364,10 @@ public class HelixBrokerStarter {
     brokerConf.addProperty(Helix.KEY_OF_BROKER_QUERY_PORT, port);
     brokerConf.addProperty(Broker.CONFIG_OF_BROKER_TIMEOUT_MS, 60 * 1000L);
     return new HelixBrokerStarter(brokerConf, "quickstart", "localhost:2122");
+  }
+
+  public LowWaterMarkService getLwmService() {
+    return _lwmService;
   }
 
   public static void main(String[] args)
