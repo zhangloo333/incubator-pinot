@@ -300,7 +300,7 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
 
     if (shouldEnableLowWaterMarkRewrite(request)) {
       // Augment the realtime request with LowWaterMark constraints.
-      _lwmService.getQueryRewriter().rewriteQueryForUpsert(realtimeBrokerRequest, rawTableName);
+      _lwmService.getQueryRewriter().maybeRewriteQueryForUpsert(realtimeBrokerRequest, rawTableName);
     }
 
     // Calculate routing table for the query

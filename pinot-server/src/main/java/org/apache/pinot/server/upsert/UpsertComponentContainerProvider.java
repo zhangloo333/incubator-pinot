@@ -18,10 +18,8 @@
  */
 package org.apache.pinot.server.upsert;
 
-import com.google.common.base.Preconditions;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.pinot.core.segment.updater.UpsertComponentContainer;
-import org.apache.pinot.core.segment.updater.WaterMarkManager;
 import org.apache.pinot.server.conf.ServerConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,8 +35,6 @@ public class UpsertComponentContainerProvider {
     LOGGER.info("creating watermark manager with class {}", className);
     try {
       Class<UpsertComponentContainer> comonentContainerClass = (Class<UpsertComponentContainer>) Class.forName(className);
-      Preconditions.checkState(comonentContainerClass.isAssignableFrom(WaterMarkManager.class),
-          "configured class not assignable from Callback class");
       _instance = comonentContainerClass.newInstance();
     } catch (Exception e) {
       LOGGER.error("failed to load watermark manager class", className, e);

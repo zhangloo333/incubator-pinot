@@ -27,17 +27,48 @@ import org.apache.pinot.spi.data.readers.GenericRow;
 import java.io.IOException;
 import java.util.Map;
 
+/**
+ * callback for handling any upsert-related operations in subclass of
+ * {@link org.apache.pinot.core.indexsegment.IndexSegment} if necessary
+ */
 public interface IndexSegmentCallback {
 
+  /**
+   * initialize the callback from {@link org.apache.pinot.core.indexsegment.IndexSegment}
+   * @param segmentMetadata the metadata associated with the curreng segment
+   * @param virtualColumnIndexReader
+   */
   void init(SegmentMetadata segmentMetadata, Map<String, DataFileReader> virtualColumnIndexReader);
 
+  /**
+   * initialize offset column for in-memory access
+   * @param offsetColumnContainer the column that stores the offset data
+   */
   void initOffsetColumn(ColumnIndexContainer offsetColumnContainer);
 
+  /**
+   * perform any operation from the callback for the given row after it has been processed and index
+   * @param row the current pinot row we just indexed into the current IndexSegment
+   * @param docId the docId of this record
+   */
   void postProcessRecords(GenericRow row, int docId);
 
+  /**
+   * initialize set of upsert-related virtual columns if necessary
+   * @throws IOException
+   */
   void initVirtualColumn() throws IOException;
 
+  /**
+   * update upsert-related virtual column from segment updater if necessary
+   * @param logEntries
+   */
   void updateVirtualColumn(Iterable<UpdateLogEntry> logEntries);
 
+  /**
+   * retrieve a information related to an upsert-enable segment virtual column for debug purpose
+   * @param offset the offset of the record we are trying to get the virtual columnn data for
+   * @return string representation of the virtual column data information
+   */
   String getVirtualColumnInfo(long offset);
 }

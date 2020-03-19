@@ -221,7 +221,7 @@ public class HelixInstanceDataManager implements InstanceDataManager {
 
       final TableDataManager tableDataManager = _tableDataManagerMap.get(tableNameWithType);
       final DataManagerCallback dataManagerCallback = tableDataManager.getTableDataManagerCallback()
-          .getDataManagerCallback(tableNameWithType, segmentName, schema, _serverMetrics, false);
+          .getImmutableDataManagerCallback(tableNameWithType, segmentName, schema, _serverMetrics);
 
       // Load from index directory
       ImmutableSegment immutableSegment = ImmutableSegmentLoader.load(indexDir,

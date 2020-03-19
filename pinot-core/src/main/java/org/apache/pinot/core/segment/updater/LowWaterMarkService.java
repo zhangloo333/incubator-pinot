@@ -26,19 +26,34 @@ import java.util.Map;
 /**
  * LowWaterMarkService keeps records of the low water mark (i.e., the stream ingestion progress) for each partition of
  * an input table.
+ * It runs on pinot broker to fetch lwm information from pinot server periodically
+ * and use that to rewrite pinot query periodically
  */
 public interface LowWaterMarkService {
 
-    void init(HelixDataAccessor helixDataAccessor, String helixClusterName, int serverPollingInterval, int serverPort);
+  void init(HelixDataAccessor helixDataAccessor, String helixClusterName, int serverPollingInterval, int serverPort);
 
-    // Return the low water mark mapping from partition id to the corresponding low water mark of a given table.
-    Map<Integer, Long> getLowWaterMarks(String tableName);
+  /**
+   * the low water mark mapping from partition id to the corresponding low water mark of a given table.
+   * @param tableNameWithType
+   * @return map of partition to lowWatermark
+   */
+  Map<Integer, Long> getLowWaterMarks(String tableNameWithType);
 
-    // Shutdown the service.
-    void shutDown();
+  /**
+   * shutdown low water mark service and its background threads (if any)
+   */
+  void shutDown();
 
-    // start
-    void start(BrokerMetrics brokerMetrics);
+  /**
+   * start the current low watermark service
+   * @param brokerMetrics pinot broker metrics for lwm service to report its status to
+   */
+  void start(BrokerMetrics brokerMetrics);
 
-    UpsertQueryRewriter getQueryRewriter();
+  /**
+   * get a queryrewriter to ensure that we can rewrite a query if the target table is upsert-enabled table
+   * @return
+   */
+  QueryRewriter getQueryRewriter();
 }

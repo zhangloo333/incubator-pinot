@@ -18,7 +18,6 @@
  */
 package org.apache.pinot.core.data.manager.upsert;
 
-import com.google.common.base.Preconditions;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -27,6 +26,10 @@ import org.apache.pinot.core.data.manager.config.TableDataManagerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * class for creating appropriate {@link TableDataManagerCallback} depends on the config
+ * allow upsert-enabled pinot server to inject proper logics while keeping append-only pinot server keep the same
+ */
 public class TableDataManagerCallbackProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(TableDataManagerCallbackProvider.class);
@@ -38,6 +41,12 @@ public class TableDataManagerCallbackProvider {
   public static final String DEFAULT_CALLBACK_CLASS_CONFIG_KEY = "append.tableDataManager.callback";
   public static final String CALLBACK_CLASS_CONFIG_DEFAULT = DefaultTableDataManagerCallbackImpl.class.getName();
 
+  /**
+   * initialize table data manager callback provider
+   * the most information config will be {@value UPSERT_CALLBACK_CLASS_CONFIG_KEY} for creating the proper
+   * callback injection for upsert pinot server
+   * @param configuration
+   */
   public TableDataManagerCallbackProvider(Configuration configuration) {
     String appendClassName = configuration.getString(DEFAULT_CALLBACK_CLASS_CONFIG_KEY, CALLBACK_CLASS_CONFIG_DEFAULT);
     String upsertClassName = configuration.getString(UPSERT_CALLBACK_CLASS_CONFIG_KEY);
@@ -47,8 +56,6 @@ public class TableDataManagerCallbackProvider {
       LOGGER.error("failed to load table data manager class {}", appendClassName, e);
       ExceptionUtils.rethrow(e);
     }
-    Preconditions.checkState(defaultTableDataManagerCallBackClass.isAssignableFrom(TableDataManagerCallback.class),
-        "configured class not assignable from Callback class", defaultTableDataManagerCallBackClass);
     if (StringUtils.isNotEmpty(upsertClassName)) {
       try {
         upsertTableDataManagerCallBackClass = (Class<TableDataManagerCallback>) Class.forName(upsertClassName);
@@ -56,11 +63,13 @@ public class TableDataManagerCallbackProvider {
         LOGGER.error("failed to load table data manager class {}", upsertClassName);
         ExceptionUtils.rethrow(e);
       }
-      Preconditions.checkState(upsertTableDataManagerCallBackClass.isAssignableFrom(TableDataManagerCallback.class),
-          "configured class not assignable from Callback class");
     }
   }
 
+  /**
+   * create a proper callback for the table, depends on whether the table is configured for upsert or not
+   * @param tableDataManagerConfig the config for the table
+   */
   public TableDataManagerCallback getTableDataManagerCallback(TableDataManagerConfig tableDataManagerConfig) {
     if (tableDataManagerConfig.getUpdateSemantic() == CommonConstants.UpdateSemantic.UPSERT) {
       return getUpsertTableDataManagerCallback();
@@ -69,7 +78,7 @@ public class TableDataManagerCallbackProvider {
     }
   }
 
-  public TableDataManagerCallback getUpsertTableDataManagerCallback() {
+  private TableDataManagerCallback getUpsertTableDataManagerCallback() {
     try {
       return upsertTableDataManagerCallBackClass.newInstance();
     } catch (Exception ex) {
@@ -79,6 +88,9 @@ public class TableDataManagerCallbackProvider {
     return null;
   }
 
+  /**
+   * create a tabledatamanager for a non-upsert enabled tables, ensure to use the original pinot workflow
+   */
   public TableDataManagerCallback getDefaultTableDataManagerCallback() {
     try {
       return defaultTableDataManagerCallBackClass.newInstance();

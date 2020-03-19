@@ -22,13 +22,16 @@ import com.google.common.collect.ImmutableMap;
 import org.apache.helix.HelixDataAccessor;
 import org.apache.pinot.common.metrics.BrokerMetrics;
 import org.apache.pinot.core.segment.updater.LowWaterMarkService;
-import org.apache.pinot.core.segment.updater.UpsertQueryRewriter;
+import org.apache.pinot.core.segment.updater.QueryRewriter;
 
 import java.util.Map;
 
+/**
+ * default class to handle any low watermark operation on pinot broker, mostly no-op
+ */
 public class DefaultLowWaterMarkService implements LowWaterMarkService {
 
-  private UpsertQueryRewriter upsertQueryRewriter = new DefaultUpsertQueryRewriter();
+  private QueryRewriter queryRewriter = new DefaultUpsertQueryRewriter();
 
   @Override
   public void init(HelixDataAccessor helixDataAccessor, String helixClusterName, int serverPollingInterval,
@@ -49,7 +52,7 @@ public class DefaultLowWaterMarkService implements LowWaterMarkService {
   }
 
   @Override
-  public UpsertQueryRewriter getQueryRewriter() {
-    return upsertQueryRewriter;
+  public QueryRewriter getQueryRewriter() {
+    return queryRewriter;
   }
 }

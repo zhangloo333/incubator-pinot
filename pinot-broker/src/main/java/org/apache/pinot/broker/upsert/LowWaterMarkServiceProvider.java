@@ -18,7 +18,6 @@
  */
 package org.apache.pinot.broker.upsert;
 
-import com.google.common.base.Preconditions;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.helix.HelixDataAccessor;
@@ -29,21 +28,28 @@ import org.slf4j.LoggerFactory;
 
 import static org.apache.pinot.common.utils.CommonConstants.Broker.*;
 
-
+/**
+ * provider to initialize LowWaterMarkServer for pinot broker
+ */
 public class LowWaterMarkServiceProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(LowWaterMarkServiceProvider.class);
 
   private LowWaterMarkService _instance;
 
+  /**
+   * create a new provider instance
+   * @param brokerConfig config for this provider to create the actual class reference,
+   *                     refer to {@value CommonConstants.Broker#CONFIG_OF_BROKER_LWMS_CLASS_NAME}
+   * @param dataAccessor helix data access to help low watermark service to find proper server cluster
+   * @param clusterName cluster name for the current pinot cluster
+   */
   public LowWaterMarkServiceProvider(Configuration brokerConfig, HelixDataAccessor dataAccessor, String clusterName) {
     String className = brokerConfig.getString(CommonConstants.Broker.CONFIG_OF_BROKER_LWMS_CLASS_NAME,
         DefaultLowWaterMarkService.class.getName());
     LOGGER.info("creating watermark manager with class {}", className);
     try {
       Class<LowWaterMarkService> comonentContainerClass = (Class<LowWaterMarkService>) Class.forName(className);
-      Preconditions.checkState(comonentContainerClass.isAssignableFrom(LowWaterMarkService.class),
-          "configured class not assignable from LowWaterMarkService class");
       _instance = comonentContainerClass.newInstance();
       _instance.init(dataAccessor, clusterName,
           brokerConfig.getInt(CONFIG_OF_BROKER_POLLING_SERVER_LWMS_INTERVAL_MS,
@@ -57,6 +63,10 @@ public class LowWaterMarkServiceProvider {
     }
   }
 
+  /**
+   * fetch the current instance of low watermark service this provider created
+   * @return
+   */
   public LowWaterMarkService getInstance() {
     return _instance;
   }

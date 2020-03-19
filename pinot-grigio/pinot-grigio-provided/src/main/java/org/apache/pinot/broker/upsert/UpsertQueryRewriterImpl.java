@@ -25,7 +25,7 @@ import org.apache.pinot.common.request.FilterQuery;
 import org.apache.pinot.common.request.FilterQueryMap;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.core.segment.updater.LowWaterMarkService;
-import org.apache.pinot.core.segment.updater.UpsertQueryRewriter;
+import org.apache.pinot.core.segment.updater.QueryRewriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +34,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-public class UpsertQueryRewriterImpl implements UpsertQueryRewriter {
+public class UpsertQueryRewriterImpl implements QueryRewriter {
   private static final Logger LOGGER = LoggerFactory.getLogger(UpsertQueryRewriterImpl.class);
 
   protected final LowWaterMarkService _lwmService;
@@ -48,7 +48,7 @@ public class UpsertQueryRewriterImpl implements UpsertQueryRewriter {
   }
 
   @Override
-  public void rewriteQueryForUpsert(BrokerRequest request, String rawTableName) {
+  public void maybeRewriteQueryForUpsert(BrokerRequest request, String rawTableName) {
     final String realtimeTableName = TableNameBuilder.ensureTableNameWithType(rawTableName,
         CommonConstants.Helix.TableType.REALTIME);
     Map<Integer, Long> lowWaterMarks = _lwmService.getLowWaterMarks(realtimeTableName);

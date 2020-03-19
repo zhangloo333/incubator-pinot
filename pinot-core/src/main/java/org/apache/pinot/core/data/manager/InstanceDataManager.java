@@ -20,7 +20,6 @@ package org.apache.pinot.core.data.manager;
 
 import java.io.File;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
@@ -132,8 +131,4 @@ public interface InstanceDataManager {
    */
   ZkHelixPropertyStore<ZNRecord> getPropertyStore();
 
-//  /**
-//   * Return the mappings from partition -> low water marks of all the tables hosted in this server.
-//   */
-//  Map<String, Map<Integer, Long>> getLowWaterMarks();
 }

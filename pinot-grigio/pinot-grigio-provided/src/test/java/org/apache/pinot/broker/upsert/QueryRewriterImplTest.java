@@ -33,7 +33,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-public class UpsertQueryRewriterImplTest {
+public class QueryRewriterImplTest {
 
     private LowWaterMarkService _lwms;
     private UpsertQueryRewriterImpl rewriter;

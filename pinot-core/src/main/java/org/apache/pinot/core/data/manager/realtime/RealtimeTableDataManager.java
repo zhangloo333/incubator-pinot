@@ -39,7 +39,6 @@ import org.apache.pinot.common.metadata.ZKMetadataProvider;
 import org.apache.pinot.common.metadata.instance.InstanceZKMetadata;
 import org.apache.pinot.common.metadata.segment.LLCRealtimeSegmentZKMetadata;
 import org.apache.pinot.common.metadata.segment.RealtimeSegmentZKMetadata;
-import org.apache.pinot.common.metrics.ServerMetrics;
 import org.apache.pinot.common.utils.CommonConstants.Segment.Realtime.Status;
 import org.apache.pinot.common.utils.LLCSegmentName;
 import org.apache.pinot.common.utils.NamedThreadFactory;
@@ -229,11 +228,13 @@ public class RealtimeTableDataManager extends BaseTableDataManager {
     // of the index directory and loading segment from it
     LoaderUtils.reloadFailureRecovery(indexDir);
 
+    // tell callback to add segment
+    _tableDataManagerCallback.addSegment(_tableNameWithType, segmentName, tableConfig);
+
     if (indexDir.exists() && (realtimeSegmentZKMetadata.getStatus() == Status.DONE)) {
       // Segment already exists on disk, and metadata has been committed. Treat it like an offline segment
-
-      DataManagerCallback callback = _tableDataManagerCallback
-          .getDataManagerCallback(_tableNameWithType, segmentName, schema, _serverMetrics, false);
+      final DataManagerCallback callback = _tableDataManagerCallback
+          .getImmutableDataManagerCallback(_tableNameWithType, segmentName, schema, _serverMetrics);
       addSegment(loadImmutableSegment(indexDir, indexLoadingConfig, schema, callback), callback);
     } else {
       // Either we don't have the segment on disk or we have not committed in ZK. We should be starting the consumer
@@ -267,7 +268,7 @@ public class RealtimeTableDataManager extends BaseTableDataManager {
         manager = new LLRealtimeSegmentDataManager(realtimeSegmentZKMetadata, tableConfig,
             this, _indexDir.getAbsolutePath(), indexLoadingConfig, schema, llcSegmentName,
             _partitionIdToSemaphoreMap.get(streamPartitionId), _serverMetrics,
-            _tableDataManagerCallback.getDataManagerCallback(_tableNameWithType, segmentName, schema, _serverMetrics, true));
+            _tableDataManagerCallback.getMutableDataManagerCallback(_tableNameWithType, segmentName, schema, _serverMetrics));
       }
       _logger.info("Initialize RealtimeSegmentDataManager - " + segmentName);
       _segmentDataManagerMap.put(segmentName, manager);
@@ -321,7 +322,7 @@ public class RealtimeTableDataManager extends BaseTableDataManager {
     try {
       File indexDir = new File(_indexDir, segmentName);
       DataManagerCallback dataManagerCallback = _tableDataManagerCallback
-          .getDataManagerCallback(_tableNameWithType, segmentName, schema, _serverMetrics, false);
+          .getImmutableDataManagerCallback(_tableNameWithType, segmentName, schema, _serverMetrics);
       addSegment(loadImmutableSegment(indexDir, indexLoadingConfig, schema, dataManagerCallback), dataManagerCallback);
     } catch (Exception e) {
       throw new RuntimeException(e);

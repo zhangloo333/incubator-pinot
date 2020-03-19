@@ -31,6 +31,14 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * watermark manager for upsert component to collect the low-water-mark information of each tables in the current
+ * pinot server
+ * watermark is defined as largest version of each partition (segment update event topic partition) for each table
+ * so it stores the data in map of {table_name: {partition_id: highest_water_mark}}
+ * then {@link LowWaterMarkService} will ingest those information from pinot server and calculate the lowest of these
+ * watermark and use it in query to send to server
+ */
 public class UpsertWaterMarkManager implements WaterMarkManager {
 
   private final Map<String, Map<Integer, Long>> _highWaterMarkTablePartitionMap = new ConcurrentHashMap<>();
@@ -55,7 +63,12 @@ public class UpsertWaterMarkManager implements WaterMarkManager {
     return _instance;
   }
 
-  // TODO(tingchen) Look into the case where Segment Update Messages might arrive before the corresponding physical data.
+  /**
+   * process a event message and update the current watermark information for this manager
+   * @param table
+   * @param segment
+   * @param logEntry the message containing the new watermark information
+   */
   public void processMessage(String table, String segment, UpdateLogEntry logEntry) {
     if (logEntry == null) {
       return;
@@ -65,6 +78,12 @@ public class UpsertWaterMarkManager implements WaterMarkManager {
     processVersionUpdate(table, partition, version);
   }
 
+  /**
+   * update the high watermark information associated with the given table/partition
+   * @param table
+   * @param partition
+   * @param version
+   */
   public void processVersionUpdate(String table, int partition, long version) {
     Preconditions.checkState(partition >= 0, "logEntry has invalid version {} for table {}",
         version, table);
@@ -76,6 +95,11 @@ public class UpsertWaterMarkManager implements WaterMarkManager {
     }
   }
 
+  /**
+   * return the highest watermark for each partition of the given table
+   * @param tableName
+   * @return
+   */
   public Map<Integer, Long> getHighWaterMarkForTable(String tableName) {
     return ImmutableMap.copyOf(_highWaterMarkTablePartitionMap.getOrDefault(tableName, ImmutableMap.of()));
   }

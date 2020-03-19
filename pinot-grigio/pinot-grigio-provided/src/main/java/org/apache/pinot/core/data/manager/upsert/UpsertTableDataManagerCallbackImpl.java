@@ -18,7 +18,6 @@
  */
 package org.apache.pinot.core.data.manager.upsert;
 
-
 import org.apache.commons.lang3.NotImplementedException;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.pinot.common.config.TableConfig;
@@ -30,6 +29,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
+/**
+ * class for handle all upsert related operation for interacting with segments for a given table at
+ * {@link org.apache.pinot.core.data.manager.TableDataManager}
+ */
 public class UpsertTableDataManagerCallbackImpl implements TableDataManagerCallback {
   private static final Logger LOGGER = LoggerFactory.getLogger(UpsertTableDataManagerCallbackImpl.class);
 
@@ -51,7 +54,18 @@ public class UpsertTableDataManagerCallbackImpl implements TableDataManagerCallb
   }
 
   @Override
-  public DataManagerCallback getDataManagerCallback(String tableName, String segmentName, Schema schema,
+  public DataManagerCallback getMutableDataManagerCallback(String tableNameWithType, String segmentName, Schema schema,
+      ServerMetrics serverMetrics) {
+    return getDataManagerCallback(tableNameWithType, segmentName, schema, serverMetrics, true);
+  }
+
+  @Override
+  public DataManagerCallback getImmutableDataManagerCallback(String tableNameWithType, String segmentName,
+      Schema schema, ServerMetrics serverMetrics) {
+    return getDataManagerCallback(tableNameWithType, segmentName, schema, serverMetrics, false);
+  }
+
+  private DataManagerCallback getDataManagerCallback(String tableName, String segmentName, Schema schema,
       ServerMetrics serverMetrics, boolean isMutable) {
     return new UpsertDataManagerCallbackImpl(tableName, segmentName, schema, serverMetrics, isMutable);
   }

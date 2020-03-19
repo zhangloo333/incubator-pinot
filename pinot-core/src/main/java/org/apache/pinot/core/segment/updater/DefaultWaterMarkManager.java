@@ -24,13 +24,15 @@ import org.apache.pinot.grigio.common.metrics.GrigioMetrics;
 
 import java.util.Map;
 
+/**
+ * default no-op watermark manager for pinot
+ */
 public class DefaultWaterMarkManager implements WaterMarkManager {
 
   private static final Map<String, Map<Integer, Long>> DEFAULT_MAP = ImmutableMap.of();
 
   @Override
   public void init(Configuration config, GrigioMetrics metrics) {
-
   }
 
   @Override

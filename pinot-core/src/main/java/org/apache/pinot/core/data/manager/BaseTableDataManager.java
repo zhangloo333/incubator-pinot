@@ -107,6 +107,7 @@ public abstract class BaseTableDataManager implements TableDataManager {
    * <p>The new segment is added with reference count of 1, so that is never removed until a drop command comes through.
    *
    * @param immutableSegment Immutable segment to add
+   * @param dataManagerCallback callback for performing any other necessary operation for other ingestion models
    */
   @Override
   public void addSegment(ImmutableSegment immutableSegment, DataManagerCallback dataManagerCallback) {

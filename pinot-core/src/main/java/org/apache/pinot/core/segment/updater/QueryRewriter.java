@@ -1,7 +1,3 @@
-package org.apache.pinot.core.segment.updater;
-
-import org.apache.pinot.common.request.BrokerRequest;
-
 /**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -20,8 +16,20 @@ import org.apache.pinot.common.request.BrokerRequest;
  * specific language governing permissions and limitations
  * under the License.
  */
-public interface UpsertQueryRewriter {
+package org.apache.pinot.core.segment.updater;
 
-  void rewriteQueryForUpsert(BrokerRequest request, String rawTableName);
+import org.apache.pinot.common.request.BrokerRequest;
+
+/**
+ * class that rewrite pinot broker sql for upsert or other purpose
+ */
+public interface QueryRewriter {
+
+  /**
+   * rewrite the query for pinot upsert table if necessary
+   * @param request the pinot sql request that pinot broker requests
+   * @param rawTableName the raw
+   */
+  void maybeRewriteQueryForUpsert(BrokerRequest request, String rawTableName);
 
 }

@@ -1,7 +1,7 @@
 package org.apache.pinot.broker.upsert;
 
 import org.apache.pinot.common.request.BrokerRequest;
-import org.apache.pinot.core.segment.updater.UpsertQueryRewriter;
+import org.apache.pinot.core.segment.updater.QueryRewriter;
 
 /**
  * Licensed to the Apache Software Foundation (ASF) under one
@@ -21,10 +21,10 @@ import org.apache.pinot.core.segment.updater.UpsertQueryRewriter;
  * specific language governing permissions and limitations
  * under the License.
  */
-public class DefaultUpsertQueryRewriter implements UpsertQueryRewriter {
+public class DefaultUpsertQueryRewriter implements QueryRewriter {
 
   @Override
-  public void rewriteQueryForUpsert(BrokerRequest request, String rawTableName) {
+  public void maybeRewriteQueryForUpsert(BrokerRequest request, String rawTableName) {
     // do nothing
   }
 }

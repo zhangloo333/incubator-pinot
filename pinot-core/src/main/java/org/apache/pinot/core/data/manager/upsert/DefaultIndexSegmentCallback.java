@@ -27,6 +27,9 @@ import org.apache.pinot.spi.data.readers.GenericRow;
 
 import java.util.Map;
 
+/**
+ * no-op callback for non-upsert table/pinot server instance
+ */
 public class DefaultIndexSegmentCallback implements IndexSegmentCallback {
 
   public static final DefaultIndexSegmentCallback INSTANCE = new DefaultIndexSegmentCallback();
@@ -35,27 +38,22 @@ public class DefaultIndexSegmentCallback implements IndexSegmentCallback {
 
   @Override
   public void init(SegmentMetadata segmentMetadata, Map<String, DataFileReader> virtualColumnIndexReader) {
-    // do nothing
   }
 
   @Override
   public void initOffsetColumn(ColumnIndexContainer offsetColumnContainer) {
-    // do noting
   }
 
   @Override
   public void postProcessRecords(GenericRow row, int docId) {
-    // do nothing
   }
 
   @Override
   public void initVirtualColumn() {
-    // do nothing
   }
 
   @Override
   public void updateVirtualColumn(Iterable<UpdateLogEntry> logEntries) {
-    // do nothing
   }
 
   @Override

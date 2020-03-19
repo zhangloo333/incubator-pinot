@@ -22,6 +22,10 @@ import org.apache.pinot.common.config.TableConfig;
 import org.apache.pinot.common.metrics.ServerMetrics;
 import org.apache.pinot.spi.data.Schema;
 
+/**
+ * Class for no-op callback for pinot cluster/table that don't support upsert
+ * We will also use this for pinot tables that don't configured to use upsert semantic
+ */
 public class DefaultTableDataManagerCallbackImpl implements TableDataManagerCallback {
 
   private static final DefaultDataManagerCallbackImpl DEFAULT_DM_CALLBACK = DefaultDataManagerCallbackImpl.INSTANCE;
@@ -35,8 +39,14 @@ public class DefaultTableDataManagerCallbackImpl implements TableDataManagerCall
   }
 
   @Override
-  public DataManagerCallback getDataManagerCallback(String tableName, String segmentName,
-      Schema schema, ServerMetrics serverMetrics, boolean isMutable) {
+  public DataManagerCallback getMutableDataManagerCallback(String tableName, String segmentName,
+      Schema schema, ServerMetrics serverMetrics) {
+    return DEFAULT_DM_CALLBACK;
+  }
+
+  @Override
+  public DataManagerCallback getImmutableDataManagerCallback(String tableName, String segmentName,
+      Schema schema, ServerMetrics serverMetrics) {
     return DEFAULT_DM_CALLBACK;
   }
 
