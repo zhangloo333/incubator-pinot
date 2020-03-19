@@ -300,7 +300,7 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
 
     if (shouldEnableLowWaterMarkRewrite(request)) {
       // Augment the realtime request with LowWaterMark constraints.
-      addLowWaterMarkToQuery(realtimeBrokerRequest, rawTableName);
+      _lwmService.getQueryRewriter().rewriteQueryForUpsert(realtimeBrokerRequest, rawTableName);
     }
 
     // Calculate routing table for the query
@@ -784,18 +784,6 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
       brokerRequest.setFilterQuery(timeFilterQuery);
       brokerRequest.setFilterSubQueryMap(filterSubQueryMap);
     }
-  }
-
-  private void addLowWaterMarkToQuery(BrokerRequest realtimeBrokerRequest, String rawTableName) {
-    final String realtimeTableName = rawTableName + "_REALTIME";
-    Map<Integer, Long> lowWaterMarks = _lwmService.getLowWaterMarks(realtimeTableName);
-    if (lowWaterMarks == null || lowWaterMarks.size() == 0) {
-      LOGGER.info("No low water marks info found for table {}", realtimeTableName);
-      return;
-    }
-    LOGGER.info("Found low water marks {} for table {}", String.valueOf(lowWaterMarks), realtimeTableName);
-    LowWaterMarkQueryWriter.addLowWaterMarkToQuery(realtimeBrokerRequest, lowWaterMarks);
-    LOGGER.info("Query augmented with LWMS info for table {} : {}", realtimeTableName, realtimeBrokerRequest);
   }
 
   /**

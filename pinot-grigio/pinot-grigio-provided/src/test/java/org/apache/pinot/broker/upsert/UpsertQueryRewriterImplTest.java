@@ -16,21 +16,34 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.broker.requesthandler;
+package org.apache.pinot.broker.upsert;
 
+import org.apache.pinot.broker.requesthandler.LowWaterMarkQueryWriter;
 import org.apache.pinot.common.request.BrokerRequest;
 import org.apache.pinot.common.request.FilterOperator;
 import org.apache.pinot.common.request.FilterQuery;
+import org.apache.pinot.core.segment.updater.LowWaterMarkService;
 import org.apache.pinot.pql.parsers.Pql2Compiler;
 import org.apache.thrift.TException;
 import org.testng.Assert;
+import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-public class LowWaterMarkQueryWriterTest {
+public class UpsertQueryRewriterImplTest {
+
+    private LowWaterMarkService _lwms;
+    private UpsertQueryRewriterImpl rewriter;
+
+    @BeforeClass
+    public void init() {
+        _lwms = new PollingBasedLowWaterMarkService();
+        rewriter = new UpsertQueryRewriterImpl(_lwms);
+    }
+
     @Test
     public void testRewriteQueryWithoutExistingFilters() throws Exception{
         Pql2Compiler pql2Compiler = new Pql2Compiler();
@@ -39,7 +52,7 @@ public class LowWaterMarkQueryWriterTest {
         Map<Integer, Long> lwms = new HashMap<>();
         lwms.put(0, 10L);
         lwms.put(1, 20L);
-        LowWaterMarkQueryWriter.addLowWaterMarkToQuery(req, lwms);
+        rewriter.addLowWaterMarkToQuery(req, lwms);
         Assert.assertTrue(req.isSetFilterQuery());
         try {
             req.validate();
@@ -80,7 +93,7 @@ public class LowWaterMarkQueryWriterTest {
         Map<Integer, Long> lwms = new HashMap<>();
         lwms.put(0, 10L);
         lwms.put(1, 20L);
-        LowWaterMarkQueryWriter.addLowWaterMarkToQuery(req, lwms);
+        rewriter.addLowWaterMarkToQuery(req, lwms);
         Assert.assertTrue(req.isSetFilterQuery());
         try {
             req.validate();

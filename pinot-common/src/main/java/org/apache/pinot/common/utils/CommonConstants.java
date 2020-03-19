@@ -179,7 +179,7 @@ public class CommonConstants {
     public static final String CONFIG_OF_BROKER_POLLING_SERVER_LWMS_SERVER_PORT = "pinot.broker.query.polling.server.lwms.port";
     public static final String CONFIG_OF_BROKER_LWMS_CLASS_NAME = "pinot.broker.lwms.classname";
     public static final String CONFIG_OF_BROKER_LWM_REWRITE_ENABLE = "pinot.broker.query.lwm.rewrite";
-    public static final boolean CONFIG_OF_BROKER_LWM_REWRITE_ENABLE_DEFAULT = true;
+    public static final boolean CONFIG_OF_BROKER_LWM_REWRITE_ENABLE_DEFAULT = false;
     public static class Request {
       public static final String PQL = "pql";
       public static final String SQL = "sql";

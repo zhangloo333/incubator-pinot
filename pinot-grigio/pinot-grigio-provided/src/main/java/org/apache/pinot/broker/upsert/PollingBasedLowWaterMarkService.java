@@ -30,6 +30,7 @@ import org.apache.pinot.common.metrics.BrokerMeter;
 import org.apache.pinot.common.metrics.BrokerMetrics;
 import org.apache.pinot.common.restlet.resources.TableLowWaterMarksInfo;
 import org.apache.pinot.core.segment.updater.LowWaterMarkService;
+import org.apache.pinot.core.segment.updater.UpsertQueryRewriter;
 import org.glassfish.jersey.client.ClientProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,6 +67,7 @@ public class PollingBasedLowWaterMarkService implements LowWaterMarkService {
   private int _serverPort;
   private boolean _shuttingDown;
   private BrokerMetrics _brokerMetrics;
+  private UpsertQueryRewriter _queryRewriter;
 
   @Override
   public void init(HelixDataAccessor helixDataAccessor, String helixClusterName, int serverPollingInterval, int serverPort) {
@@ -75,6 +77,7 @@ public class PollingBasedLowWaterMarkService implements LowWaterMarkService {
     _cacheInstanceConfigsDataAccessor =
         new ZkCacheBaseDataAccessor<>((ZkBaseDataAccessor<ZNRecord>) helixDataAccessor.getBaseDataAccessor(),
             instanceConfigs, null, Collections.singletonList(instanceConfigs));
+    _queryRewriter = new UpsertQueryRewriterImpl(this);
     _tableLowWaterMarks = new ConcurrentHashMap<>();
     _httpClient = ClientBuilder.newClient();
     _httpClient.property(ClientProperties.CONNECT_TIMEOUT, SERVER_CONNENCT_TIMEOUT_MS);
@@ -98,6 +101,11 @@ public class PollingBasedLowWaterMarkService implements LowWaterMarkService {
     _brokerMetrics = brokerMetrics;
     Thread serverPollingThread = new Thread(new PinotServerPollingExecutor());
     serverPollingThread.start();
+  }
+
+  @Override
+  public UpsertQueryRewriter getQueryRewriter() {
+    return _queryRewriter;
   }
 
   @Override

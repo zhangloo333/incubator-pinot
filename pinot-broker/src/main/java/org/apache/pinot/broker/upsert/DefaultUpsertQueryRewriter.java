@@ -1,3 +1,8 @@
+package org.apache.pinot.broker.upsert;
+
+import org.apache.pinot.common.request.BrokerRequest;
+import org.apache.pinot.core.segment.updater.UpsertQueryRewriter;
+
 /**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -16,29 +21,10 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.core.segment.updater;
+public class DefaultUpsertQueryRewriter implements UpsertQueryRewriter {
 
-import org.apache.helix.HelixDataAccessor;
-import org.apache.pinot.common.metrics.BrokerMetrics;
-
-import java.util.Map;
-
-/**
- * LowWaterMarkService keeps records of the low water mark (i.e., the stream ingestion progress) for each partition of
- * an input table.
- */
-public interface LowWaterMarkService {
-
-    void init(HelixDataAccessor helixDataAccessor, String helixClusterName, int serverPollingInterval, int serverPort);
-
-    // Return the low water mark mapping from partition id to the corresponding low water mark of a given table.
-    Map<Integer, Long> getLowWaterMarks(String tableName);
-
-    // Shutdown the service.
-    void shutDown();
-
-    // start
-    void start(BrokerMetrics brokerMetrics);
-
-    UpsertQueryRewriter getQueryRewriter();
+  @Override
+  public void rewriteQueryForUpsert(BrokerRequest request, String rawTableName) {
+    // do nothing
+  }
 }
