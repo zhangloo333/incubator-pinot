@@ -444,6 +444,8 @@ public class DetectionConfigTranslator extends ConfigTranslator<DetectionConfigD
         properties.put(PROP_WINDOW_SIZE, 6);
         properties.put(PROP_WINDOW_UNIT, TimeUnit.HOURS);
         properties.put(PROP_FREQUENCY, new TimeGranularity(15, TimeUnit.MINUTES));
+        properties.put(PROP_WINDOW_DELAY, 10);
+        properties.put(PROP_WINDOW_DELAY_UNIT, TimeUnit.MINUTES);
       } else {
         properties.put(PROP_WINDOW_SIZE, 6);
         properties.put(PROP_WINDOW_UNIT, TimeUnit.HOURS);
