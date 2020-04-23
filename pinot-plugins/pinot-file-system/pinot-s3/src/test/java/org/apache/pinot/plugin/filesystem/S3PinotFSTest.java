@@ -18,9 +18,7 @@
  */
 package org.apache.pinot.plugin.filesystem;
 
-import com.adobe.testing.s3mock.testng.S3Mock;
 import java.io.File;
-import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -34,37 +32,32 @@ import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.S3Object;
 
 
-@Test(enabled = false)
-//@Listeners(com.adobe.testing.s3mock.testng.S3MockListener.class)
+@Test
 public class S3PinotFSTest {
   final String DELIMITER = "/";
   S3PinotFS _s3PinotFS;
   S3Client _s3Client;
+  PinotS3Mock _s3Mock;
   final String BUCKET = "test-bucket";
   final String SCHEME = "s3";
   final String FILE_FORMAT = "%s://%s/%s";
   final String DIR_FORMAT = "%s://%s";
+  final Integer HTTP_PORT = 9452;
+  final Integer HTTPS_PORT = 9453;
 
   @BeforeClass
   public void setUp() {
-    S3Mock s3Mock = S3Mock.getInstance();
-    _s3Client = s3Mock.createS3ClientV2();
+    _s3Mock = new PinotS3Mock.PinotS3MockBuilder().withHttpPort(HTTP_PORT).withHttpsPort(HTTPS_PORT)
+        .withInitialBuckets(BUCKET).build();
+    _s3Mock.bootstrap();
+    _s3Client = _s3Mock.createS3ClientV2();
     _s3PinotFS = new S3PinotFS();
     _s3PinotFS.init(_s3Client);
-    _s3Client.createBucket(CreateBucketRequest.builder().bucket(BUCKET).build());
-  }
-
-  @AfterClass
-  public void tearDown()
-      throws IOException {
-    _s3PinotFS.close();
-    _s3Client.close();
   }
 
   private void createEmptyFile(String folderName, String fileName) {
@@ -73,7 +66,7 @@ public class S3PinotFSTest {
         .putObject(S3TestUtils.getPutObjectRequest(BUCKET, fileNameWithFolder), RequestBody.fromBytes(new byte[0]));
   }
 
-  @Test(enabled = false)
+  @Test
   public void testTouchFileInBucket()
       throws Exception {
 
@@ -92,7 +85,7 @@ public class S3PinotFSTest {
     Assert.assertTrue(Arrays.equals(response, originalFiles));
   }
 
-  @Test(enabled = false)
+  @Test
   public void testTouchFilesInFolder()
       throws Exception {
 
@@ -113,7 +106,7 @@ public class S3PinotFSTest {
     Assert.assertTrue(Arrays.equals(response, Arrays.stream(originalFiles).map(x -> folder + DELIMITER + x).toArray()));
   }
 
-  @Test(enabled = false)
+  @Test
   public void testListFilesInBucketNonRecursive()
       throws Exception {
     String[] originalFiles = new String[]{"a-list.txt", "b-list.txt", "c-list.txt"};
@@ -130,7 +123,7 @@ public class S3PinotFSTest {
     Assert.assertTrue(Arrays.equals(actualFiles, originalFiles));
   }
 
-  @Test(enabled = false)
+  @Test
   public void testListFilesInFolderNonRecursive()
       throws Exception {
     String folder = "list-files";
@@ -148,7 +141,7 @@ public class S3PinotFSTest {
         Arrays.equals(Arrays.stream(originalFiles).map(x -> folder + DELIMITER + x).toArray(), actualFiles));
   }
 
-  @Test(enabled = false)
+  @Test
   public void testListFilesInFolderRecursive()
       throws Exception {
     String folder = "list-files-rec";
@@ -170,7 +163,7 @@ public class S3PinotFSTest {
     Assert.assertTrue(Arrays.equals(expectedResultList.toArray(), actualFiles));
   }
 
-  @Test(enabled = false)
+  @Test
   public void testDeleteFile()
       throws Exception {
     String[] originalFiles = new String[]{"a-delete.txt", "b-delete.txt", "c-delete.txt"};
@@ -196,7 +189,7 @@ public class S3PinotFSTest {
     Assert.assertTrue(Arrays.equals(actualResponse, expectedResultList.toArray()));
   }
 
-  @Test(enabled = false)
+  @Test
   public void testDeleteFolder()
       throws Exception {
     String[] originalFiles = new String[]{"a-delete-2.txt", "b-delete-2.txt", "c-delete-2.txt"};
@@ -217,7 +210,7 @@ public class S3PinotFSTest {
     Assert.assertEquals(0, actualResponse.length);
   }
 
-  @Test(enabled = false)
+  @Test
   public void testIsDirectory()
       throws Exception {
     String[] originalFiles = new String[]{"a-dir.txt", "b-dir.txt", "c-dir.txt"};
@@ -241,7 +234,7 @@ public class S3PinotFSTest {
     Assert.assertFalse(notIsDir);
   }
 
-  @Test(enabled = false)
+  @Test
   public void testExists()
       throws Exception {
     String[] originalFiles = new String[]{"a-ex.txt", "b-ex.txt", "c-ex.txt"};
@@ -269,7 +262,7 @@ public class S3PinotFSTest {
     Assert.assertFalse(fileNotExists);
   }
 
-  @Test(enabled = false)
+  @Test
   public void testCopyFromAndToLocal()
       throws Exception {
     String fileName = "copyFile.txt";
@@ -289,7 +282,7 @@ public class S3PinotFSTest {
     fileToDownload.deleteOnExit();
   }
 
-  @Test(enabled = false)
+  @Test
   public void testOpenFile()
       throws Exception {
     String fileName = "sample.txt";
@@ -302,7 +295,7 @@ public class S3PinotFSTest {
     Assert.assertEquals(actualContents, fileContent);
   }
 
-  @Test(enabled = false)
+  @Test
   public void testMkdir()
       throws Exception {
     String folderName = "my-test-folder";
@@ -311,5 +304,10 @@ public class S3PinotFSTest {
 
     HeadObjectResponse headObjectResponse = _s3Client.headObject(S3TestUtils.getHeadObjectRequest(BUCKET, folderName));
     Assert.assertTrue(headObjectResponse.sdkHttpResponse().isSuccessful());
+  }
+
+  @AfterClass
+  public void tearDown() {
+    _s3Mock.terminate();
   }
 }
