@@ -45,7 +45,7 @@ import org.apache.pinot.core.segment.memory.PinotDataBuffer;
 
 public class ForwardIndexBenchmark {
 
-  static int ROWS = 36_000_000;
+  static int ROWS = 1_000_000;
   static int MAX_VALUE = 40000;
   static int NUM_BITS = PinotDataBitSet.getNumBitsPerValue(MAX_VALUE);
   static File rawFile = new File("/Users/kishoreg/fwd-index.test");
@@ -175,9 +175,9 @@ public class ForwardIndexBenchmark {
       throws Exception {
     generateRawFile();
     generatePinotFwdIndex();
-//    generatePFORIndex();
-//    readRawFile();
+    generatePFORIndex();
+    readRawFile();
     readPinotFwdIndex();
-//    readBitPackedFwdIndex();
+    readBitPackedFwdIndex();
   }
 }
