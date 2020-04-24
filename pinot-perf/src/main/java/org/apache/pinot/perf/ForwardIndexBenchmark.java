@@ -18,6 +18,7 @@
  */
 package org.apache.pinot.perf;
 
+import com.google.common.base.Stopwatch;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.DataInputStream;
@@ -35,6 +36,7 @@ import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.util.Arrays;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 import me.lemire.integercompression.BitPacking;
 import org.apache.commons.math.util.MathUtils;
 import org.apache.pinot.core.io.reader.impl.v1.FixedBitSingleValueReader;
@@ -44,13 +46,12 @@ import org.apache.pinot.core.io.util.PinotDataBitSet;
 import org.apache.pinot.core.io.writer.impl.v1.FixedBitSingleValueWriter;
 import org.apache.pinot.core.segment.memory.PinotDataBuffer;
 
-
 public class ForwardIndexBenchmark {
 
   static int ROWS = 36_000_000;
   static int MAX_VALUE = 40000;
   static int NUM_BITS = PinotDataBitSet.getNumBitsPerValue(MAX_VALUE);
-  static File rawFile = new File("/Users/kishoreg/fwd-index.test");
+  static File rawFile = new File("/Users/steotia/fwd-index.test");
   static File pinotOutFile = new File(rawFile.getAbsolutePath() + ".pinot.fwd");
   static File bitPackedFile = new File(rawFile.getAbsolutePath() + ".fast.fwd");
 
@@ -141,42 +142,39 @@ public class ForwardIndexBenchmark {
 
   static void readPinotFwdIndex()
       throws IOException {
-
-//    int[] values = new int[ROWS];
     PinotDataBuffer pinotDataBuffer = PinotDataBuffer.loadBigEndianFile(pinotOutFile);
-//    FixedBitSingleValueReader reader = new FixedBitSingleValueReader(pinotDataBuffer, ROWS, NUM_BITS);
-    FixedBitIntReaderWriter reader = new FixedBitIntReaderWriter(pinotDataBuffer, ROWS, NUM_BITS);
-    long start = System.currentTimeMillis();
-    int[] val = new int[32];
-    for (int i = 0; i < ROWS; i += 32) {
-      reader.readInt(i, 32, val);
+    FixedBitSingleValueReader reader = new FixedBitSingleValueReader(pinotDataBuffer, ROWS, NUM_BITS);
+    Stopwatch stopwatch = Stopwatch.createUnstarted();
+    int[] unpacked = new int[32];
+    stopwatch.start();
+    // sequentially unpack 32 integers at a time
+    for (int startIndex = 0; startIndex < ROWS; startIndex += 32) {
+      reader.readBulk(startIndex, 32, unpacked);
     }
-    long end = System.currentTimeMillis();
-
-//    System.out.println("pinot = " + Arrays.toString(values) + " took: " + (end - start) + " ms");
-    System.out.println("pinot took: " + (end - start) + " ms");
+    stopwatch.stop();
+    System.out.println("pinot took: " + stopwatch.elapsed(TimeUnit.MILLISECONDS) + "ms");
   }
 
   static void readBitPackedFwdIndex()
       throws IOException {
-
-    int[] values = new int[32];
-//    DataInputStream dataInputStream = new DataInputStream(new FileInputStream(bitPackedFile));
     PinotDataBuffer pinotDataBuffer = PinotDataBuffer.mapReadOnlyBigEndianFile(bitPackedFile);
     FileChannel fileChannel = new RandomAccessFile(bitPackedFile, "r").getChannel();
     ByteBuffer buffer =
         fileChannel.map(FileChannel.MapMode.READ_ONLY, 0, bitPackedFile.length()).order(ByteOrder.BIG_ENDIAN);
     int[] compressed = new int[NUM_BITS];
-    long start = System.currentTimeMillis();
+    int[] unpacked = new int[32];
+    Stopwatch stopwatch = Stopwatch.createUnstarted();
+    // sequentially unpack 32 integers at a time
     for (int i = 0; i < ROWS; i += 32) {
       for (int j = 0; j < compressed.length; j++) {
         compressed[j] = buffer.getInt();
       }
-      BitPacking.fastunpack(compressed, 0, values, 0, NUM_BITS);
+      stopwatch.start();
+      BitPacking.fastunpack(compressed, 0, unpacked, 0, NUM_BITS);
+      stopwatch.stop();
     }
-    long end = System.currentTimeMillis();
-//    System.out.println("bitPacked = " + Arrays.toString(values) + " took: " + (end - start) + " ms");
-    System.out.println("bitPacked took: " + (end - start) + " ms");
+    //System.out.println("bitPacked = " + Arrays.toString(values) + " took: " + (end - start) + " ms");
+    System.out.println("bitPacked took: " + stopwatch.elapsed(TimeUnit.MILLISECONDS)+ " ms");
   }
 
   public static void main(String[] args)

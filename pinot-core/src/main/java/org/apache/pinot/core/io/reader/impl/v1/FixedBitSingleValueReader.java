@@ -50,6 +50,10 @@ public final class FixedBitSingleValueReader extends BaseSingleColumnSingleValue
     }
   }
 
+  public void readBulk(int startIndex, int length, int[] buffer) {
+    _reader.readInt(startIndex, length, buffer);
+  }
+
   @Override
   public ReaderContext createContext() {
     return null;
