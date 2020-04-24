@@ -38,6 +38,8 @@ import java.util.Random;
 import me.lemire.integercompression.BitPacking;
 import org.apache.commons.math.util.MathUtils;
 import org.apache.pinot.core.io.reader.impl.v1.FixedBitSingleValueReader;
+import org.apache.pinot.core.io.util.FixedBitIntReaderWriter;
+import org.apache.pinot.core.io.util.FixedByteValueReaderWriter;
 import org.apache.pinot.core.io.util.PinotDataBitSet;
 import org.apache.pinot.core.io.writer.impl.v1.FixedBitSingleValueWriter;
 import org.apache.pinot.core.segment.memory.PinotDataBuffer;
@@ -45,7 +47,7 @@ import org.apache.pinot.core.segment.memory.PinotDataBuffer;
 
 public class ForwardIndexBenchmark {
 
-  static int ROWS = 1_000_000;
+  static int ROWS = 36_000_000;
   static int MAX_VALUE = 40000;
   static int NUM_BITS = PinotDataBitSet.getNumBitsPerValue(MAX_VALUE);
   static File rawFile = new File("/Users/kishoreg/fwd-index.test");
@@ -101,14 +103,19 @@ public class ForwardIndexBenchmark {
     int[] raw = new int[inputSize];
     int[] bitPacked = new int[outputSize];
 
-    DataOutputStream dos = new DataOutputStream(new FileOutputStream(bitPackedFile));
+    int totalNum = (NUM_BITS * ROWS + 31) / Integer.SIZE;
+
+    PinotDataBuffer pinotDataBuffer = PinotDataBuffer
+        .mapFile(bitPackedFile, false, 0, (long) totalNum * Integer.BYTES, ByteOrder.BIG_ENDIAN, "bitpacking");
+
+    FixedByteValueReaderWriter readerWriter = new FixedByteValueReaderWriter(pinotDataBuffer);
     int counter = 0;
     for (int i = 0; i < data.length; i++) {
       raw[counter] = data[i];
       if (counter == raw.length - 1 || i == data.length - 1) {
         BitPacking.fastpack(raw, 0, bitPacked, 0, NUM_BITS);
         for (int j = 0; j < outputSize; j++) {
-          dos.writeInt(bitPacked[j]);
+          readerWriter.writeInt(i / 32 + j, bitPacked[j]);
         }
         Arrays.fill(bitPacked, 0);
         counter = 0;
@@ -116,7 +123,7 @@ public class ForwardIndexBenchmark {
         counter = counter + 1;
       }
     }
-    dos.close();
+    readerWriter.close();
     System.out.println("bitPackedFile.length = " + bitPackedFile.length());
   }
 
@@ -137,11 +144,12 @@ public class ForwardIndexBenchmark {
 
 //    int[] values = new int[ROWS];
     PinotDataBuffer pinotDataBuffer = PinotDataBuffer.loadBigEndianFile(pinotOutFile);
-    FixedBitSingleValueReader reader = new FixedBitSingleValueReader(pinotDataBuffer, ROWS, NUM_BITS);
+//    FixedBitSingleValueReader reader = new FixedBitSingleValueReader(pinotDataBuffer, ROWS, NUM_BITS);
+    FixedBitIntReaderWriter reader = new FixedBitIntReaderWriter(pinotDataBuffer, ROWS, NUM_BITS);
     long start = System.currentTimeMillis();
-    int val;
-    for (int i = 0; i < ROWS; i++) {
-      val = reader.getInt(i);
+    int[] val = new int[32];
+    for (int i = 0; i < ROWS; i += 32) {
+      reader.readInt(i, 32, val);
     }
     long end = System.currentTimeMillis();
 
@@ -173,6 +181,7 @@ public class ForwardIndexBenchmark {
 
   public static void main(String[] args)
       throws Exception {
+    System.out.println("ROWS = " + ROWS);
     generateRawFile();
     generatePinotFwdIndex();
     generatePFORIndex();
