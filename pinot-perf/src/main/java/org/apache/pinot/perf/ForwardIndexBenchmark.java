@@ -143,13 +143,13 @@ public class ForwardIndexBenchmark {
   static void readPinotFwdIndex()
       throws IOException {
     PinotDataBuffer pinotDataBuffer = PinotDataBuffer.loadBigEndianFile(pinotOutFile);
-    FixedBitSingleValueReader reader = new FixedBitSingleValueReader(pinotDataBuffer, ROWS, NUM_BITS);
+    FixedBitIntReaderWriter reader = new FixedBitIntReaderWriter(pinotDataBuffer, ROWS, NUM_BITS);
     Stopwatch stopwatch = Stopwatch.createUnstarted();
     int[] unpacked = new int[32];
     stopwatch.start();
     // sequentially unpack 32 integers at a time
     for (int startIndex = 0; startIndex < ROWS; startIndex += 32) {
-      reader.readBulk(startIndex, 32, unpacked);
+      reader.readInt(startIndex, 32, unpacked);
     }
     stopwatch.stop();
     System.out.println("pinot took: " + stopwatch.elapsed(TimeUnit.MILLISECONDS) + "ms");

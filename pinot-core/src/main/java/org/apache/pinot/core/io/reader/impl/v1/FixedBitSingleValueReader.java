@@ -21,15 +21,16 @@ package org.apache.pinot.core.io.reader.impl.v1;
 import java.io.IOException;
 import org.apache.pinot.core.io.reader.BaseSingleColumnSingleValueReader;
 import org.apache.pinot.core.io.reader.ReaderContext;
+import org.apache.pinot.core.io.util.FastFixedBitIntReaderWriter;
 import org.apache.pinot.core.io.util.FixedBitIntReaderWriter;
 import org.apache.pinot.core.segment.memory.PinotDataBuffer;
 
 
 public final class FixedBitSingleValueReader extends BaseSingleColumnSingleValueReader {
-  private final FixedBitIntReaderWriter _reader;
+  private final FastFixedBitIntReaderWriter _reader;
 
   public FixedBitSingleValueReader(PinotDataBuffer dataBuffer, int numRows, int numBitsPerValue) {
-    _reader = new FixedBitIntReaderWriter(dataBuffer, numRows, numBitsPerValue);
+    _reader = new FastFixedBitIntReaderWriter(dataBuffer, numRows, numBitsPerValue);
   }
 
   @Override
@@ -48,10 +49,6 @@ public final class FixedBitSingleValueReader extends BaseSingleColumnSingleValue
     for (int i = rowsStartIndex; i < rowsEndIndex; i++) {
       values[valuesStartIndex++] = getInt(rows[i]);
     }
-  }
-
-  public void readBulk(int startIndex, int length, int[] buffer) {
-    _reader.readInt(startIndex, length, buffer);
   }
 
   @Override

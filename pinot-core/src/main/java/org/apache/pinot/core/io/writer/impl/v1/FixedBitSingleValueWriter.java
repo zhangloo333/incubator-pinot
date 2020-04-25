@@ -21,13 +21,14 @@ package org.apache.pinot.core.io.writer.impl.v1;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteOrder;
+import org.apache.pinot.core.io.util.FastFixedBitIntReaderWriter;
 import org.apache.pinot.core.io.util.FixedBitIntReaderWriter;
 import org.apache.pinot.core.io.writer.SingleColumnSingleValueWriter;
 import org.apache.pinot.core.segment.memory.PinotDataBuffer;
 
 
 public class FixedBitSingleValueWriter implements SingleColumnSingleValueWriter {
-  private FixedBitIntReaderWriter dataFileWriter;
+  private FastFixedBitIntReaderWriter dataFileWriter;
 
   public FixedBitSingleValueWriter(File file, int rows, int columnSizeInBits)
       throws Exception {
@@ -36,7 +37,7 @@ public class FixedBitSingleValueWriter implements SingleColumnSingleValueWriter 
     // Backward-compatible: index file is always big-endian
     PinotDataBuffer dataBuffer =
         PinotDataBuffer.mapFile(file, false, 0, length, ByteOrder.BIG_ENDIAN, getClass().getSimpleName());
-    dataFileWriter = new FixedBitIntReaderWriter(dataBuffer, rows, columnSizeInBits);
+    dataFileWriter = new FastFixedBitIntReaderWriter(dataBuffer, rows, columnSizeInBits);
   }
 
   @Override
