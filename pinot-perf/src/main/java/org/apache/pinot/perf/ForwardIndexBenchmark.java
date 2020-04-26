@@ -39,29 +39,63 @@ import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import me.lemire.integercompression.BitPacking;
 import org.apache.commons.math.util.MathUtils;
-import org.apache.pinot.core.io.reader.impl.v1.FixedBitSingleValueReader;
 import org.apache.pinot.core.io.util.FixedBitIntReaderWriter;
 import org.apache.pinot.core.io.util.FixedByteValueReaderWriter;
 import org.apache.pinot.core.io.util.PinotDataBitSet;
 import org.apache.pinot.core.io.writer.impl.v1.FixedBitSingleValueWriter;
 import org.apache.pinot.core.segment.memory.PinotDataBuffer;
+import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.BenchmarkMode;
+import org.openjdk.jmh.annotations.Mode;
+import org.openjdk.jmh.annotations.OutputTimeUnit;
+import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.annotations.Setup;
+import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.runner.Runner;
+import org.openjdk.jmh.runner.options.Options;
+import org.openjdk.jmh.runner.options.OptionsBuilder;
+import org.openjdk.jmh.runner.options.TimeValue;
 
+
+@State(Scope.Benchmark)
 public class ForwardIndexBenchmark {
 
   static int ROWS = 36_000_000;
   static int MAX_VALUE = 40000;
   static int NUM_BITS = PinotDataBitSet.getNumBitsPerValue(MAX_VALUE);
-  static File rawFile = new File("/Users/steotia/fwd-index.test");
+  static File rawFile = new File("/Users/kishoreg/fwd-index.test");
   static File pinotOutFile = new File(rawFile.getAbsolutePath() + ".pinot.fwd");
   static File bitPackedFile = new File(rawFile.getAbsolutePath() + ".fast.fwd");
+  FixedBitIntReaderWriter reader;
+  int[] packed = new int[NUM_BITS];
+  int[] unpacked = new int[32];
+
+  ByteBuffer bitPackedBuffer;
 
   static {
+  }
+
+  @Setup
+  public void setup()
+      throws Exception {
     rawFile.delete();
     pinotOutFile.delete();
     bitPackedFile.delete();
+    generateRawFile();
+    generatePinotFwdIndex();
+    generatePFORIndex();
+
+    //setup pinot forward index reader
+    PinotDataBuffer pinotDataBuffer = PinotDataBuffer.loadBigEndianFile(pinotOutFile);
+    reader = new FixedBitIntReaderWriter(pinotDataBuffer, ROWS, NUM_BITS);
+
+    FileChannel fileChannel = new RandomAccessFile(bitPackedFile, "r").getChannel();
+    bitPackedBuffer =
+        fileChannel.map(FileChannel.MapMode.READ_ONLY, 0, bitPackedFile.length()).order(ByteOrder.BIG_ENDIAN);
+    bitPackedBuffer.mark();
   }
 
-  static void generateRawFile()
+  public void generateRawFile()
       throws IOException {
 
     rawFile.delete();
@@ -74,7 +108,7 @@ public class ForwardIndexBenchmark {
     bw.close();
   }
 
-  static void generatePinotFwdIndex()
+  public void generatePinotFwdIndex()
       throws Exception {
     BufferedReader bfr = new BufferedReader(new FileReader(rawFile));
     FixedBitSingleValueWriter fixedBitSingleValueWriter = new FixedBitSingleValueWriter(pinotOutFile, ROWS, NUM_BITS);
@@ -87,7 +121,7 @@ public class ForwardIndexBenchmark {
     System.out.println("pinotOutFile.length = " + pinotOutFile.length());
   }
 
-  static void generatePFORIndex()
+  public void generatePFORIndex()
       throws Exception {
 
     BufferedReader bfr = new BufferedReader(new FileReader(rawFile));
@@ -128,7 +162,7 @@ public class ForwardIndexBenchmark {
     System.out.println("bitPackedFile.length = " + bitPackedFile.length());
   }
 
-  static void readRawFile()
+  public void readRawFile()
       throws IOException {
     BufferedReader bfr = new BufferedReader(new FileReader(rawFile));
     String line;
@@ -140,51 +174,38 @@ public class ForwardIndexBenchmark {
 //    System.out.println("raw = " + Arrays.toString(values));
   }
 
-  static void readPinotFwdIndex()
+  @Benchmark
+  @BenchmarkMode(Mode.AverageTime)
+  @OutputTimeUnit(TimeUnit.MILLISECONDS)
+  public void readPinotFwdIndex()
       throws IOException {
-    PinotDataBuffer pinotDataBuffer = PinotDataBuffer.loadBigEndianFile(pinotOutFile);
-    FixedBitIntReaderWriter reader = new FixedBitIntReaderWriter(pinotDataBuffer, ROWS, NUM_BITS);
-    Stopwatch stopwatch = Stopwatch.createUnstarted();
-    int[] unpacked = new int[32];
-    stopwatch.start();
     // sequentially unpack 32 integers at a time
     for (int startIndex = 0; startIndex < ROWS; startIndex += 32) {
       reader.readInt(startIndex, 32, unpacked);
     }
-    stopwatch.stop();
-    System.out.println("pinot took: " + stopwatch.elapsed(TimeUnit.MILLISECONDS) + "ms");
   }
 
-  static void readBitPackedFwdIndex()
+  @Benchmark
+  @BenchmarkMode(Mode.AverageTime)
+  @OutputTimeUnit(TimeUnit.MILLISECONDS)
+  public void readBitPackedFwdIndex()
       throws IOException {
-    PinotDataBuffer pinotDataBuffer = PinotDataBuffer.mapReadOnlyBigEndianFile(bitPackedFile);
-    FileChannel fileChannel = new RandomAccessFile(bitPackedFile, "r").getChannel();
-    ByteBuffer buffer =
-        fileChannel.map(FileChannel.MapMode.READ_ONLY, 0, bitPackedFile.length()).order(ByteOrder.BIG_ENDIAN);
-    int[] compressed = new int[NUM_BITS];
-    int[] unpacked = new int[32];
-    Stopwatch stopwatch = Stopwatch.createUnstarted();
     // sequentially unpack 32 integers at a time
+    bitPackedBuffer.reset();
     for (int i = 0; i < ROWS; i += 32) {
-      for (int j = 0; j < compressed.length; j++) {
-        compressed[j] = buffer.getInt();
+      for (int j = 0; j < packed.length; j++) {
+        packed[j] = bitPackedBuffer.getInt();
       }
-      stopwatch.start();
-      BitPacking.fastunpack(compressed, 0, unpacked, 0, NUM_BITS);
-      stopwatch.stop();
+      BitPacking.fastunpack(packed, 0, unpacked, 0, NUM_BITS);
     }
-    //System.out.println("bitPacked = " + Arrays.toString(values) + " took: " + (end - start) + " ms");
-    System.out.println("bitPacked took: " + stopwatch.elapsed(TimeUnit.MILLISECONDS)+ " ms");
   }
 
   public static void main(String[] args)
       throws Exception {
-    System.out.println("ROWS = " + ROWS);
-    generateRawFile();
-    generatePinotFwdIndex();
-    generatePFORIndex();
-    readRawFile();
-    readPinotFwdIndex();
-    readBitPackedFwdIndex();
+    Options opt =
+        new OptionsBuilder().include(ForwardIndexBenchmark.class.getSimpleName()).warmupTime(TimeValue.seconds(2))
+            .warmupIterations(3).measurementTime(TimeValue.seconds(5)).measurementIterations(3).forks(1).build();
+
+    new Runner(opt).run();
   }
 }
