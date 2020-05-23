@@ -53,8 +53,12 @@ public class FunctionRegistry {
   }
 
   public static void registerFunction(Method method) {
-    FunctionInfo functionInfo = new FunctionInfo(method, method.getDeclaringClass());
-    _functionInfoMap.put(method.getName().toLowerCase(), functionInfo);
+    try {
+      FunctionInfo functionInfo = new FunctionInfo(method, method.getDeclaringClass());
+      _functionInfoMap.put(method.getName().toLowerCase(), functionInfo);
+    }catch (Throwable t){
+
+    }
   }
 
   public static boolean containsFunctionByName(String funcName) {
@@ -63,6 +67,7 @@ public class FunctionRegistry {
 
   static {
     try {
+      FunctionRegistry.registerFunction(StringFunctions.class.getDeclaredMethod("reverse", String.class));
       FunctionRegistry.registerFunction(DateTimeFunctions.class.getDeclaredMethod("toEpochSeconds", Long.class));
       FunctionRegistry.registerFunction(DateTimeFunctions.class.getDeclaredMethod("toEpochMinutes", Long.class));
       FunctionRegistry.registerFunction(DateTimeFunctions.class.getDeclaredMethod("toEpochHours", Long.class));
@@ -92,7 +97,6 @@ public class FunctionRegistry {
       FunctionRegistry.registerFunction(StringFunctions.class.getDeclaredMethod("reverse", String.class));
     } catch (NoSuchMethodException e) {
       LOGGER.error("Caught exception when registering function", e);
-      throw new IllegalStateException(e);
     }
   }
 }
