@@ -37,18 +37,23 @@ import org.slf4j.LoggerFactory;
  */
 public class StartBrokerCommand extends AbstractBaseAdminCommand implements Command {
   private static final Logger LOGGER = LoggerFactory.getLogger(StartBrokerCommand.class);
-  @Option(name = "-help", required = false, help = true, aliases = {"-h", "--h", "--help"}, usage = "Print this message.")
-  private boolean _help = false;
   @Option(name = "-brokerHost", required = false, metaVar = "<String>", usage = "host name for controller.")
   private String _brokerHost;
+
   @Option(name = "-brokerPort", required = false, metaVar = "<int>", usage = "Broker port number to use for query.")
   private int _brokerPort = CommonConstants.Helix.DEFAULT_BROKER_QUERY_PORT;
+
   @Option(name = "-zkAddress", required = false, metaVar = "<http>", usage = "HTTP address of Zookeeper.")
   private String _zkAddress = DEFAULT_ZK_ADDRESS;
+
   @Option(name = "-clusterName", required = false, metaVar = "<String>", usage = "Pinot cluster name.")
   private String _clusterName = "PinotCluster";
-  @Option(name = "-configFileName", required = false, metaVar = "<Config File Name>", usage = "Broker Starter Config file.", forbids = {"-brokerHost", "-brokerPort"})
+
+  @Option(name = "-configFileName", required = false, aliases = {"-config", "-configFile", "-brokerConfig", "-brokerConf"}, metaVar = "<Config File Name>", usage = "Broker Starter Config file.", forbids = {"-brokerHost", "-brokerPort"})
   private String _configFileName;
+
+  @Option(name = "-help", required = false, help = true, aliases = {"-h", "--h", "--help"}, usage = "Print this message.")
+  private boolean _help = false;
   private HelixBrokerStarter _brokerStarter;
 
   public boolean getHelp() {
