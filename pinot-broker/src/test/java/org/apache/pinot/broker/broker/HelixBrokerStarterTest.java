@@ -31,6 +31,7 @@ import org.apache.pinot.broker.routing.RoutingTable;
 import org.apache.pinot.broker.routing.timeboundary.TimeBoundaryInfo;
 import org.apache.pinot.common.metadata.segment.OfflineSegmentZKMetadata;
 import org.apache.pinot.common.request.BrokerRequest;
+import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.CommonConstants.Helix;
 import org.apache.pinot.common.utils.ZkStarter;
 import org.apache.pinot.common.utils.config.TagNameUtils;
@@ -77,7 +78,9 @@ public class HelixBrokerStarterTest extends ControllerTest {
 
     Configuration brokerConf = new BaseConfiguration();
     brokerConf.addProperty(Helix.KEY_OF_BROKER_QUERY_PORT, 18099);
-    _brokerStarter = new HelixBrokerStarter(brokerConf, getHelixClusterName(), ZkStarter.DEFAULT_ZK_STR);
+    brokerConf.addProperty(CommonConstants.Helix.CONFIG_OF_CLUSTER_NAME, getHelixClusterName());
+    brokerConf.addProperty(CommonConstants.Helix.CONFIG_OF_ZOOKEEPR_SERVER, ZkStarter.DEFAULT_ZK_STR);
+    _brokerStarter = new HelixBrokerStarter(brokerConf);
     _brokerStarter.start();
 
     addFakeBrokerInstancesToAutoJoinHelixCluster(NUM_BROKERS - 1, true);

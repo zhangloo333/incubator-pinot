@@ -36,8 +36,7 @@ import org.slf4j.LoggerFactory;
 
 
 public class PinotConfigUtils {
-
-  public static final String TMP_DIR = System.getProperty("java.io.tmpdir") + File.separator;
+  public static final String CURRENT_USER_DIR = System.getProperty("user.dir") + File.separator;
   private static final Logger LOGGER = LoggerFactory.getLogger(PinotConfigUtils.class);
   private static final String CONTROLLER_CONFIG_VALIDATION_ERROR_MESSAGE_FORMAT =
       "Pinot Controller Config Validation Error: %s";
@@ -64,7 +63,7 @@ public class PinotConfigUtils {
     conf.setControllerPort(controllerPort);
 
     if (StringUtils.isEmpty(dataDir)) {
-      dataDir = TMP_DIR + String.format("Controller_%s_%s/controller/data", controllerHost, controllerPort);
+      dataDir = CURRENT_USER_DIR + String.format("Controller_%s_%s/controller/data", controllerHost, controllerPort);
     }
     conf.setDataDir(dataDir);
     conf.setControllerVipHost(controllerHost);
@@ -141,17 +140,21 @@ public class PinotConfigUtils {
     return null;
   }
 
-  public static Configuration generateBrokerConf(int brokerPort) {
+  public static Configuration generateBrokerConf(String clusterName, String zkAddress, String brokerHost,
+      int brokerPort) {
     if (brokerPort == 0) {
       brokerPort = getAvailablePort();
     }
     Configuration brokerConf = new BaseConfiguration();
     brokerConf.addProperty(CommonConstants.Helix.KEY_OF_BROKER_QUERY_PORT, brokerPort);
+    brokerConf.addProperty(CommonConstants.Helix.CONFIG_OF_CLUSTER_NAME, clusterName);
+    brokerConf.addProperty(CommonConstants.Helix.CONFIG_OF_ZOOKEEPR_SERVER, zkAddress);
+    brokerConf.addProperty(CommonConstants.Broker.CONFIG_OF_BROKER_HOSTNAME, brokerHost);
     return brokerConf;
   }
 
-  public static Configuration generateServerConf(String serverHost, int serverPort, int serverAdminPort,
-      String serverDataDir, String serverSegmentDir)
+  public static Configuration generateServerConf(String clusterName, String zkAddress, String serverHost,
+      int serverPort, int serverAdminPort, String serverDataDir, String serverSegmentDir)
       throws SocketException, UnknownHostException {
     if (serverHost == null) {
       serverHost = NetUtil.getHostAddress();
@@ -163,12 +166,14 @@ public class PinotConfigUtils {
       serverAdminPort = getAvailablePort();
     }
     if (serverDataDir == null) {
-      serverDataDir = TMP_DIR + String.format("Server_%s_%d/server/data", serverHost, serverPort);
+      serverDataDir = CURRENT_USER_DIR + String.format("Server_%s_%d/server/data", serverHost, serverPort);
     }
     if (serverSegmentDir == null) {
-      serverSegmentDir = TMP_DIR + String.format("Server_%s_%d/server/segment", serverHost, serverPort);
+      serverSegmentDir = CURRENT_USER_DIR + String.format("Server_%s_%d/server/segment", serverHost, serverPort);
     }
     Configuration serverConf = new PropertiesConfiguration();
+    serverConf.addProperty(CommonConstants.Helix.CONFIG_OF_CLUSTER_NAME, clusterName);
+    serverConf.addProperty(CommonConstants.Helix.CONFIG_OF_ZOOKEEPR_SERVER, zkAddress);
     serverConf.addProperty(CommonConstants.Helix.KEY_OF_SERVER_NETTY_HOST, serverHost);
     serverConf.addProperty(CommonConstants.Helix.KEY_OF_SERVER_NETTY_PORT, serverPort);
     serverConf.addProperty(CommonConstants.Server.CONFIG_OF_ADMIN_API_PORT, serverAdminPort);

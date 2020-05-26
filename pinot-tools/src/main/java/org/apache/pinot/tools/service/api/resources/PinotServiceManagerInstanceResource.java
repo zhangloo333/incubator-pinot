@@ -47,13 +47,9 @@ import org.apache.pinot.controller.ControllerConf;
 import org.apache.pinot.spi.services.ServiceRole;
 import org.apache.pinot.spi.utils.JsonUtils;
 import org.apache.pinot.tools.service.PinotServiceManager;
+import org.apache.pinot.tools.utils.PinotConfigUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import static org.apache.pinot.common.utils.CommonConstants.Controller.CONFIG_OF_CONTROLLER_METRICS_PREFIX;
-import static org.apache.pinot.common.utils.CommonConstants.Controller.DEFAULT_METRICS_PREFIX;
-import static org.apache.pinot.tools.utils.PinotConfigUtils.TMP_DIR;
-import static org.apache.pinot.tools.utils.PinotConfigUtils.getAvailablePort;
 
 
 @Api(tags = "Startable")
@@ -175,21 +171,21 @@ public class PinotServiceManagerInstanceResource {
           controllerConf.setControllerHost(hostname);
         }
         if (controllerConf.getControllerPort() == null) {
-          controllerConf.setControllerPort(Integer.toString(getAvailablePort()));
+          controllerConf.setControllerPort(Integer.toString(PinotConfigUtils.getAvailablePort()));
         }
         if (controllerConf.getDataDir() == null) {
-          controllerConf.setDataDir(TMP_DIR + String
+          controllerConf.setDataDir(PinotConfigUtils.CURRENT_USER_DIR + String
               .format("Controller_%s_%s/data", controllerConf.getControllerHost(), controllerConf.getControllerPort()));
         }
-        if (!controllerConf.containsKey(CONFIG_OF_CONTROLLER_METRICS_PREFIX)) {
-          controllerConf.addProperty(CONFIG_OF_CONTROLLER_METRICS_PREFIX, String
-              .format("%s.%s_%s", DEFAULT_METRICS_PREFIX, controllerConf.getControllerHost(),
+        if (!controllerConf.containsKey(CommonConstants.Controller.CONFIG_OF_CONTROLLER_METRICS_PREFIX)) {
+          controllerConf.addProperty(CommonConstants.Controller.CONFIG_OF_CONTROLLER_METRICS_PREFIX, String
+              .format("%s.%s_%s", CommonConstants.Controller.DEFAULT_METRICS_PREFIX, controllerConf.getControllerHost(),
                   controllerConf.getControllerPort()));
         }
         break;
       case BROKER:
         if (!configuration.containsKey(CommonConstants.Helix.KEY_OF_BROKER_QUERY_PORT)) {
-          configuration.addProperty(CommonConstants.Helix.KEY_OF_BROKER_QUERY_PORT, getAvailablePort());
+          configuration.addProperty(CommonConstants.Helix.KEY_OF_BROKER_QUERY_PORT, PinotConfigUtils.getAvailablePort());
         }
         if (!configuration.containsKey(CommonConstants.Broker.METRICS_CONFIG_PREFIX)) {
           String hostname;
@@ -214,18 +210,18 @@ public class PinotServiceManagerInstanceResource {
           configuration.addProperty(CommonConstants.Helix.KEY_OF_SERVER_NETTY_HOST, hostname);
         }
         if (!configuration.containsKey(CommonConstants.Helix.KEY_OF_SERVER_NETTY_PORT)) {
-          configuration.addProperty(CommonConstants.Helix.KEY_OF_SERVER_NETTY_PORT, getAvailablePort());
+          configuration.addProperty(CommonConstants.Helix.KEY_OF_SERVER_NETTY_PORT, PinotConfigUtils.getAvailablePort());
         }
         if (!configuration.containsKey(CommonConstants.Server.CONFIG_OF_ADMIN_API_PORT)) {
-          configuration.addProperty(CommonConstants.Server.CONFIG_OF_ADMIN_API_PORT, getAvailablePort());
+          configuration.addProperty(CommonConstants.Server.CONFIG_OF_ADMIN_API_PORT, PinotConfigUtils.getAvailablePort());
         }
         if (!configuration.containsKey(CommonConstants.Server.CONFIG_OF_INSTANCE_DATA_DIR)) {
-          configuration.addProperty(CommonConstants.Server.CONFIG_OF_INSTANCE_DATA_DIR, TMP_DIR + String
+          configuration.addProperty(CommonConstants.Server.CONFIG_OF_INSTANCE_DATA_DIR, PinotConfigUtils.CURRENT_USER_DIR + String
               .format("Server_%s_%d/data", configuration.getString(CommonConstants.Helix.KEY_OF_SERVER_NETTY_HOST),
                   configuration.getInt(CommonConstants.Helix.KEY_OF_SERVER_NETTY_PORT)));
         }
         if (!configuration.containsKey(CommonConstants.Server.CONFIG_OF_INSTANCE_SEGMENT_TAR_DIR)) {
-          configuration.addProperty(CommonConstants.Server.CONFIG_OF_INSTANCE_SEGMENT_TAR_DIR, TMP_DIR + String
+          configuration.addProperty(CommonConstants.Server.CONFIG_OF_INSTANCE_SEGMENT_TAR_DIR, PinotConfigUtils.CURRENT_USER_DIR + String
               .format("Server_%s_%d/segment", configuration.getString(CommonConstants.Helix.KEY_OF_SERVER_NETTY_HOST),
                   configuration.getInt(CommonConstants.Helix.KEY_OF_SERVER_NETTY_PORT)));
         }

@@ -23,6 +23,7 @@ import java.net.SocketException;
 import java.net.UnknownHostException;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.ConfigurationException;
+import org.apache.commons.configuration.PropertiesConfiguration;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.spi.services.ServiceRole;
 import org.apache.pinot.tools.Command;
@@ -39,7 +40,7 @@ import org.slf4j.LoggerFactory;
 public class StartServerCommand extends AbstractBaseAdminCommand implements Command {
   private static final Logger LOGGER = LoggerFactory.getLogger(StartServerCommand.class);
   @Option(name = "-help", required = false, help = true, aliases = {"-h", "--h", "--help"}, usage = "Print this message.")
-  private boolean _help = false;
+  private final boolean _help = false;
   @Option(name = "-serverHost", required = false, metaVar = "<String>", usage = "Host name for controller.")
   private String _serverHost;
   @Option(name = "-serverPort", required = false, metaVar = "<int>", usage = "Port number to start the server at.")
@@ -47,9 +48,9 @@ public class StartServerCommand extends AbstractBaseAdminCommand implements Comm
   @Option(name = "-serverAdminPort", required = false, metaVar = "<int>", usage = "Port number to serve the server admin API at.")
   private int _serverAdminPort = CommonConstants.Server.DEFAULT_ADMIN_API_PORT;
   @Option(name = "-dataDir", required = false, metaVar = "<string>", usage = "Path to directory containing data.")
-  private String _dataDir = TMP_DIR + "pinotServerData";
+  private String _dataDir = CURRENT_USER_DIR + "data/pinotServerData";
   @Option(name = "-segmentDir", required = false, metaVar = "<string>", usage = "Path to directory containing segments.")
-  private String _segmentDir = TMP_DIR + "pinotSegments";
+  private String _segmentDir = CURRENT_USER_DIR + "data/pinotSegments";
   @Option(name = "-zkAddress", required = false, metaVar = "<http>", usage = "Http address of Zookeeper.")
   private String _zkAddress = DEFAULT_ZK_ADDRESS;
   @Option(name = "-clusterName", required = false, metaVar = "<String>", usage = "Pinot cluster name.")
@@ -144,13 +145,22 @@ public class StartServerCommand extends AbstractBaseAdminCommand implements Comm
     }
   }
 
-
   private Configuration getServerConf()
       throws ConfigurationException, SocketException, UnknownHostException {
     if (_configFileName != null) {
-      return PinotConfigUtils.readConfigFromFile(_configFileName);
+      PropertiesConfiguration serverConf = PinotConfigUtils.readConfigFromFile(_configFileName);
+      if (!serverConf.containsKey(CommonConstants.Server.CONFIG_OF_INSTANCE_DATA_DIR)) {
+        serverConf.setProperty(CommonConstants.Server.CONFIG_OF_INSTANCE_DATA_DIR,
+            _dataDir + serverConf.getInt(CommonConstants.Helix.KEY_OF_SERVER_NETTY_PORT, _serverPort) + "/index");
+      }
+      if (!serverConf.containsKey(CommonConstants.Server.CONFIG_OF_INSTANCE_SEGMENT_TAR_DIR)) {
+        serverConf.setProperty(CommonConstants.Server.CONFIG_OF_INSTANCE_SEGMENT_TAR_DIR,
+            _dataDir + serverConf.getInt(CommonConstants.Helix.KEY_OF_SERVER_NETTY_PORT, _serverPort) + "/segmentTar");
+      }
+      return serverConf;
     }
     return PinotConfigUtils
-        .generateServerConf(_serverHost, _serverPort, _serverAdminPort, _dataDir, _segmentDir);
+        .generateServerConf(_clusterName, _zkAddress, _serverHost, _serverPort, _serverAdminPort, _dataDir,
+            _segmentDir);
   }
 }

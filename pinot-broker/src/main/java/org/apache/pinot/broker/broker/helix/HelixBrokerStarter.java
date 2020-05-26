@@ -96,21 +96,39 @@ public class HelixBrokerStarter implements ServiceStartable {
   // Participant Helix manager handles Helix functionality such as state transitions and messages
   private HelixManager _participantHelixManager;
 
+  @Deprecated
   public HelixBrokerStarter(Configuration brokerConf, String clusterName, String zkServer)
       throws Exception {
     this(brokerConf, clusterName, zkServer, null);
   }
 
+  @Deprecated
   public HelixBrokerStarter(Configuration brokerConf, String clusterName, String zkServer, @Nullable String brokerHost)
       throws Exception {
+    this(applyBrokerConfigs(brokerConf, clusterName, zkServer, brokerHost));
+  }
+
+  @Deprecated
+  private static Configuration applyBrokerConfigs(Configuration brokerConf, String clusterName, String zkServers, @Nullable String brokerHost) {
+    brokerConf.setProperty(Helix.CONFIG_OF_CLUSTER_NAME, clusterName);
+    brokerConf.setProperty(Helix.CONFIG_OF_ZOOKEEPR_SERVER, zkServers);
+    if (brokerHost == null) {
+      brokerConf.clearProperty(Broker.CONFIG_OF_BROKER_HOSTNAME);
+    } else {
+      brokerConf.setProperty(Broker.CONFIG_OF_BROKER_HOSTNAME, brokerHost);
+    }
+    return brokerConf;
+  }
+
+  public HelixBrokerStarter(Configuration brokerConf) throws Exception {
     _brokerConf = brokerConf;
     setupHelixSystemProperties();
 
-    _clusterName = clusterName;
+    _clusterName = brokerConf.getString(Helix.CONFIG_OF_CLUSTER_NAME);
 
     // Remove all white-spaces from the list of zkServers (if any).
-    _zkServers = zkServer.replaceAll("\\s+", "");
-
+    _zkServers = brokerConf.getString(Helix.CONFIG_OF_ZOOKEEPR_SERVER).replaceAll("\\s+", "");
+    String brokerHost = brokerConf.getString(Broker.CONFIG_OF_BROKER_HOSTNAME);
     if (brokerHost == null) {
       brokerHost = _brokerConf.getBoolean(CommonConstants.Helix.SET_INSTANCE_ID_TO_HOSTNAME_KEY, false) ? NetUtil
           .getHostnameOrAddress() : NetUtil.getHostAddress();
@@ -380,7 +398,9 @@ public class HelixBrokerStarter implements ServiceStartable {
     int port = 5001;
     brokerConf.addProperty(Helix.KEY_OF_BROKER_QUERY_PORT, port);
     brokerConf.addProperty(Broker.CONFIG_OF_BROKER_TIMEOUT_MS, 60 * 1000L);
-    return new HelixBrokerStarter(brokerConf, "quickstart", "localhost:2122");
+    brokerConf.addProperty(CommonConstants.Helix.CONFIG_OF_CLUSTER_NAME, "quickstart");
+    brokerConf.addProperty(CommonConstants.Helix.CONFIG_OF_ZOOKEEPR_SERVER, "localhost:2122");
+    return new HelixBrokerStarter(brokerConf);
   }
 
   public static void main(String[] args)

@@ -27,6 +27,7 @@ import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.PropertiesConfiguration;
 import org.apache.helix.controller.rebalancer.strategy.AutoRebalanceStrategy;
 import org.apache.pinot.common.protocols.SegmentCompletionProtocol;
+import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.StringUtil;
 import org.apache.pinot.spi.filesystem.LocalPinotFS;
 import org.slf4j.Logger;
@@ -216,7 +217,7 @@ public class ControllerConf extends PropertiesConfiguration {
   }
 
   public void setHelixClusterName(String clusterName) {
-    setProperty(HELIX_CLUSTER_NAME, clusterName);
+    setProperty(CommonConstants.Helix.CONFIG_OF_CLUSTER_NAME, clusterName);
   }
 
   public void setControllerHost(String host) {
@@ -252,7 +253,7 @@ public class ControllerConf extends PropertiesConfiguration {
   }
 
   public void setZkStr(String zkStr) {
-    setProperty(ZK_STR, zkStr);
+    setProperty(CommonConstants.Helix.CONFIG_OF_ZOOKEEPR_SERVER, zkStr);
   }
 
   // A boolean to decide whether Jersey API should be the primary one. For now, we set this to be false,
@@ -262,7 +263,8 @@ public class ControllerConf extends PropertiesConfiguration {
   }
 
   public String getHelixClusterName() {
-    return (String) getProperty(HELIX_CLUSTER_NAME);
+    return containsKey(CommonConstants.Helix.CONFIG_OF_CLUSTER_NAME) ? (String) getProperty(
+        CommonConstants.Helix.CONFIG_OF_CLUSTER_NAME) : (String) getProperty(HELIX_CLUSTER_NAME);
   }
 
   public String getControllerHost() {
@@ -296,7 +298,8 @@ public class ControllerConf extends PropertiesConfiguration {
   }
 
   public String getZkStr() {
-    Object zkAddressObj = getProperty(ZK_STR);
+    Object zkAddressObj = containsKey(CommonConstants.Helix.CONFIG_OF_ZOOKEEPR_SERVER) ? getProperty(
+        CommonConstants.Helix.CONFIG_OF_ZOOKEEPR_SERVER) : getProperty(ZK_STR);
 
     // The set method converted comma separated string into ArrayList, so need to convert back to String here.
     if (zkAddressObj instanceof ArrayList) {

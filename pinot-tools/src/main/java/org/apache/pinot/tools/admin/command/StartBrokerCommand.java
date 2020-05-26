@@ -125,6 +125,6 @@ public class StartBrokerCommand extends AbstractBaseAdminCommand implements Comm
     if (_configFileName != null) {
       return PinotConfigUtils.readConfigFromFile(_configFileName);
     }
-    return PinotConfigUtils.generateBrokerConf(_brokerPort);
+    return PinotConfigUtils.generateBrokerConf(_clusterName, _zkAddress, _brokerHost, _brokerPort);
   }
 }

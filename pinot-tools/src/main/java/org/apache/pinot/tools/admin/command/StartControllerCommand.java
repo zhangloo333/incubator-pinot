@@ -48,7 +48,8 @@ public class StartControllerCommand extends AbstractBaseAdminCommand implements 
   @Option(name = "-controllerPort", required = false, metaVar = "<int>", usage = "Port number to start the controller at.")
   private String _controllerPort = DEFAULT_CONTROLLER_PORT;
   @Option(name = "-dataDir", required = false, metaVar = "<string>", usage = "Path to directory containging data.")
-  private String _dataDir = TMP_DIR + "PinotController";
+  private String _dataDir = CURRENT_USER_DIR + "data/PinotController";
+
   @Option(name = "-zkAddress", required = false, metaVar = "<http>", usage = "Http address of Zookeeper.")
   private String _zkAddress = DEFAULT_ZK_ADDRESS;
   @Option(name = "-clusterName", required = false, metaVar = "<String>", usage = "Pinot cluster name.")
@@ -142,6 +143,9 @@ public class StartControllerCommand extends AbstractBaseAdminCommand implements 
     ControllerConf conf;
     if (_configFileName != null) {
       conf = PinotConfigUtils.generateControllerConf(_configFileName);
+      if (conf.getDataDir() == null) {
+        conf.setDataDir(_dataDir);
+      }
     } else {
       if (_controllerHost == null) {
         _controllerHost = NetUtil.getHostAddress();

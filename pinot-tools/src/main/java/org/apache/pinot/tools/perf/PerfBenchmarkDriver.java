@@ -223,8 +223,10 @@ public class PerfBenchmarkDriver {
     String brokerInstanceName = "Broker_localhost_" + CommonConstants.Helix.DEFAULT_BROKER_QUERY_PORT;
     brokerConf.setProperty(CommonConstants.Helix.Instance.INSTANCE_ID_KEY, brokerInstanceName);
     brokerConf.setProperty(CommonConstants.Broker.CONFIG_OF_BROKER_TIMEOUT_MS, BROKER_TIMEOUT_MS);
+    brokerConf.addProperty(CommonConstants.Helix.CONFIG_OF_CLUSTER_NAME, _clusterName);
+    brokerConf.addProperty(CommonConstants.Helix.CONFIG_OF_ZOOKEEPR_SERVER, _zkAddress);
     LOGGER.info("Starting broker instance: {}", brokerInstanceName);
-    new HelixBrokerStarter(brokerConf, _clusterName, _zkAddress).start();
+    new HelixBrokerStarter(brokerConf).start();
   }
 
   private void startServer()
@@ -238,12 +240,14 @@ public class PerfBenchmarkDriver {
     serverConfiguration
         .addProperty(CommonConstants.Server.CONFIG_OF_INSTANCE_SEGMENT_TAR_DIR, _serverInstanceSegmentTarDir);
     serverConfiguration.addProperty(CommonConstants.Helix.KEY_OF_SERVER_NETTY_HOST, "localhost");
+    serverConfiguration.addProperty(CommonConstants.Helix.CONFIG_OF_CLUSTER_NAME, _clusterName);
+    serverConfiguration.addProperty(CommonConstants.Helix.CONFIG_OF_ZOOKEEPR_SERVER, _zkAddress);
     if (_segmentFormatVersion != null) {
       serverConfiguration.setProperty(CommonConstants.Server.CONFIG_OF_SEGMENT_FORMAT_VERSION, _segmentFormatVersion);
     }
     serverConfiguration.setProperty(CommonConstants.Server.CONFIG_OF_INSTANCE_ID, _serverInstanceName);
     LOGGER.info("Starting server instance: {}", _serverInstanceName);
-    HelixServerStarter helixServerStarter = new HelixServerStarter(_clusterName, _zkAddress, serverConfiguration);
+    HelixServerStarter helixServerStarter = new HelixServerStarter(serverConfiguration);
     helixServerStarter.start();
   }
 
