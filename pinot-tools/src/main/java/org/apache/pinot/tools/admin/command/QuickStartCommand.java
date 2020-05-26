@@ -34,6 +34,9 @@ public class QuickStartCommand extends AbstractBaseAdminCommand implements Comma
   @Option(name = "-type", required = false, metaVar = "<String>", usage = "Type of quickstart, supported: STREAM/BATCH/HYBRID")
   private String _type;
 
+  @Option(name = "-tmpDir", required = false, aliases = {"-quickstartDir", "-dataDir"}, metaVar = "<String>", usage = "Temp Directory to host quickstart data")
+  private String _tmpDir;
+
   @Option(name = "-help", required = false, help = true, aliases = {"-h", "--h", "--help"}, usage = "Print this message.")
   private boolean _help = false;
 
@@ -50,6 +53,14 @@ public class QuickStartCommand extends AbstractBaseAdminCommand implements Comma
   public QuickStartCommand setType(String type) {
     _type = type;
     return this;
+  }
+
+  public String getTmpDir() {
+    return _tmpDir;
+  }
+
+  public void setTmpDir(String tmpDir) {
+    _tmpDir = tmpDir;
   }
 
   @Override
@@ -74,14 +85,26 @@ public class QuickStartCommand extends AbstractBaseAdminCommand implements Comma
     switch (_type.toUpperCase()) {
       case "OFFLINE":
       case "BATCH":
-        new Quickstart().execute();
+        Quickstart quickstart = new Quickstart();
+        if (_tmpDir != null) {
+          quickstart.setTmpDir(_tmpDir);
+        }
+        quickstart.execute();
         break;
       case "REALTIME":
       case "STREAM":
-        new RealtimeQuickStart().execute();
+        RealtimeQuickStart realtimeQuickStart = new RealtimeQuickStart();
+        if (_tmpDir != null) {
+          realtimeQuickStart.setTmpDir(_tmpDir);
+        }
+        realtimeQuickStart.execute();
         break;
       case "HYBRID":
-        new HybridQuickstart().execute();
+        HybridQuickstart hybridQuickstart = new HybridQuickstart();
+        if (_tmpDir != null) {
+          hybridQuickstart.setTmpDir(_tmpDir);
+        }
+        hybridQuickstart.execute();
         break;
       default:
         throw new UnsupportedOperationException("Unsupported QuickStart type: " + _type);

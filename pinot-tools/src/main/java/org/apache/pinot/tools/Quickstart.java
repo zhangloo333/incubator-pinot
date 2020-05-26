@@ -23,9 +23,13 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import java.io.File;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import org.apache.commons.io.FileUtils;
 import org.apache.pinot.spi.data.readers.FileFormat;
 import org.apache.pinot.spi.plugin.PluginManager;
+import org.apache.pinot.tools.admin.PinotAdministrator;
 import org.apache.pinot.tools.admin.command.QuickstartRunner;
 
 
@@ -33,6 +37,12 @@ public class Quickstart {
 
   private static final String TAB = "\t\t";
   private static final String NEW_LINE = "\n";
+  private File _tmpDir = new File(Quickstart.class.getName());;
+
+  public Quickstart setTmpDir(String tmpDir) {
+    this._tmpDir = new File(tmpDir);
+    return this;
+  }
 
   public enum Color {
     RESET("\u001B[0m"), GREEN("\u001B[32m"), YELLOW("\u001B[33m"), CYAN("\u001B[36m");
@@ -115,7 +125,7 @@ public class Quickstart {
 
   public void execute()
       throws Exception {
-    File quickstartTmpDir = new File(FileUtils.getTempDirectory(), String.valueOf(System.currentTimeMillis()));
+    File quickstartTmpDir = new File(_tmpDir, String.valueOf(System.currentTimeMillis()));
     File configDir = new File(quickstartTmpDir, "configs");
     File dataDir = new File(quickstartTmpDir, "data");
     Preconditions.checkState(configDir.mkdirs());
@@ -203,7 +213,9 @@ public class Quickstart {
 
   public static void main(String[] args)
       throws Exception {
-    PluginManager.get().init();
-    new Quickstart().execute();
+    List<String> arguments = new ArrayList<>();
+    arguments.addAll(Arrays.asList("QuickStart", "-type", "BATCH"));
+    arguments.addAll(Arrays.asList(args));
+    PinotAdministrator.main(arguments.toArray(new String[arguments.size()]));
   }
 }

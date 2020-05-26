@@ -22,12 +22,16 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import java.io.File;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import org.apache.commons.io.FileUtils;
 import org.apache.pinot.common.utils.ZkStarter;
 import org.apache.pinot.spi.plugin.PluginManager;
 import org.apache.pinot.spi.stream.StreamDataProvider;
 import org.apache.pinot.spi.stream.StreamDataServerStartable;
 import org.apache.pinot.tools.Quickstart.Color;
+import org.apache.pinot.tools.admin.PinotAdministrator;
 import org.apache.pinot.tools.admin.command.QuickstartRunner;
 import org.apache.pinot.tools.streams.MeetupRsvpStream;
 import org.apache.pinot.tools.utils.KafkaStarterUtils;
@@ -38,16 +42,24 @@ import static org.apache.pinot.tools.Quickstart.printStatus;
 
 public class RealtimeQuickStart {
   private StreamDataServerStartable _kafkaStarter;
+  private File _tmpDir = new File(RealtimeQuickStart.class.getName());
 
   public static void main(String[] args)
       throws Exception {
-    PluginManager.get().init();
-    new RealtimeQuickStart().execute();
+    List<String> arguments = new ArrayList<>();
+    arguments.addAll(Arrays.asList("QuickStart", "-type", "REALTIME"));
+    arguments.addAll(Arrays.asList(args));
+    PinotAdministrator.main(arguments.toArray(new String[arguments.size()]));
+  }
+
+  public RealtimeQuickStart setTmpDir(String tmpDir) {
+    this._tmpDir = new File(tmpDir);
+    return this;
   }
 
   public void execute()
       throws Exception {
-    File quickstartTmpDir = new File(FileUtils.getTempDirectory(), String.valueOf(System.currentTimeMillis()));
+    File quickstartTmpDir = new File(_tmpDir, String.valueOf(System.currentTimeMillis()));
     File configDir = new File(quickstartTmpDir, "configs");
     File dataDir = new File(quickstartTmpDir, "data");
     Preconditions.checkState(configDir.mkdirs());

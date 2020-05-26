@@ -23,6 +23,9 @@ import com.google.common.collect.Lists;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import org.apache.commons.io.FileUtils;
 import org.apache.pinot.common.utils.ZkStarter;
 import org.apache.pinot.spi.config.table.TableConfig;
@@ -33,6 +36,7 @@ import org.apache.pinot.spi.stream.StreamDataProvider;
 import org.apache.pinot.spi.stream.StreamDataServerStartable;
 import org.apache.pinot.spi.utils.JsonUtils;
 import org.apache.pinot.tools.Quickstart.Color;
+import org.apache.pinot.tools.admin.PinotAdministrator;
 import org.apache.pinot.tools.admin.command.QuickstartRunner;
 import org.apache.pinot.tools.streams.AirlineDataStream;
 import org.apache.pinot.tools.utils.KafkaStarterUtils;
@@ -48,13 +52,19 @@ public class HybridQuickstart {
   private File _realtimeTableConfigFile;
   private File _dataFile;
   private File _ingestionJobSpecFile;
+  private File _tmpDir = new File(HybridQuickstart.class.getName());
 
   public static void main(String[] args)
       throws Exception {
-    // TODO: Explicitly call below method to load dependencies from pinot-plugins libs which are excluded from pinot-tools packaging.
-    // E.g. Kafka related libs are coming from pinot-kafka-* lib, avro libs are coming from pinot-avro lib.
-    PluginManager.get().init();
-    new HybridQuickstart().execute();
+    List<String> arguments = new ArrayList<>();
+    arguments.addAll(Arrays.asList("QuickStart", "-type", "HYBRID"));
+    arguments.addAll(Arrays.asList(args));
+    PinotAdministrator.main(arguments.toArray(new String[arguments.size()]));
+  }
+
+  public HybridQuickstart setTmpDir(String tmpDir) {
+    this._tmpDir = new File(tmpDir);
+    return this;
   }
 
   private QuickstartTableRequest prepareOfflineTableRequest(File configDir)
@@ -110,8 +120,7 @@ public class HybridQuickstart {
 
   public void execute()
       throws Exception {
-
-    File quickstartTmpDir = new File(FileUtils.getTempDirectory(), String.valueOf(System.currentTimeMillis()));
+    File quickstartTmpDir = new File(_tmpDir, String.valueOf(System.currentTimeMillis()));
     File configDir = new File(quickstartTmpDir, "configs");
     File dataDir = new File(quickstartTmpDir, "data");
     Preconditions.checkState(configDir.mkdirs());
