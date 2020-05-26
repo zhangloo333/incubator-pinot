@@ -254,7 +254,7 @@
                 <initialMemorySize>1G</initialMemorySize>
                 <maxMemorySize>1G</maxMemorySize>
                 <extraArguments>
-                  <extraArgument>-Dlog4j2.configurationFile=conf/pinot-service-log4j2.xml</extraArgument>
+                  <extraArgument>-Dlog4j2.configurationFile=conf/log4j2.xml</extraArgument>
                 </extraArguments>
               </jvmSettings>
             </program>

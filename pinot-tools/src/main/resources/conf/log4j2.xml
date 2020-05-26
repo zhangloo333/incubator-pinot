@@ -29,7 +29,7 @@
   <Appenders>
     <Console name="console" target="SYSTEM_OUT" />
     <RollingFile name="pinotLog" fileName="${env:LOG_ROOT}/pinot-${env:PINOT_COMPONENT}.log"
-                 filePattern="${env:LOG_ROOT}/pinot-${env:PINOT_COMPONENT}-%d{yyyy-MM-dd}-%i.log" immediateFlush="false">
+                 filePattern="${env:LOG_ROOT}/pinot-${env:PINOT_COMPONENT}.log.%i.gz" immediateFlush="false">
       <PatternLayout pattern="${env:LOG_PATTERN}"/>
       <Policies>
         <SizeBasedTriggeringPolicy size="19500KB" />
