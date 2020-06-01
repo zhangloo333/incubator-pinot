@@ -2,7 +2,7 @@
   {
     "column": "hoursSinceEpoch",
     "pattern": {
-      "type": "SEQUENCE", "start": 420768, "stepsize": 1, "repetitions": 18
+      "type": "SEQUENCE", "start": 429528, "stepsize": 1, "repetitions": 18
     }
   },
   {

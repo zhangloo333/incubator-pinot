@@ -3,7 +3,7 @@
     "column": "hoursSinceEpoch",
     "pattern": {
       "type": "SEQUENCE",
-      "start": 420768,
+      "start": 429528,
       "stepsize": 1
     }
   },

@@ -42,7 +42,7 @@ echo "Extracting template files"
 
 echo "Generating data for ${TEMPLATE_NAME} in ${DATA_DIR}"
 ${ADMIN_PATH} GenerateData \
--numFiles 1 -numRecords 354780  -format csv \
+-numFiles 1 -numRecords 946080 -format csv \
 -schemaFile "${TEMPLATE_BASEDIR}/${TEMPLATE_NAME}_schema.json" \
 -schemaAnnotationFile "${TEMPLATE_BASEDIR}/${TEMPLATE_NAME}_generator.json" \
 -outDir "$DATA_DIR"

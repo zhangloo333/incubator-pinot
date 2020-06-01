@@ -31,6 +31,9 @@ data with these patterns if you so desire.
 The command line examples below are meant to be executed from the **pinot repository root**.
 (This was tested with pinot-quickstart in batch mode. Requires DefaultTenant and broker) 
 
+NOTE: there's a `generator.sh` script under `incubator-pinot/docker/images/pinot/bin` that wraps this
+functionality for Apache Pinot docker containers.
+
 ## Generate data via pattern
 This first step generates the raw data from a given generator file. By default, we generate the data as CSV, and you can
 have a look manually with your favorite spreadsheet tool.
@@ -39,7 +42,7 @@ have a look manually with your favorite spreadsheet tool.
 
 ```
 ./pinot-tools/target/pinot-tools-pkg/bin/pinot-admin.sh GenerateData \
--numFiles 1 -numRecords 354780  -format csv \
+-numFiles 1 -numRecords 946080  -format csv \
 -schemaFile ./pinot-tools/src/main/resources/generator/complexWebsite_schema.json \
 -schemaAnnotationFile ./pinot-tools/src/main/resources/generator/complexWebsite_generator.json \
 -outDir ./myTestData
@@ -50,7 +53,8 @@ Now we turn the verbose CSV data into an efficiently packed segment ready for up
 
 ```
 ./pinot-tools/target/pinot-tools-pkg/bin/pinot-admin.sh CreateSegment \
--tableName complexWebsite -segmentName complexWebsite -format CSV -overwrite \
+-format CSV \
+-tableConfigFile ./pinot-tools/src/main/resources/generator/complexWebsite_config.json \
 -schemaFile ./pinot-tools/src/main/resources/generator/complexWebsite_schema.json \
 -dataDir ./myTestData \
 -outDir ./myTestSegment 
