@@ -160,6 +160,7 @@ public class CommonConstants {
         "pinot.broker.startup.minResourcePercent";
     public static final double DEFAULT_BROKER_MIN_RESOURCE_PERCENT_FOR_START = 100.0;
     public static final String CONFIG_OF_ENABLE_QUERY_LIMIT_OVERRIDE = "pinot.broker.enable.query.limit.override";
+    public static final String CONFIG_OF_ENABLE_FAIL_QUERY_ON_COLUMN_MISMATCH = "pinot.broker.enable.fail.query.column.mismatch";
 
     public static class Request {
       public static final String PQL = "pql";
